@@ -139,7 +139,11 @@ else {
   const repoChanged = state.schedules ? state.schedules !== repoSchedHash : null;
   if (localChanged === true && repoChanged === false) schedDir = 'push';
   else if (localChanged === false && repoChanged === true) schedDir = 'pull';
-  else schedDir = newest(localSched) >= newest(repoSched) && localSched.length ? 'push' : 'pull'; // 처음이거나 양쪽 다 바뀜: 더 최근에 등록한 예약이 있는 쪽
+  else {
+    // 처음 맞추는 PC이거나 양쪽이 다 바뀐 경우. 예약 파일은 실행할 때마다 고쳐져 파일 시각을 믿을 수 없으므로,
+    // 이 PC에서 가장 최근에 등록한 예약의 시각과 Git에 올린 시각을 비교한다. 진 쪽은 백업으로 남는다.
+    schedDir = localSched.length && newest(localSched) > commitTime('작업공간/.office/schedules.json') ? 'push' : 'pull';
+  }
 }
 async function runningTasks() {
   const access = readDashboardAccess(workspace);
