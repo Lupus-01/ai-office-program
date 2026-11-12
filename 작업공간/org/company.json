@@ -6,8 +6,8 @@
     "effort": "high"
   },
   "budget": {
-    "calls": 80,
-    "minutes": 60
+    "calls": 240,
+    "minutes": 180
   },
   "postGapSeconds": 30
 }
