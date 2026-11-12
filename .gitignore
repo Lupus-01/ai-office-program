@@ -6,3 +6,7 @@ private/
 .office/server.lock
 .office/sessions.json
 .office/dashboard-access.json
+
+# 동기화 도구의 PC별 상태·백업
+.sync-state.json
+.sync-backups/
