@@ -37,7 +37,7 @@
 대표님은 작업 공간 `보관함/`의 자료를 따로 압축해 보관하고 있습니다: `프로필제작`(양식·예시·받은 파일), `초기화-백업`, `최종산출물`, `업로드`, 계정 파일.
 이 저장소와 압축본을 합치면 일하는 데 필요한 것은 모두 있습니다. 옮겨지지 않는 것은 대시보드의 지난 업무 목록·실행 기록과 업무 폴더 `outputs/`뿐입니다(2026-11-12 기준 업무 15건 모두 완료·닫힘, 예약 업무 없음).
 
-**예약 업무(2026-11-12 저녁 추가):** 예약 2건은 `작업공간/.office/schedules.json`에 들어 있습니다. 아래 "집에서 바꾼 것을 회사 PC로 가져올 때"대로 넣으면 그대로 실행됩니다. 두 PC를 같은 시각에 켜 두면 두 번씩 실행되니 한쪽에서는 대시보드 예약 탭에서 꺼 두세요.
+**예약 업무(2026-11-12 저녁 추가):** 예약 2건은 `작업공간/.office/schedules.json`에 들어 있습니다. 아래 "설정 동기화"를 하면 그대로 실행됩니다. 두 PC를 같은 시각에 켜 두면 두 번씩 실행되니 한쪽에서는 대시보드 예약 탭에서 꺼 두세요.
 
 아래 6번에서 압축본을 함께 넣습니다.
 
@@ -100,38 +100,37 @@
 
 10. **확인:** `npm run doctor`가 통과하고, 대시보드 조직 탭에 부서 10개·직원 24명, 회사 설정에 업무 예산 80회·60분이 보이면 끝입니다.
 
-## 집에서 바꾼 것을 회사 PC로 가져올 때 (2026-11-13 기준)
+## 설정 동기화 (두 PC를 같은 설정으로 맞추기)
 
-회사 PC 프로그램 폴더에서 Claude Code를 열고 이렇게 말하면 됩니다.
+`sync.mjs`가 이 PC의 설정과 이 저장소(Git)의 설정을 비교해 **더 최신인 쪽으로** 맞춥니다. 출근·퇴근할 때 한 번씩 돌리면 두 PC가 같은 설정을 씁니다.
 
-> ai-office-workspace 저장소를 최신으로 받아서 README의 "집에서 바꾼 것을 회사 PC로 가져올 때"대로 해줘
+프로그램 폴더에서 Claude Code를 열고 이렇게 말하면 됩니다.
 
-직접 할 때의 순서입니다(Git Bash).
+> 설정 동기화해줘
 
-1. 이 저장소를 최신으로 받습니다: 저장소 폴더에서 `git pull` (없으면 `gh repo clone Lupus-01/ai-office-workspace`).
-2. 프로그램 폴더에서 서버를 끕니다: `npm run office:stop`
-3. 회사 설정을 가져옵니다. 부서·직원·회사 공통 규칙이 집에서 바꾼 내용으로 **덮어써집니다**(회사 PC에서 따로 바꾼 조직 설정이 있으면 사라지니 먼저 `node scripts/office.mjs org export <백업 파일>`로 남겨 둡니다).
+직접 실행할 때(이 저장소 폴더에서):
 
-   ```bash
-   node scripts/office.mjs org import <이 저장소 경로>/org-export.json --yes
-   ```
+```bash
+node sync.mjs --program <AI Office 프로그램 폴더>   # 처음 한 번. 다음부터는 node sync.mjs
+node sync.mjs --check                              # 비교만 하고 바꾸지 않음
+node sync.mjs --pull                               # 무조건 Git → 이 PC
+node sync.mjs --push                               # 무조건 이 PC → Git
+```
 
-4. 예약과 업무 폴더를 넣습니다. 예약 파일은 덮어씁니다(회사 PC에 따로 등록한 예약이 있으면 사라집니다).
+회사 PC에 이 저장소가 아직 없으면 먼저 `gh repo clone Lupus-01/ai-office-workspace`로 받습니다.
 
-   ```bash
-   cd <이 저장소 경로>/작업공간
-   cp .office/schedules.json ~/AIOffice/.office/schedules.json
-   cp -rn outputs ~/AIOffice/
-   ```
+| 맞추는 것 | 최신을 정하는 기준 | 가져올 때 |
+| --- | --- | --- |
+| 회사 설정(부서·직원·회사 공통 규칙·회사 설정) | 이 PC에서 설정이 바뀐 시각 vs Git에 올린 시각 | 가져오기 전 설정을 백업하고 덮어씀 |
+| 예약 | 지난 동기화 이후 어느 쪽이 바뀌었는지. 처음이거나 양쪽이 다 바뀌었으면 이 PC에서 가장 최근에 등록한 시각 vs Git에 올린 시각 | 서버를 잠깐 껐다 켬. 진행 중인 업무가 있으면 예약은 보류 |
+| Claude 메모(`claude-memory/`) | 파일별 수정 시각 vs Git에 올린 시각 | 파일별로 덮어씀 |
+| AI트렌드부·AI평가부 업무 폴더(`outputs/`) | 없는 폴더만 서로 채움(덮어쓰지 않음) | 연락처·메일·계좌로 보이는 내용이 있으면 올리지 않음 |
 
-5. Claude 메모를 넣습니다: `claude-memory/`의 파일을 회사 PC의 메모 폴더(세팅 순서 8번의 `memory/`)에 덮어씁니다.
-6. 상태바(선택): `claude-settings/statusline-command.sh`를 `~/.claude/`에 복사하고, `~/.claude/settings.json` 최상위에 아래를 추가합니다. `jq`가 필요합니다(`winget install jqlang.jq`, 설치 뒤 Claude Code 재시작).
-
-   ```json
-   "statusLine": { "type": "command", "command": "sh ~/.claude/statusline-command.sh" }
-   ```
-
-7. 서버를 켭니다: `npm run office:start`. 대시보드 조직 탭에 AI트렌드부·AI평가부가 보이고 예약 탭에 2건(11:00, 12:00)이 있으면 끝입니다.
+- 덮어쓰기 전의 내용은 이 저장소 폴더의 `.sync-backups/`에 남습니다(Git에는 올리지 않음).
+- 두 PC에서 **둘 다** 설정을 바꾼 뒤 동기화하면 더 나중 것이 이기고, 진 쪽 변경은 백업에만 남습니다. 자리를 옮기기 전에 한 번 동기화하면 이런 일이 없습니다.
+- 예약 문구만 고친 경우처럼 시각이 남지 않는 변경은 방향을 잘못 고를 수 있습니다. 결과가 예상과 다르면 `--push`나 `--pull`로 방향을 정합니다.
+- 계정 정보와 상담사 관련 파일은 동기화하지 않습니다.
+- 상태바(선택, 처음 한 번): `claude-settings/statusline-command.sh`를 `~/.claude/`에 복사하고 `~/.claude/settings.json` 최상위에 `"statusLine": { "type": "command", "command": "sh ~/.claude/statusline-command.sh" }`를 추가합니다. `jq`가 필요합니다(`winget install jqlang.jq`, 설치 뒤 Claude Code 재시작).
 
 ## 다시 올리거나 가져올 때
 
