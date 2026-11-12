@@ -231,6 +231,31 @@ if (upTasks.length) { actions.push(`AI 브리핑·평가 업무 폴더: 이 PC �
 if (downTasks.length) actions.push(`AI 브리핑·평가 업무 폴더: Git → 이 PC ${downTasks.length}건`);
 for (const s of skipped) actions.push(`  올리지 않음: ${s}`);
 
+// ── 5) 프로그램 코드 위치(안내만: 코드는 스스로 바꾸지 않는다) ─────────────────
+// 올린 쪽이 어느 브랜치·커밋을 쓰는지 program.json에 적어 두고, 다른 PC에서는 다르면 맞추는 명령을 알려 준다.
+const programFile = path.join(REPO, 'program.json');
+const programGit = (gitArgs) => run('git', gitArgs, program, { allowFail: true });
+const localBranch = programGit(['rev-parse', '--abbrev-ref', 'HEAD']).out;
+const localHead = programGit(['rev-parse', 'HEAD']).out;
+const recorded = readJson(programFile);
+if (!localHead) actions.push('프로그램 코드: Git 저장소가 아니라 확인하지 못함');
+else if (recorded?.commit === localHead) actions.push(`프로그램 코드: 같음 (${localBranch} ${localHead.slice(0, 7)})`);
+else {
+  const hasRecorded = recorded?.commit && programGit(['cat-file', '-e', `${recorded.commit}^{commit}`]).ok;
+  const localIsNewer = !recorded?.commit || hasRecorded && programGit(['merge-base', '--is-ancestor', recorded.commit, localHead]).ok;
+  if (localIsNewer && FORCE !== 'pull') {
+    const pushed = programGit(['rev-parse', `origin/${localBranch}`]).out === localHead;
+    if (!pushed) actions.push(`프로그램 코드: 이 PC가 최신이지만 아직 GitHub에 올리지 않았습니다 (${localBranch} ${localHead.slice(0, 7)}). 프로그램 폴더에서 git push origin ${localBranch} 후 다시 동기화하세요.`);
+    else {
+      actions.push(`프로그램 코드: 이 PC가 최신 → 위치를 Git에 기록 (${localBranch} ${localHead.slice(0, 7)})`);
+      if (!CHECK) { fs.writeFileSync(programFile, `${JSON.stringify({ branch: localBranch, commit: localHead, remote: 'origin', updated: new Date().toISOString() }, null, 2)}\n`); toCommit.push('프로그램 코드 위치'); }
+    }
+  } else if (recorded?.commit) {
+    actions.push(`프로그램 코드: Git 기록이 더 최신입니다 (${recorded.branch} ${recorded.commit.slice(0, 7)}, 이 PC는 ${localBranch} ${localHead.slice(0, 7)}).`);
+    actions.push(`  맞추려면 프로그램 폴더에서: npm run office:stop → git fetch origin → git switch ${recorded.branch} → git pull --ff-only → npm ci → npm run office:start`);
+  }
+}
+
 // ── 마무리 ───────────────────────────────────────────────────────────────────
 log(`\n${CHECK ? '[비교만 함 — 바꾸지 않았습니다]' : '[결과]'}`);
 for (const a of actions) log(`- ${a}`);
