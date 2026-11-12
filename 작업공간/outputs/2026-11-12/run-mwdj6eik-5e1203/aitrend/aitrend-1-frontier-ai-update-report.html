@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>대장급 AI 모델 개선 동향 보고서 (2026-11-12 확인)</title>
+  <style>
+    :root { color-scheme: light; --ink: #172b3a; --muted: #4a5d6c; --line: #d3dee6; --accent: #0b6c66; --paper: #fff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: #f1f5f7; font: 17px/1.7 system-ui, -apple-system, "Malgun Gothic", sans-serif; }
+    a { color: #075d91; text-underline-offset: 3px; overflow-wrap: anywhere; }
+    a:focus-visible { outline: 3px solid #0b6c66; outline-offset: 4px; }
+    .skip { position: absolute; top: -100px; left: 16px; padding: 8px; background: white; }
+    .skip:focus { top: 8px; }
+    main { max-width: 1120px; margin: auto; padding: 56px 32px 64px; }
+    header { padding-bottom: 28px; border-bottom: 2px solid var(--ink); }
+    .eyebrow { color: var(--accent); font-size: .8rem; font-weight: 750; letter-spacing: .08em; }
+    h1 { max-width: 900px; margin: 12px 0 16px; font-size: clamp(1.8rem, 4vw, 2.8rem); line-height: 1.25; letter-spacing: -.03em; word-break: keep-all; overflow-wrap: anywhere; }
+    h2 { margin: 0 0 16px; font-size: 1.3rem; letter-spacing: -.02em; word-break: keep-all; }
+    h3 { margin: 0 0 8px; font-size: 1.08rem; word-break: keep-all; }
+    p { margin: 0 0 12px; }
+    .meta, .muted { color: var(--muted); font-size: .9rem; }
+    .lead { font-size: 1.12rem; max-width: 75ch; }
+    .takeaway { margin-top: 28px; padding: 24px; background: #e7f3ef; border-left: 4px solid var(--accent); border-radius: 0 10px 10px 0; }
+    .takeaway strong.title { display: block; margin-bottom: 10px; color: #07524d; font-size: 1.1rem; }
+    .takeaway li + li { margin-top: 10px; }
+    section.panel { margin-top: 24px; padding: 26px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+    ol, ul { margin: 0; padding-left: 24px; }
+    li + li { margin-top: 8px; }
+    .table-wrap { max-width: 100%; overflow-x: auto; margin: 16px 0 8px; border: 1px solid var(--line); border-radius: 8px; -webkit-overflow-scrolling: touch; }
+    table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: .92rem; text-align: left; }
+    caption { padding: 12px; text-align: left; color: var(--muted); }
+    th { background: #e9eff3; font-weight: 700; }
+    th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+    tr:last-child td { border-bottom: 0; }
+    .label { display: inline-block; padding: 1px 7px; margin: 1px 2px 1px 0; border-radius: 4px; background: #e3ecf2; color: #29475b; font-size: .76rem; font-weight: 700; white-space: nowrap; }
+    .label.co { background: #e0f0ea; color: #0a4f49; }
+    .label.uncertain { background: #fff0d9; color: #74470a; }
+    .note { padding: 16px; background: #fff8eb; border: 1px solid #e8d4ab; border-radius: 8px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+    .card { padding: 20px; border: 1px solid var(--line); border-radius: 10px; background: #fbfdfe; min-width: 0; }
+    .card .co-name { color: var(--accent); font-size: .82rem; font-weight: 750; letter-spacing: .04em; }
+    .card ul { padding-left: 20px; font-size: .95rem; }
+    .card .src { margin-top: 12px; font-size: .86rem; color: var(--muted); }
+    .card .src a { display: block; }
+    footer { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line); }
+    .sources { padding-left: 22px; font-size: .9rem; }
+    @media (max-width: 700px) {
+      body { font-size: 16px; }
+      main { padding: 28px 14px 40px; }
+      section.panel, .takeaway { padding: 18px; }
+      .cards { grid-template-columns: minmax(0, 1fr); }
+      th, td { padding: 10px; }
+    }
+    @media print {
+      body { background: white; font-size: 10.5pt; }
+      main { padding: 0; max-width: none; }
+      section.panel, .takeaway, .card { break-inside: avoid; border-radius: 0; box-shadow: none; }
+      .table-wrap { overflow: visible; border: 0; }
+      table { min-width: 0; font-size: 9pt; }
+      .cards { display: block; }
+      .card { margin-bottom: 12px; }
+      a { color: inherit; }
+      .card .src a::after, .sources a::after { content: " (" attr(href) ")"; font-size: 8pt; }
+      .skip { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#report">보고서 본문으로</a>
+  <main id="report">
+    <header>
+      <div class="eyebrow">AI TREND BRIEF · AI트렌드부</div>
+      <h1>대장급 AI 모델 개선 동향 보고서</h1>
+      <p class="lead">Claude·GPT·Gemini·Grok·Meta·DeepSeek의 최신 대표 모델이 직전 모델보다 무엇이, 얼마나 달라졌는지 정리했습니다.</p>
+      <p class="meta">작성: AI트렌드팀장(aitrend-1) · 확인일: 2026-11-12 · 조사 범위: 회사별 최신 대표 모델 1건(2026-09 ~ 2026-11-10 발표), 총 6건 · 근거: AI트렌드 조사 담당 조사 파일(aitrend-2-frontier-model-updates.md)</p>
+    </header>
+
+    <section class="takeaway" aria-label="한눈에 보는 결론">
+      <strong class="title">한눈에 보는 결론</strong>
+      <ul>
+        <li><strong>성능 상승 폭이 가장 크게 공개된 모델은 xAI Grok 4.7</strong>입니다. 터미널 작업 시험(Terminal-Bench 4.0) 20.3% → 37.6%, 코딩 시험(CursorBench 4.0) 40.4% → 46.3%. <span class="label co">회사 발표</span> 다만 같은 표에서 Claude Fable 5.1은 57.9%로 더 높습니다.</li>
+        <li><strong>OpenAI GPT-6.1 Sol</strong>은 직전 GPT-6 Sol보다 DeepSWE +6.4점, OSWorld 2.0 +7점, 어려운 질문 오류율 11.4% → 7.7%로 나아졌다고 전해집니다. <span class="label uncertain">2차 출처 · 1차 미확인</span></li>
+        <li><strong>Google Gemini 4 Carbon</strong>은 안전성 지표가 크게 개선됐습니다(공격 시뮬레이션 침해율 3.1% → 0.8%, 에이전트 정직성 70% → 92%). <span class="label co">회사 발표</span> 단, 2026-11-30부터 가격이 2배($4/$20)로 오릅니다.</li>
+        <li><strong>Anthropic Claude Fable 5.2</strong>는 성능 점수는 미확인이지만 <strong>가격 20% 인하</strong>(입력 $10→$8, 출력 $50→$40 / 100만 토큰)와 빠른 모드 최대 2.5배 속도가 확인됐습니다. <span class="label co">회사 문서</span></li>
+        <li>DeepSeek V4.1-Flash-1017은 DeepSWE 74.2% → 77%(회사 발표, 2차 출처 경유), Meta Muse Wonder는 개선 폭 <strong>미확인</strong>입니다.</li>
+      </ul>
+    </section>
+
+    <section class="panel" aria-labelledby="compare">
+      <h2 id="compare">회사·모델별 비교표</h2>
+      <p class="muted">수치는 각 회사가 고른 시험·조건으로 잰 값이라 회사끼리 직접 비교하기 어렵습니다. 표가 화면보다 넓으면 좌우로 밀어 보세요.</p>
+      <div class="table-wrap" role="region" aria-label="회사·모델별 비교표" tabindex="0">
+        <table>
+          <caption>표시: <span class="label co">회사 발표</span> 회사 자체 수치 · <span class="label">직접</span> 회사 페이지를 직접 열어 확인 · <span class="label uncertain">2차</span> 언론·제3자 경유(1차 미확인)</caption>
+          <thead><tr><th scope="col">회사 · 모델</th><th scope="col">발표일</th><th scope="col">직전 대비 개선 수치</th><th scope="col">특이사항</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Anthropic</strong><br>Claude Fable 5.2 / Mythos 5.2</td>
+              <td>2026-11-09<br><span class="muted">(기사는 11-10, 하루 차이)</span></td>
+              <td>가격 -20%: 입력 $10→$8, 출력 $50→$40 /100만 토큰 <span class="label">직접</span><br>빠른 모드 최대 2.5배 출력 속도 <span class="label">직접</span><br>"5.1보다 약 30% 빠름" <span class="label uncertain">2차 · 기준 불명확</span><br>벤치마크 점수: <strong>미확인</strong></td>
+              <td>컨텍스트 100만 토큰, 최대 출력 128k <span class="label">직접</span>. Mythos 5.2는 인증 기관 한정, 30일 데이터 보관 필수</td>
+            </tr>
+            <tr>
+              <td><strong>OpenAI</strong><br>GPT-6.1 Sol</td>
+              <td>2026-09-29 <span class="label uncertain">2차</span></td>
+              <td>DeepSWE v1.1 +6.4점, OSWorld 2.0 +7점, 어려운 질문 오류율(low effort) 11.4%→7.7% <span class="label co">회사 발표</span> <span class="label uncertain">2차</span><br>캐시 입력 $0.20→$0.10 /100만 토큰, 표준가 $2/$10 동일</td>
+              <td>컨텍스트 105만 토큰, 출력 최대 128K <span class="label uncertain">2차</span>. 제한 공개 모델 GPT-6 Astra는 첫 "Critical" 사이버 위험 등급</td>
+            </tr>
+            <tr>
+              <td><strong>Google</strong><br>Gemini 4 Carbon</td>
+              <td>2026-11-10 <span class="label">직접</span></td>
+              <td>직전 Argon 대비: 공격 시뮬레이션 침해율 3.1%→0.8%, 자동 사이버공격 질의 성공률 9.86%→2.17%, 에이전트 정직성 70%→92% <span class="label co">회사 발표</span><br>CursorBench 4.0 등 1위(절대 점수 미공개)</td>
+              <td>도입가 $2/$10 → 2026-11-30부터 $4/$20. Argon보다 토큰을 더 씀. 일반 코딩·지식 업무엔 회사가 Argon 권장. 컨텍스트 미기재</td>
+            </tr>
+            <tr>
+              <td><strong>xAI</strong><br>Grok 4.7</td>
+              <td>2026-09-21 <span class="label">직접</span></td>
+              <td>직전 4.6 대비: CursorBench 4.0 40.4→46.3%, Terminal-Bench 4.0 20.3→37.6%, DeepSWE v1.1 65.2→71.0%(effort 설정 상이), EEBench 53.0→64.0%, HealthBench Professional 48.5→56.7% <span class="label co">회사 발표</span></td>
+              <td>가격 $2/$6로 4.6과 동일. Fast 변형은 속도 2배·가격 2배. 컨텍스트 500K <span class="label uncertain">2차</span>. 후속 4.8·5 일정은 미확인</td>
+            </tr>
+            <tr>
+              <td><strong>Meta</strong><br>Muse Wonder (미리보기)</td>
+              <td>2026-10-12 <span class="label uncertain">2차</span></td>
+              <td>직전 대비 개선 폭: <strong>미확인</strong><br>벤치마크 점수: <strong>미확인</strong></td>
+              <td>컨텍스트 1,048,576 토큰, 가격 $4/$20 <span class="label uncertain">2차 · 단일 출처</span>. Llama 계열은 Llama 4(2025-04)가 마지막</td>
+            </tr>
+            <tr>
+              <td><strong>DeepSeek</strong><br>V4.1-Flash-1017</td>
+              <td>2026-10-17 <span class="label uncertain">2차</span></td>
+              <td>9월 V4.1-Flash 대비 DeepSWE v1.1 74.2%→77% <span class="label co">회사 발표</span> <span class="label uncertain">2차</span><br>작업 시간·출력 길이 감소(감소폭 미공개)</td>
+              <td>가격 유지(비피크 미캐시 입력 $0.15/100만 토큰). 가중치 공개(MIT). 기사상 Claude Opus 5가 공개 벤치 11개 중 7개에서 앞섬</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="cards">
+      <h2 id="cards">모델별 상세</h2>
+      <div class="cards">
+        <article class="card">
+          <div class="co-name">ANTHROPIC</div>
+          <h3>Claude Fable 5.2 / Mythos 5.2</h3>
+          <ul>
+            <li>같은 일을 더 싸게: 입력·출력 가격 모두 20% 인하 <span class="label">직접</span></li>
+            <li>빠른 모드는 최대 2.5배 빠른 출력(가격은 입력 $16·출력 $80) <span class="label">직접</span></li>
+            <li>코딩·추론·비전 개선은 정성 서술만 있고 점수는 미확인 <span class="label uncertain">2차</span></li>
+            <li>Mythos 5.2는 인증 기관 한정, 데이터 30일 보관 필수(무보관 불가). 화면 조작 기능은 새 도구 버전 필요 <span class="label">직접</span></li>
+          </ul>
+          <div class="src">출처:
+            <a href="https://platform.claude.com/docs/en/release-notes/overview">Claude Platform release notes</a>
+            <a href="https://finance.yahoo.com/technology/article/anthropic-debuts-claude-fable-52-and-mythos-52-models-as-ipo-nears-190405087.html">Yahoo Finance 기사</a>
+            <span class="muted">anthropic.com 공식 발표문은 직접 열지 못함</span>
+          </div>
+        </article>
+        <article class="card">
+          <div class="co-name">OPENAI</div>
+          <h3>GPT-6.1 Sol</h3>
+          <ul>
+            <li>코딩 시험 DeepSWE +6.4점, 컴퓨터 조작 시험 OSWorld 2.0 +7점 <span class="label co">회사 발표</span> <span class="label uncertain">2차</span></li>
+            <li>어려운 질문 오류율 11.4% → 7.7%(low effort 기준)</li>
+            <li>캐시 입력 가격 절반($0.20→$0.10), 표준가 동일</li>
+            <li>ChatGPT에 Sol(유료)·Luna(무료) 배포 소식은 검색 요약만 있어 <strong>미확인</strong></li>
+          </ul>
+          <div class="src">출처:
+            <a href="https://www.cometapi.com/what-is-gpt-6-1-sol/">CometAPI — What is GPT-6.1 Sol</a>
+            <a href="https://www.cnbc.com/2026/09/03/open-ai-astra-gpt-6-cyber.html">CNBC — GPT-6 Astra</a>
+            <span class="muted">openai.com 접속 차단(403)으로 1차 미확인. 모델명 표기 혼재</span>
+          </div>
+        </article>
+        <article class="card">
+          <div class="co-name">GOOGLE</div>
+          <h3>Gemini 4 Carbon</h3>
+          <ul>
+            <li>공격 시뮬레이션 침해율 3.1% → 0.8% <span class="label co">회사 발표</span></li>
+            <li>자동 사이버공격 질의 성공률 9.86% → 2.17%</li>
+            <li>에이전트 정직성 70% → 92%</li>
+            <li>외부 시험 3종 1위·멀티모달 지식 에이전트 2위(절대 점수 미공개)</li>
+            <li>11-30부터 가격 2배, 토큰 사용량도 더 많음 → 일상 업무엔 회사도 Argon 권장</li>
+          </ul>
+          <div class="src">출처:
+            <a href="https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-carbon-now-available/">Google 블로그 — Gemini 4 Carbon is now available</a>
+          </div>
+        </article>
+        <article class="card">
+          <div class="co-name">XAI</div>
+          <h3>Grok 4.7</h3>
+          <ul>
+            <li>터미널 작업 20.3% → 37.6%(약 1.9배) <span class="label co">회사 발표</span></li>
+            <li>코딩 40.4% → 46.3%, DeepSWE 65.2% → 71.0%(설정 상이)</li>
+            <li>EEBench 53.0% → 64.0%, 의료 HealthBench 48.5% → 56.7%</li>
+            <li>가격·속도는 4.6과 동일($2/$6)</li>
+            <li>xAI 자체 표에서도 Terminal-Bench는 Claude Fable 5.1(57.9%)이 앞섬</li>
+          </ul>
+          <div class="src">출처:
+            <a href="https://x.ai/news/grok-4-7">xAI — Introducing Grok 4.7</a>
+            <a href="https://www.ai-toolbox.co/grok-models/grok-models-explained-2026">ai-toolbox — Grok 모델 정리(컨텍스트)</a>
+          </div>
+        </article>
+        <article class="card">
+          <div class="co-name">META</div>
+          <h3>Muse Wonder (미리보기)</h3>
+          <ul>
+            <li>Meta 최신 대표 모델은 Llama가 아닌 비공개 Muse 계열 <span class="label uncertain">2차 · 단일 출처</span></li>
+            <li>컨텍스트 1,048,576 토큰, 가격 $4/$20</li>
+            <li>벤치마크 점수·직전 대비 개선 폭 <strong>미확인</strong></li>
+            <li>관련 발표: Muse Spark 1.3(09-02), Muse Spark Open(10-15, 오픈 웨이트)</li>
+          </ul>
+          <div class="src">출처:
+            <a href="https://innfactory.ai/en/ai-models/meta-llama/">innFactory — Meta Llama &amp; Muse</a>
+            <span class="muted">Meta 공식 페이지 미확인</span>
+          </div>
+        </article>
+        <article class="card">
+          <div class="co-name">DEEPSEEK</div>
+          <h3>V4.1-Flash-1017</h3>
+          <ul>
+            <li>DeepSWE 74.2% → 77% <span class="label co">회사 발표</span> <span class="label uncertain">2차</span></li>
+            <li>작업 시간·출력 길이 감소(폭 미공개)</li>
+            <li>가격 유지, 가중치 공개(MIT 라이선스)</li>
+            <li>상위 모델 V4-Pro-0813이 따로 있을 수 있음(미확인)</li>
+          </ul>
+          <div class="src">출처:
+            <a href="https://siliconangle.com/2026/10/18/deepseek-releases-updated-v4-1-flash-model-it-says-completes-tasks-faster/">SiliconANGLE 기사</a>
+            <span class="muted">DeepSeek 공식 페이지 미확인</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="limits">
+      <h2 id="limits">한계 — 읽을 때 주의할 점</h2>
+      <div class="note">
+        <ul>
+          <li><strong>대부분 회사 자체 발표 수치</strong>입니다. 제3자가 같은 조건으로 다시 잰 값이 아닙니다.</li>
+          <li><strong>시험 조건이 다릅니다.</strong> 같은 DeepSWE 점수라도 회사마다 effort 설정 등이 달라(Grok 4.7은 설정 상이 명시) 회사끼리 점수를 직접 비교하면 안 됩니다.</li>
+          <li><strong>1차 출처 직접 확인은 3건</strong>(Claude 문서, Google 블로그, xAI 공지)뿐입니다. GPT·Meta·DeepSeek은 언론·제3자 페이지 경유이며, openai.com은 접속 차단(403)으로 열지 못했습니다.</li>
+          <li><strong>미확인 항목:</strong> Claude Fable 5.2 벤치마크 점수, Meta Muse Wonder 점수·개선 폭, Gemini 4 Carbon·DeepSeek 컨텍스트 길이, ChatGPT Sol/Luna 배포, Grok 후속 일정.</li>
+          <li><strong>모델 선정은 가정</strong>입니다. OpenAI는 Astra(제한 공개) 대신 Sol(일반 공개), Meta는 Llama 대신 Muse, DeepSeek은 가장 최근 발표인 Flash-1017을 골랐습니다.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="actions">
+      <h2 id="actions">다음 행동 — 우리 업무에 참고할 점 <span class="label">제안</span></h2>
+      <ol>
+        <li><strong>비용:</strong> Claude Fable 5.2 가격 20% 인하가 확인됐으므로, Claude를 쓰는 업무는 비용 재계산을 권합니다.</li>
+        <li><strong>Gemini 사용 시:</strong> Gemini 4 Carbon은 11-30부터 2배 가격이고 토큰도 더 쓰므로, 일반 문서·조사 업무는 회사 권장대로 Argon 유지가 적절해 보입니다.</li>
+        <li><strong>모델 교체 판단:</strong> 회사 발표 점수만으로 바꾸지 말고, 우리 실제 업무(보고서 작성·조사) 샘플로 직접 비교한 뒤 결정하길 권합니다.</li>
+        <li><strong>추가 확인:</strong> OpenAI·Meta·DeepSeek 공식 페이지가 열리면 이번 2차 수치를 1차 출처로 다시 대조합니다.</li>
+        <li><strong>데이터 정책:</strong> Claude Mythos 5.2는 데이터 30일 보관 필수라 민감 자료 업무엔 사용 전 검토가 필요합니다.</li>
+      </ol>
+    </section>
+
+    <footer aria-labelledby="sources">
+      <h2 id="sources">출처와 확인일 (모두 2026-11-12 확인)</h2>
+      <ol class="sources">
+        <li><a href="https://platform.claude.com/docs/en/release-notes/overview">Claude Platform release notes — Claude Platform Docs</a> (회사 문서, 직접)</li>
+        <li><a href="https://finance.yahoo.com/technology/article/anthropic-debuts-claude-fable-52-and-mythos-52-models-as-ipo-nears-190405087.html">Anthropic debuts Claude Fable 5.2 and Mythos 5.2 models as IPO nears — Yahoo Finance</a> (2차)</li>
+        <li><a href="https://www.cometapi.com/what-is-gpt-6-1-sol/">What is GPT-6.1 Sol — CometAPI</a> (2차)</li>
+        <li><a href="https://www.cnbc.com/2026/09/03/open-ai-astra-gpt-6-cyber.html">OpenAI announces rollout of GPT-6 Astra model — CNBC</a> (2차)</li>
+        <li><a href="https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-carbon-now-available/">Gemini 4 Carbon is now available — Google 블로그</a> (회사 발표, 직접)</li>
+        <li><a href="https://x.ai/news/grok-4-7">Introducing Grok 4.7 — xAI</a> (회사 발표, 직접)</li>
+        <li><a href="https://www.ai-toolbox.co/grok-models/grok-models-explained-2026">Grok Models Explained (2026) — ai-toolbox</a> (2차)</li>
+        <li><a href="https://innfactory.ai/en/ai-models/meta-llama/">Meta Llama &amp; Muse: Versions, Benchmarks &amp; EU Availability — innFactory</a> (2차, 2026-10-28 갱신)</li>
+        <li><a href="https://siliconangle.com/2026/10/18/deepseek-releases-updated-v4-1-flash-model-it-says-completes-tasks-faster/">DeepSeek releases updated V4.1-Flash model — SiliconANGLE</a> (2차)</li>
+      </ol>
+      <p class="meta">이 보고서의 수치는 모두 조사 파일(outputs/2026-11-12/run-mwdj6eik-5e1203/aitrend/aitrend-2-frontier-model-updates.md)에 출처와 함께 적힌 값입니다. "다음 행동"은 팀장 제안이며 확인된 사실이 아닙니다.</p>
+    </footer>
+  </main>
+</body>
+</html>

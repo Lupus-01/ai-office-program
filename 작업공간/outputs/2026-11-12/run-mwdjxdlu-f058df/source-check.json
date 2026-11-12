@@ -1,0 +1,100 @@
+{
+  "checked": 25,
+  "broken": [],
+  "mismatched": [
+    {
+      "url": "https://artificialanalysis.ai/articles/gemini-4-carbon-new-number-1",
+      "stage": "s1-research",
+      "title": "Gemini 4 Carbon is the new #1 on the Artificial Analysis Intelligence Index v5 | Artificial Analysis"
+    },
+    {
+      "url": "https://artificialanalysis.ai/evaluations/omniscience",
+      "stage": "s1-research",
+      "title": "AA-Omniscience v1.1: Knowledge and Hallucination Benchmark | Artificial Analysis"
+    },
+    {
+      "url": "https://aistudio.google.com/docs/changelog",
+      "stage": "s1-research",
+      "title": "Release notes - Gemini API | Google AI Studio"
+    },
+    {
+      "url": "https://developers.openai.com/api/docs/models/gpt-6-cyber",
+      "stage": "s1-research",
+      "title": "GPT-6-Cyber Model | OpenAI API"
+    },
+    {
+      "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/",
+      "stage": "s1-research",
+      "title": "Multimodal Knowledge Agents benchmark: November 2026"
+    },
+    {
+      "url": "https://releasebot.io/updates/google",
+      "stage": "s1-research",
+      "title": "Google Release Notes - November 2026 Latest Updates - Releasebot"
+    },
+    {
+      "url": "https://llmgateway.io/timeline",
+      "stage": "s1-research",
+      "title": "New AI Models — November 2026 LLM Releases | LLM Gateway"
+    },
+    {
+      "url": "https://thinkingmachines.ai/news/inkling-2-small/",
+      "stage": "s1-research",
+      "title": "Introducing Inkling 2 Small - Thinking Machines Lab"
+    },
+    {
+      "url": "https://aistudio.google.com/docs/whats-new-gemini-4-carbon",
+      "stage": "s1-research",
+      "title": "What's new in Gemini 4 Carbon - Gemini API | Google AI Studio"
+    },
+    {
+      "url": "https://www.nocode.mba/ai-release-tracker/2026/11",
+      "stage": "s1-research",
+      "title": "AI Models Released in November 2026 | No Code MBA"
+    },
+    {
+      "url": "https://deepmind.google/blog/gemini-robotics-2-5-accelerates-real-world-physical-intelligence/",
+      "stage": "s1-research",
+      "title": "Gemini Robotics 2.5: Accelerating Physical Intelligence — Google DeepMind"
+    },
+    {
+      "url": "https://www.implicator.ai/deepseek-releases-creator-mode-allows-deepseek-harness-users/",
+      "stage": "s1-research",
+      "title": "DeepSeek Creator Mode Builds Harness Plugins From Plain Engl"
+    },
+    {
+      "url": "https://thursdai.news/releases/2026-11",
+      "stage": "s1-research",
+      "title": "November 2026 AI Releases: SWE-2 Flash, Kimi K3.1 Pro open weights & 13 more — ThursdAI"
+    },
+    {
+      "url": "https://research.meta.ai/blog/muse-ember",
+      "stage": "s1-research",
+      "title": "Introducing Our Smallest, Most Efficient Model: Muse Ember"
+    },
+    {
+      "url": "https://deepmind.google/models/model-cards/gemini-4-carbon/",
+      "stage": "s2-html",
+      "title": "Gemini 4 Carbon - Model Card — Google DeepMind"
+    }
+  ],
+  "unknown": [
+    {
+      "url": "https://venturebeat.com/ai/google-unveils-gemini-4-carbon-retaking-the-worlds-no-1-spot-on-updated-harder-benchmarks-but-access-is-limited/",
+      "stage": "s1-research",
+      "status": 429
+    },
+    {
+      "url": "https://openai.com/index/introducing-gpt-6-cyber/",
+      "stage": "s1-research",
+      "status": 403
+    },
+    {
+      "url": "https://openai.com/index/introducing-images-2-6/",
+      "stage": "s1-research",
+      "status": 403
+    }
+  ],
+  "skipped": 0,
+  "relayed": 0
+}

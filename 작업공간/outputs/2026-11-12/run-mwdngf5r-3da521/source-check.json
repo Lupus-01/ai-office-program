@@ -1,0 +1,29 @@
+{
+  "checked": 11,
+  "broken": [],
+  "mismatched": [
+    {
+      "url": "https://artificialanalysis.ai/evaluations/omniscience",
+      "stage": "s2-briefing",
+      "title": "AA-Omniscience v1.1: Knowledge and Hallucination Benchmark | Artificial Analysis"
+    },
+    {
+      "url": "https://www.cnbc.com/2026/11/09/anthropic-claude-fable-5-2-mythos-5-2.html",
+      "stage": "s2-briefing",
+      "title": "Anthropic releases Claude Fable 5.2 and Claude Mythos 5.2 ahead of IPO"
+    },
+    {
+      "url": "https://blog.google/innovation-and-ai/technology/developers-tools/introducing-gemini-omni-1-2-flash/",
+      "stage": "s2-briefing",
+      "title": "Gemini Omni 1.2 Flash: 15-second video and lower pricing"
+    },
+    {
+      "url": "https://thursdai.news/releases/2026-11",
+      "stage": "s2-briefing",
+      "title": "November 2026 AI Releases: SWE-2 Flash, Kimi K3.1 Pro open weights & 13 more — ThursdAI"
+    }
+  ],
+  "unknown": [],
+  "skipped": 0,
+  "relayed": 0
+}

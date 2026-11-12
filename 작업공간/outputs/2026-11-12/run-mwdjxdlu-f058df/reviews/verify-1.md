@@ -1,0 +1,6 @@
+VERDICT: PASS
+
+- [확인] aitrend/aitrend-1-ai-briefing.html:189 — Claude 비교값·측정 조건과 BenchCAD 정의가 [Anthropic 공식 발표](https://www.anthropic.com/claude-fable-and-mythos-5-2)와 일치합니다.
+- [확인] aitrend/aitrend-1-ai-briefing.html:216 — Gemini 평가값·측정 주체, AA-Briefcase 1,483→1,609, MKA 비용 비교 조건이 [Google 모델 카드](https://deepmind.google/models/model-cards/gemini-4-carbon/), [AA 원문](https://artificialanalysis.ai/articles/gemini-4-carbon-new-number-1), [MKA 발표](https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/)와 일치합니다.
+- [확인] aitrend/aitrend-1-ai-briefing.html:238 — GPT-6 Cyber 32.1%→48.5%와 Images 2.6의 속도 50% 발표를 [Cyber 공식 발표](https://openai.com/index/introducing-gpt-6-cyber/), [Images 공식 발표](https://openai.com/index/introducing-images-2-6/)에서 확인했습니다. 이전 지적 4건은 반영됐습니다.
+- [확인] aitrend/aitrend-1-ai-briefing.html:351 — 서비스 적용안은 근거 발표에 연결된 제안으로 구분했고, 기대 효과 수치를 만들지 않았습니다. plan.json·brief·조사본·HTML·검수 의견을 읽었으며 파일은 수정하지 않았습니다. 모바일·인쇄 실제 렌더링과 일부 2차 보도의 독립 검증은 미확인입니다.

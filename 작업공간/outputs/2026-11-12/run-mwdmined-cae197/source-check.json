@@ -1,0 +1,45 @@
+{
+  "checked": 14,
+  "broken": [],
+  "mismatched": [
+    {
+      "url": "https://artificialanalysis.ai/evaluations/omniscience",
+      "stage": "briefing",
+      "title": "AA-Omniscience v1.1: Knowledge and Hallucination Benchmark | Artificial Analysis"
+    },
+    {
+      "url": "https://www.implicator.ai/deepseek-releases-creator-mode-allows-deepseek-harness-users/",
+      "stage": "briefing",
+      "title": "DeepSeek Creator Mode Builds Harness Plugins From Plain Engl"
+    },
+    {
+      "url": "https://www.cnbc.com/2026/11/09/anthropic-claude-fable-5-2-mythos-5-2.html",
+      "stage": "briefing",
+      "title": "Anthropic releases Claude Fable 5.2 and Claude Mythos 5.2 ahead of IPO"
+    },
+    {
+      "url": "https://research.meta.ai/blog/muse-ember",
+      "stage": "briefing",
+      "title": "Introducing Our Smallest, Most Efficient Model: Muse Ember"
+    },
+    {
+      "url": "https://releasebot.io/updates/google",
+      "stage": "briefing",
+      "title": "Google Release Notes - November 2026 Latest Updates - Releasebot"
+    },
+    {
+      "url": "https://thursdai.news/releases/2026-11",
+      "stage": "briefing",
+      "title": "November 2026 AI Releases: SWE-2 Flash, Kimi K3.1 Pro open weights & 13 more — ThursdAI"
+    }
+  ],
+  "unknown": [
+    {
+      "url": "https://venturebeat.com/ai/google-unveils-gemini-4-carbon-retaking-the-worlds-no-1-spot-on-updated-harder-benchmarks-but-access-is-limited/",
+      "stage": "briefing",
+      "status": 429
+    }
+  ],
+  "skipped": 0,
+  "relayed": 0
+}

@@ -22,11 +22,14 @@
 | `작업공간/inputs/` | KPI 자료 | `~/AIOffice/inputs/` |
 | `작업공간/.office/publications/`, `video-publications.json` | 꼬리별 관측소 글·댓글 게시 기록(같은 영상·글을 다시 올리지 않게 막는 기록) | `~/AIOffice/.office/` |
 | `claude-memory/` | 터미널 Claude가 기억하던 메모(카페 규칙·올린 글 번호, 프로필제작 결정, PR 범위, 테스트 방법) | 8번 |
+| `작업공간/.office/schedules.json` | 예약 2건(매일 오전 11시 AI 브리핑, 매일 낮 12시 AI 자체 평가) | `~/AIOffice/.office/schedules.json` (서버를 끈 상태에서 덮어씀) |
+| `작업공간/outputs/2026-11-12/` | AI 브리핑 5건과 AI 자체 평가 1건의 업무 폴더. 지난 브리핑·개선 노트를 다음 업무가 찾아 읽는다(상담사 개인정보 없음) | `~/AIOffice/outputs/2026-11-12/` |
+| `claude-settings/statusline-command.sh` | Claude Code 상태바 스크립트 | `~/.claude/statusline-command.sh` |
 
 ## 일부러 넣지 않은 것
 
 - **계정 정보**(비밀번호·쿠키 등 서버만 쓰는 계정 파일): Git에 올리지 않습니다. 집 PC에서 계정 연결을 다시 하고 직접 로그인합니다(7번).
-- **상담사 개인정보가 든 파일**(프로필 예시 14명, 받은 파일, 최종 워드, 업로드, 업무 폴더 `outputs/`): 연락처·주소·계좌가 들어 있어 이 저장소에는 넣지 않았습니다. 필요하면 USB·개인 클라우드로 옮깁니다. 프로필 작성의 예시 겹침 검사는 `보관함/프로필제작/예시/`가 있어야 하니, 집에서 프로필 업무를 하려면 예시 폴더를 함께 옮기세요.
+- **상담사 개인정보가 든 파일**(프로필 예시 14명, 받은 파일, 최종 워드, 업로드, 업무 폴더 `outputs/` 중 상담사 관련 업무): 연락처·주소·계좌가 들어 있어 이 저장소에는 넣지 않았습니다. 필요하면 USB·개인 클라우드로 옮깁니다. 프로필 작성의 예시 겹침 검사는 `보관함/프로필제작/예시/`가 있어야 하니, 집에서 프로필 업무를 하려면 예시 폴더를 함께 옮기세요.
 - **실행 기록·생성 파일**(`.office/runs/` 등, `.claude/`, `.codex/`, `AGENTS.md`, `CLAUDE.md`, `scripts/`): 프로그램이 다시 만듭니다.
 
 ## 대표님 압축본 (보관함 자료)
@@ -34,10 +37,7 @@
 대표님은 작업 공간 `보관함/`의 자료를 따로 압축해 보관하고 있습니다: `프로필제작`(양식·예시·받은 파일), `초기화-백업`, `최종산출물`, `업로드`, 계정 파일.
 이 저장소와 압축본을 합치면 일하는 데 필요한 것은 모두 있습니다. 옮겨지지 않는 것은 대시보드의 지난 업무 목록·실행 기록과 업무 폴더 `outputs/`뿐입니다(2026-11-12 기준 업무 15건 모두 완료·닫힘, 예약 업무 없음).
 
-**예약 업무(2026-11-12 저녁 추가):** 예약은 이 저장소로 옮겨지지 않습니다. 다른 PC에서도 받으려면 터미널 Claude에게 아래 두 문장을 다시 지시합니다. 두 PC에서 동시에 켜 두면 두 번씩 실행됩니다.
-
-- "매일 오전 11시에 AI트렌드부가 Claude, GPT 같은 대장급 AI들의 특이사항을 조사해서 HTML 보고서로 보고해줘"
-- "매일 낮 12시에 AI평가부가 AI 자체 평가를 진행해서 진행 업무를 평가하고, 다음 업무를 잘 진행할 수 있게 개선 노트를 만들어줘. 12시 40분까지 끝내줘" (마지막 평가 후 2일이 안 됐거나 새로 끝난 업무가 없으면 건너뜁니다)
+**예약 업무(2026-11-12 저녁 추가):** 예약 2건은 `작업공간/.office/schedules.json`에 들어 있습니다. 아래 "집에서 바꾼 것을 회사 PC로 가져올 때"대로 넣으면 그대로 실행됩니다. 두 PC를 같은 시각에 켜 두면 두 번씩 실행되니 한쪽에서는 대시보드 예약 탭에서 꺼 두세요.
 
 아래 6번에서 압축본을 함께 넣습니다.
 
@@ -99,6 +99,39 @@
 9. **개인 스킬(선택):** https://github.com/JISANGHYEOK-0901/personal-ai-workflow 의 `develop` 브랜치에서 `skills/execute`, `skills/pr-lifecycle`, `skills/handoff`를 `~/.claude/skills/`에 복사합니다.
 
 10. **확인:** `npm run doctor`가 통과하고, 대시보드 조직 탭에 부서 10개·직원 24명, 회사 설정에 업무 예산 80회·60분이 보이면 끝입니다.
+
+## 집에서 바꾼 것을 회사 PC로 가져올 때 (2026-11-13 기준)
+
+회사 PC 프로그램 폴더에서 Claude Code를 열고 이렇게 말하면 됩니다.
+
+> ai-office-workspace 저장소를 최신으로 받아서 README의 "집에서 바꾼 것을 회사 PC로 가져올 때"대로 해줘
+
+직접 할 때의 순서입니다(Git Bash).
+
+1. 이 저장소를 최신으로 받습니다: 저장소 폴더에서 `git pull` (없으면 `gh repo clone Lupus-01/ai-office-workspace`).
+2. 프로그램 폴더에서 서버를 끕니다: `npm run office:stop`
+3. 회사 설정을 가져옵니다. 부서·직원·회사 공통 규칙이 집에서 바꾼 내용으로 **덮어써집니다**(회사 PC에서 따로 바꾼 조직 설정이 있으면 사라지니 먼저 `node scripts/office.mjs org export <백업 파일>`로 남겨 둡니다).
+
+   ```bash
+   node scripts/office.mjs org import <이 저장소 경로>/org-export.json --yes
+   ```
+
+4. 예약과 업무 폴더를 넣습니다. 예약 파일은 덮어씁니다(회사 PC에 따로 등록한 예약이 있으면 사라집니다).
+
+   ```bash
+   cd <이 저장소 경로>/작업공간
+   cp .office/schedules.json ~/AIOffice/.office/schedules.json
+   cp -rn outputs ~/AIOffice/
+   ```
+
+5. Claude 메모를 넣습니다: `claude-memory/`의 파일을 회사 PC의 메모 폴더(세팅 순서 8번의 `memory/`)에 덮어씁니다.
+6. 상태바(선택): `claude-settings/statusline-command.sh`를 `~/.claude/`에 복사하고, `~/.claude/settings.json` 최상위에 아래를 추가합니다. `jq`가 필요합니다(`winget install jqlang.jq`, 설치 뒤 Claude Code 재시작).
+
+   ```json
+   "statusLine": { "type": "command", "command": "sh ~/.claude/statusline-command.sh" }
+   ```
+
+7. 서버를 켭니다: `npm run office:start`. 대시보드 조직 탭에 AI트렌드부·AI평가부가 보이고 예약 탭에 2건(11:00, 12:00)이 있으면 끝입니다.
 
 ## 다시 올리거나 가져올 때
 

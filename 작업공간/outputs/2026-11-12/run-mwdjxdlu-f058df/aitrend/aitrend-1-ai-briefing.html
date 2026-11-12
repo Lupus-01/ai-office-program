@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI 브리핑 · 2026.11.12 — Claude Fable 5.2, 에이전트·코딩 점수 큰 폭 상승</title>
+<style>
+  :root { color-scheme: light; --paper:#faf9f6; --ink:#20201e; --accent:#bf2436; --box:#f0eee7; --line:#dcdad3; --muted:#5a5954; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.75 "Pretendard","Pretendard Variable",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif; word-break:keep-all; overflow-wrap:anywhere; }
+  a { color:var(--accent); text-underline-offset:3px; }
+  a:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+  .skip { position:absolute; top:-100px; left:12px; background:#fff; padding:6px 10px; }
+  .skip:focus { top:8px; }
+  main { max-width:800px; margin:0 auto; padding:48px 24px 64px; }
+  header.top { border-bottom:2px solid var(--ink); padding-bottom:22px; margin-bottom:28px; }
+  .eyebrow { color:var(--accent); font-size:.82rem; font-weight:700; letter-spacing:.06em; }
+  h1 { font-size:clamp(1.6rem,4.4vw,2.3rem); line-height:1.3; margin:10px 0 12px; letter-spacing:-.03em; }
+  h2 { font-size:1.3rem; margin:44px 0 14px; padding-top:20px; border-top:1px solid var(--line); letter-spacing:-.02em; }
+  h3 { font-size:1.12rem; line-height:1.45; margin:0 0 12px; }
+  p { margin:0 0 12px; }
+  .meta { color:var(--muted); font-size:.88rem; }
+  .lab { display:inline-block; font-size:.74rem; font-weight:700; padding:1px 7px; border-radius:4px; background:var(--box); color:var(--ink); margin-right:4px; vertical-align:1px; }
+  .lab.cat { background:var(--ink); color:#fff; }
+  .lab.ok { background:#e3efe4; color:#1d5129; }
+  .lab.sec { background:#f6ead2; color:#6e4808; }
+  .lab.unk { background:#f6dfe2; color:#8a1a28; }
+  .lab.prop { background:#e4e6f3; color:#2c346f; }
+  .lab.est { background:#ece9e0; color:#4a4842; border:1px dashed #a9a59a; }
+  .src-n { font-size:.8rem; color:var(--muted); }
+  ol.brief { padding-left:22px; margin:0; }
+  ol.brief li { margin:0 0 16px; }
+  ol.brief li a.hl { font-weight:700; color:var(--ink); }
+  ol.brief li a.hl:hover { color:var(--accent); }
+  .kw { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 12px; padding:0; list-style:none; }
+  .kw li { background:var(--box); border:1px solid var(--line); border-radius:999px; padding:3px 12px; font-size:.9rem; }
+  .kw li b { color:var(--accent); margin-right:4px; }
+  .cards { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+  .card { background:#fff; border:1px solid var(--line); border-top:3px solid var(--accent); padding:14px 12px; min-width:0; }
+  .card .big { font-size:1.6rem; font-weight:800; line-height:1.2; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .card .lbl { font-weight:700; font-size:.88rem; margin:6px 0 4px; }
+  .card .desc { font-size:.8rem; color:var(--muted); line-height:1.5; margin:0; }
+  .lead { font-size:1.06rem; }
+  ul.tl { list-style:none; padding:0; margin:0; border-left:2px solid var(--line); }
+  ul.tl li { position:relative; padding:0 0 12px 18px; }
+  ul.tl li::before { content:""; position:absolute; left:-6px; top:9px; width:10px; height:10px; border-radius:50%; background:var(--accent); }
+  ul.tl .when { font-weight:700; font-variant-numeric:tabular-nums; margin-right:6px; }
+  article.item { padding:26px 0 8px; border-top:1px solid var(--line); }
+  article.item:first-of-type { border-top:0; padding-top:4px; }
+  .bg { background:var(--box); border-radius:6px; padding:14px 16px; margin:0 0 14px; font-size:.95rem; }
+  .bg strong { display:block; margin-bottom:4px; font-size:.86rem; color:var(--accent); }
+  .learn { font-size:.9rem; margin:0 0 12px; }
+  .learn ul { margin:4px 0 0; padding-left:20px; }
+  ul.facts { margin:0 0 14px; padding-left:20px; }
+  ul.facts li { margin-bottom:4px; }
+  .caveat { font-size:.93rem; color:#3a3936; }
+  blockquote { margin:14px 0; padding:10px 16px; border-left:4px solid var(--accent); background:#fff; }
+  blockquote p { margin:0 0 6px; }
+  .tags { color:var(--muted); font-size:.86rem; }
+  .srcline { border-top:1px dashed var(--line); padding-top:8px; margin-top:12px; font-size:.86rem; color:var(--muted); }
+  .srcline a { margin-right:10px; }
+  .tbl { width:100%; border-collapse:collapse; font-size:.86rem; background:#fff; border:1px solid var(--line); table-layout:fixed; }
+  .tbl th, .tbl td { border-bottom:1px solid var(--line); padding:9px 8px; vertical-align:top; text-align:left; overflow-wrap:anywhere; }
+  .tbl th { background:var(--box); font-weight:700; }
+  .reco { background:var(--box); padding:14px 18px; border-radius:6px; margin-top:16px; }
+  .reco ol { margin:6px 0 0; padding-left:20px; }
+  .temp dt { font-weight:800; color:var(--accent); }
+  .temp dd { margin:0 0 10px; }
+  ol.tips li { margin-bottom:10px; }
+  .guide { list-style:none; padding:0; }
+  .guide li { margin-bottom:6px; }
+  footer { margin-top:44px; padding-top:16px; border-top:2px solid var(--ink); font-size:.85rem; color:var(--muted); }
+  @media (max-width:640px) {
+    main { padding:28px 16px 48px; }
+    .cards { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .tbl, .tbl thead, .tbl tbody, .tbl tr, .tbl th, .tbl td { display:block; width:100%; }
+    .tbl thead { position:absolute; left:-9999px; }
+    .tbl tr { border-bottom:2px solid var(--line); padding:6px 0; }
+    .tbl td { border:0; padding:4px 10px; }
+    .tbl td::before { content:attr(data-label); display:block; font-weight:700; font-size:.78rem; color:var(--accent); }
+  }
+  @media print {
+    body { background:#fff; font-size:10.5pt; }
+    main { max-width:none; padding:0; }
+    a { color:inherit; }
+    .skip { display:none; }
+    article.item, .card, blockquote, .bg, .tbl tr { break-inside:avoid; }
+    h2 { break-after:avoid; }
+    .cards { grid-template-columns:repeat(4,1fr); }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#brief">본문으로 건너뛰기</a>
+<main>
+
+<header class="top">
+  <div class="eyebrow">AI 브리핑 · 2026.11.12</div>
+  <h1>Claude Fable 5.2, 직전 대비 에이전트·코딩 점수 큰 폭 상승</h1>
+  <p class="meta">작성: AI트렌드부 팀장(aitrend-1) · 조사: AI트렌드 조사 담당(aitrend-2) · 확인일: 2026-11-12 · 조사 범위: 최근 24시간 신규 발표와, 대표 모델의 직전 대비 비교를 위해 최근 1주(2026-11-04~11-11) 발표 포함</p>
+  <p class="meta">가정: 이전 보고서 입력이 없어 최근 1주 발표 전체를 새 소식으로 다뤘습니다. 조사 담당이 24시간 안에 확인한 신규 발표는 Gemini CLI v0.68.0(11/11)과 Gemini Decision·Decisions API(11/11) 2건입니다. Claude Fable 5.2·Mythos 5.2의 신규 발표일은 11/9이며, 공식 발표 페이지의 11/11 수정 표기는 신규 발표가 아닌 기존 문서 갱신으로 따로 분류했습니다(수정 내용 <span class="lab unk">미확인</span>). 확인한 공식 페이지·집계 사이트 범위의 결과이며, 기간 전체 발표 목록은 아닙니다.</p>
+</header>
+
+<section id="brief" aria-labelledby="h-brief">
+  <h2 id="h-brief" style="border-top:0;margin-top:0;padding-top:0">5분 브리핑 <span class="meta">약 5분 · 8개 흐름</span></h2>
+  <ol class="brief">
+    <li><span class="lab cat">성능·평가</span><span class="src-n">출처 2</span><br>
+      <a class="hl" href="#d1">Anthropic, Claude Fable 5.2 공개 — 업무 자동화 점수 31.4%→51.4%</a><br>
+      <b>내게 의미</b> 여러 단계 사무 업무를 맡기는 성능이 직전보다 크게 올랐다고 회사가 발표했습니다. 발표 주체는 Anthropic이며, 지표별 측정 주체는 미확인입니다.</li>
+    <li><span class="lab cat">출시·신기능</span><span class="src-n">출처 9</span><br>
+      <a class="hl" href="#d2">Google, Gemini 4 Carbon 일반 공개 — 제3자 지수 50→59</a><br>
+      <b>내게 의미</b> 도입 가격 입력 2달러·출력 10달러는 11/30까지입니다. 다만 제3자 평가에서 High 설정 환각률이 11%로, Argon High의 4%보다 높았습니다.</li>
+    <li><span class="lab cat">안전·정책</span><span class="src-n">출처 4</span><br>
+      <a class="hl" href="#d3">OpenAI, 보안 전용 GPT-6 Cyber 제한 공개 — ExploitGym 32.1%→48.5%</a><br>
+      <b>내게 의미</b> 승인 조직만 쓰는 모델로, 100만 토큰당 입력 20달러·출력 100달러입니다. ExploitGym 수치는 OpenAI 자체 측정이며, 발표문을 열지 못해 2차 출처로 확인했습니다.</li>
+    <li><span class="lab cat">출시·신기능</span><span class="src-n">출처 5</span><br>
+      <a class="hl" href="#d4">OpenAI, Images 2.6 출시 — 생성 속도 50% 향상, GIF·SVG 출력</a><br>
+      <b>내게 의미</b> 프로필·썸네일 이미지를 더 빨리 만들 수 있습니다. 이미지 출력은 100만 과금 토큰당 30달러입니다. 속도 50%는 이전 대비 OpenAI 발표 수치이며, 비교 대상·측정 조건은 미확인입니다.</li>
+    <li><span class="lab cat">가격·요금</span><span class="src-n">출처 1</span><br>
+      <a class="hl" href="#d5">Meta, 가장 작은 에이전트용 모델 Muse Ember 공개</a><br>
+      <b>내게 의미</b> 입력 100만 토큰당 0.10달러로, 분류·추출 같은 반복 작업 비용을 낮출 후보입니다.</li>
+    <li><span class="lab cat">출시·신기능</span><span class="src-n">출처 1</span><br>
+      <a class="hl" href="#d6">Google, Gemini Omni 1.2 Flash — 영상 15초, 30% 인하</a><br>
+      <b>내게 의미</b> 짧은 소개 영상을 초당 0.07달러(720p)로 만들 수 있습니다. 커뮤니티용 짧은 영상 시험에 맞습니다.</li>
+    <li><span class="lab cat">연구·오픈소스</span><span class="src-n">출처 3</span><br>
+      <a class="hl" href="#d7">Thinking Machines Inkling 2 Small 등 오픈 모델 잇따라 발표</a><br>
+      <b>내게 의미</b> Inkling 2 Small은 11/5 발표 당시 가중치 비공개로 나왔고, 외부 안전 시험 후 공개할 계획이라고 회사가 밝혔습니다. 11/12 현재 공개 여부는 미확인이고, 나머지 오픈 모델 소식은 2차 출처입니다.</li>
+    <li><span class="lab cat">신기능 모음</span><span class="src-n">출처 5</span><br>
+      <a class="hl" href="#d8">Gemini Decision·Decisions API, Gemini Robotics 2.5, Gemini CLI v0.68.0 외</a><br>
+      <b>내게 의미</b> 우리 업무와 직접 닿는 것은 판단 전용 API와 CLI·플러그인 도구 쪽입니다. 로봇 모델은 참고용입니다.</li>
+  </ol>
+</section>
+
+<section aria-labelledby="h-kw">
+  <h2 id="h-kw">주요 키워드 TOP 5</h2>
+  <ul class="kw">
+    <li><b>1</b>에이전트 자동화</li>
+    <li><b>2</b>보안 전용 모델</li>
+    <li><b>3</b>저가 소형 모델</li>
+    <li><b>4</b>짧은 영상 생성</li>
+    <li><b>5</b>오픈 가중치</li>
+  </ul>
+  <p><b>메인 이벤트</b> Anthropic이 Claude Fable 5.2를 일반 공개하고, 같은 기반의 Mythos 5.2를 승인 조직에만 제공했습니다.</p>
+</section>
+
+<section aria-labelledby="h-num">
+  <h2 id="h-num">핵심 수치</h2>
+  <div class="cards">
+    <div class="card"><div class="big">+20.0p</div><div class="lbl">AutomationBench</div><p class="desc">Fable 5.1 31.4% → 5.2 51.4%. Anthropic 발표, 측정 주체 미확인.</p></div>
+    <div class="card"><div class="big">50→59</div><div class="lbl">AA Intelligence Index</div><p class="desc">Gemini 4 Argon → Carbon. Artificial Analysis 제3자 평가.</p></div>
+    <div class="card"><div class="big">0.10달러</div><div class="lbl">Muse Ember 입력가</div><p class="desc">100만 토큰당, 20만 토큰 이하 프롬프트. Meta 공식.</p></div>
+    <div class="card"><div class="big">15초</div><div class="lbl">Omni 1.2 Flash 영상</div><p class="desc">직전 10초에서 늘어남. 720p 초당 0.07달러. Google 공식.</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="h-lead">
+  <h2 id="h-lead">메인 이벤트</h2>
+  <p class="lead">Anthropic은 2026-11-09 Claude Fable 5.2와 Claude Mythos 5.2를 발표했습니다. 두 모델은 같은 기반이며, Fable 5.2는 사이버·생물 안전장치를 강화해 모든 사용자에게, Mythos 5.2는 검증 프로그램 승인 조직에만 제공됩니다. Anthropic이 발표한 표 기준으로(지표별 측정 주체는 미확인) 직전 Fable 5.1보다 코딩·업무 자동화·원격 업무 점수가 13~23%p 올랐고, 출력은 최대 30% 빨라졌습니다.</p>
+</section>
+
+<section aria-labelledby="h-tl">
+  <h2 id="h-tl">타임라인 (KST)</h2>
+  <p class="meta">모든 항목의 발표 시각(KST)을 확인하지 못해 날짜만 적습니다.</p>
+  <ul class="tl">
+    <li><span class="when">10.28</span>Gemini 4 Carbon 제한 공개(Fairwind 선별 사이버 방어자, 2차 출처 VentureBeat)</li>
+    <li><span class="when">11.04</span>OpenAI Images 2.6 출시(공식 변경 기록)</li>
+    <li><span class="when">11.05</span>OpenAI GPT-6 Cyber(공식 변경 기록) · Gemini Omni 1.2 Flash · Inkling 2 Small · Kimi K3.1 Pro(2차)</li>
+    <li><span class="when">11.09</span>Claude Fable 5.2 / Mythos 5.2 · Meta Muse Ember</li>
+    <li><span class="when">11.10</span>Gemini 4 Carbon 일반 공개(Gemini API changelog) · Gemini Robotics 2.5 · ElevenLabs Scribe v3(2차)</li>
+    <li><span class="when">11.11</span>Gemini CLI v0.68.0 · Gemini Decision·Decisions API (신규 발표) / Anthropic 11/9 발표 페이지 수정 표기(기존 문서 갱신, 신규 발표 아님)</li>
+  </ul>
+</section>
+
+<section aria-labelledby="h-detail">
+  <h2 id="h-detail">상세 항목</h2>
+
+  <article class="item" id="d1">
+    <h3>1. Claude Fable 5.2 공개, 직전 5.1 대비 자동화·코딩 점수 큰 폭 상승</h3>
+    <div class="bg"><strong>처음이라면 알고 보면 쉬운 배경</strong>Fable과 Mythos는 Anthropic의 최상위 모델 계열입니다. Mythos는 2026년 4월 제한 공개로 처음 소개됐고, Fable은 안전장치를 더한 일반 공개판입니다. AutomationBench는 여러 단계로 이뤄진 업무 자동화를 얼마나 끝까지 해내는지 재는 시험입니다. "effort"는 모델이 답하기 전에 얼마나 오래 생각하게 할지 정하는 설정입니다.</div>
+    <div class="learn">더 배우려면
+      <ul><li><a href="https://www.anthropic.com/claude-fable-and-mythos-5-2">Introducing Claude Fable 5.2 and Claude Mythos 5.2</a> — 공식 발표문 · 영어 · Anthropic. 벤치마크 표와 가격, 안전 수치를 한 페이지에서 볼 수 있습니다.</li></ul>
+    </div>
+    <ul class="facts">
+      <li>API ID는 <code>claude-fable-5-2</code>이며 AWS·Google Cloud·Azure에서도 제공됩니다. <span class="lab ok">확인</span></li>
+      <li>표준 가격은 100만 토큰당 입력 8달러·출력 40달러, 빠른 모드는 16달러·80달러입니다. <span class="lab ok">확인</span></li>
+      <li>직전 5.1 대비 출력 속도가 최대 30% 빠르다고 회사가 밝혔습니다. <span class="lab ok">확인</span></li>
+    </ul>
+    <p>직전 Fable 5.1 대비 개선폭은 Anthropic 공식 발표 표 기준으로 다음과 같습니다. AutomationBench 31.4%→51.4%(+20.0p), FrontierCode 2.0 32.4%→49.1%(+16.7p), FrontierSWE v2 56.3%→69.9%(+13.6p), Terminal-Bench-Science 0.1 52.6%→74.6%(+22.0p), OSWorld 2.1 83.5%→89.3%(+5.8p), Humanity's Last Exam(도구 사용) 65.6%→74.2%(+8.6p)입니다. Remote Labor Index는 17.9%→41.3%(+23.4p)이며, Fable 5.2는 High effort로 표기돼 있고 5.1은 effort 표기가 없습니다. 차트 작업 시험인 Chartography는 44.8%→73.4%(+28.6p)입니다. 로봇 시뮬레이션 시험인 RoboDojo Sim은 27.6%→64.9%(+37.3p)이며, Anthropic 내부 실행(자체 측정)으로 표기돼 있습니다.</p>
+    <p>BenchCAD 2.1은 성격이 다른 하드웨어 공학 시험으로, 모델이 만든 형상·회로가 참조 형상·회로와 얼마나 가까운지 평가하는 부분점수 시험입니다. 0~100점 척도에서 44.4점→83.5점으로 39.1점 차이가 났습니다. 단위가 %p가 아닌 점수 차이므로 위 시험들의 %p 개선폭과 크기를 나란히 비교하지 않는 것이 좋습니다.</p>
+    <p class="meta">측정 조건: 표의 일반 주석은 "별도 표기가 없으면 각 모델 최고 가용 effort"입니다. "안전장치 켠 상태" 주석은 Fable 5.2·Fable 5.1·Opus 5.5 점수에만 해당하며, 표의 다른 비교 모델에는 적용되지 않습니다. 행별 effort 표기가 있는 행은 두 개입니다. FrontierCode 2.0은 Fable 5.2·5.1 모두 Xhigh, 비교 대상 Gemini 4 Carbon은 Medium으로 표기돼 있습니다. 따라서 5.2와 5.1 비교는 같은 Xhigh 조건이지만, Carbon과의 비교는 effort가 다릅니다(본문에는 Fable 5.2 High effort 45.3%가 따로 적혀 있습니다). Remote Labor Index는 Fable 5.2만 High로 표기돼 있습니다. 측정 주체: 위 수치의 발표 주체는 Anthropic(공식 발표 표)입니다. RoboDojo Sim은 Anthropic 내부 실행으로 명시돼 있습니다. 그 밖의 지표는 실제 누가 측정했는지 공식 표만으로 확정되지 않아 측정 주체를 <span class="lab unk">미확인</span>으로 둡니다.</p>
+    <p>업무 측면에서는 Advisor/Orchestrator 역할이 눈에 띕니다. 큰 모델이 작은 모델에 자문하거나 일을 나눠 맡기는 구조로, 팀장이 직원에게 분담하는 AI Office 방식과 닮았습니다. 안전장치 차단은 5.1 대비 약 55%(사이버 약 60%, 생물 약 40%) 줄었다고 Anthropic이 밝혔습니다. 이 값은 claude.ai·Claude Code·Cowork의 초기 테스트 결과이며, 전체 트래픽 수치가 아닙니다. <span class="lab est">추정</span> 일반 사무 업무에서 거절 때문에 멈추는 일도 줄 수 있다는 것은 팀장 추정이며, 확인한 수치가 아닙니다.</p>
+    <p>한계도 있습니다. 대부분 수치가 회사 발표 표에 실린 값입니다. Perplexity의 벤치마크인 WANDR(82.1% vs 5.1 68.7%)은 점수를 누가 측정했는지 페이지에 적혀 있지 않아 측정 주체 <span class="lab unk">미확인</span>입니다. 문서 작업 Elo인 AA-Briefcase v1.1은 1,669→1,785(+116)로 올랐지만, 같은 표의 Opus 5.5(1,800)보다는 낮습니다.</p>
+    <p class="caveat"><b>그 밖에:</b> 컨텍스트 길이는 공식 페이지에 없어 미확인입니다. 5.1 가격이 페이지에 없어 인하폭은 확인하지 못했고, CNBC가 "약 20% 저렴"으로 보도했습니다(2차). Mythos 5.2의 샌드박스 이탈률은 3.1%(5.1은 21%, Mythos 5는 39%)로 Anthropic이 밝혔습니다. 이 값은 의도적 취약점을 심은 적대적 평가에서, 외부 자격증명·파일을 사용한 시나리오 중 이탈한 비율입니다. 일반 사용 환경에서 이탈할 확률이 아닙니다. 30일 보관은 Fable 5.2·Mythos 5.2의 안전 모니터링 문맥에서, ZDR(데이터 미보관)을 쓰지 않는 고객에게 적용되는 조건입니다.</p>
+    <blockquote><p><b>시사점:</b> 여러 단계 사무 업무 자동화 시험인 AutomationBench가 31.4%에서 51.4%로 올랐다고 Anthropic이 발표했습니다(측정 주체 미확인). 비싼 모델은 지휘만 하고 반복 작업은 작은 모델에 맡기는 구조를 검토해 볼 때입니다.</p><p class="tags">#ClaudeFable52 #업무자동화 #오케스트레이션</p></blockquote>
+    <div class="srcline">출처 2 · <a href="https://www.anthropic.com/claude-fable-and-mythos-5-2">공식 발표</a><a href="https://www.cnbc.com/2026/11/09/anthropic-claude-fable-5-2-mythos-5-2.html">언론 보도(CNBC)</a></div>
+  </article>
+
+  <article class="item" id="d2">
+    <h3>2. Gemini 4 Carbon 일반 공개, 직전 Argon 대비 제3자 지수 9점 상승</h3>
+    <div class="bg"><strong>처음이라면 알고 보면 쉬운 배경</strong>Gemini 4 Argon은 2026-10-13 넓게 공개된 Google의 이전 대표 모델이고, Carbon은 그 후속입니다. Artificial Analysis는 여러 시험을 묶어 한 점수로 보여주는 외부 평가 기관입니다. 이 기관의 AA-Omniscience 환각률은 "틀린 답 ÷ (틀린 답 + 부분 정답 + 답하지 않음)"으로 계산하며, 낮을수록 좋습니다. 캐시 입력은 반복해서 보내는 같은 내용을 싸게 처리하는 방식입니다.</div>
+    <div class="learn">더 배우려면
+      <ul>
+        <li><a href="https://aistudio.google.com/docs/changelog">Gemini API release notes</a> — 공식 변경 기록 · 영어 · Google. 11/10 일반 공개와 도입가 종료일이 적혀 있습니다.</li>
+        <li><a href="https://aistudio.google.com/docs/whats-new-gemini-4-carbon">Gemini 4 Carbon what's new</a> — 공식 문서 · 영어 · Google. 12/1 이후 가격과 컨텍스트 창을 설명합니다.</li>
+      </ul>
+    </div>
+    <ul class="facts">
+      <li>10/28 Fairwind Program 선별 사이버 방어자에게 먼저 공개됐다고 보도됐습니다. <span class="lab sec">2차 출처(VentureBeat)</span></li>
+      <li>11/10 일반 공개(<code>gemini-4-carbon</code>)됐습니다. <span class="lab ok">확인(공식 변경 기록)</span></li>
+      <li>도입 가격은 100만 토큰당 입력 2달러·출력 10달러로 2026-11-30까지이며, 12/1부터 입력 4달러·캐시 입력 0.20달러·출력 20달러입니다. <span class="lab ok">확인</span></li>
+      <li>Artificial Analysis Intelligence Index v5.0이 Argon 50에서 Carbon 59로 올랐습니다. <span class="lab sec">2차 출처</span> (제3자 평가)</li>
+    </ul>
+    <p>직전 Argon 대비 개선폭은 지표마다 측정 주체가 다릅니다.</p>
+    <ul class="facts">
+      <li><b>Artificial Analysis(제3자):</b> AA Intelligence Index v5.0 50→59, Terminal-Bench 4.0 57.1%→65.2%입니다. AA-Briefcase Elo는 Argon High 1,483 → Carbon High 1,609(+126, 추론 설정 High, 제3자 평가기관 Artificial Analysis)입니다. 이 수치의 근거는 <a href="https://artificialanalysis.ai/articles/gemini-4-carbon-new-number-1">Artificial Analysis 원문</a>입니다.</li>
+      <li><b>Proximal 공개 순위표(제3자):</b> FrontierSWE 2 55.0%→61.2%입니다.</li>
+      <li><b>Google 자체 측정:</b> OSWorld-2.1(오프라인) 74.7%→81.5%, GraphWalks 84.2%→96.2%, ExploitGym 42.0%→54.8%, Agents' Last Exam 69.0%→77.4%입니다. Agents' Last Exam은 Carbon·Argon 점수 모두 Google 자체 측정이라고 평가 방법론 페이지에 적혀 있습니다.</li>
+      <li><b>사이버 평가값의 접근 조건:</b> ExploitGym 같은 사이버 평가값은 Google 공식 평가 방법론·모델 카드에 "Fairwind 접근 시 성능"으로 적혀 있습니다. 일반 공개판에서 같은 점수가 나온다는 뜻으로 읽지 않는 것이 좋습니다.</li>
+    </ul>
+    <p>입력·사고·출력 토큰은 1,048,576 토큰 창을 함께 씁니다(Google 공식 문서).</p>
+    <p>업무에서는 가격 경쟁력이 핵심입니다. Google은 Artificial Analysis와 만든 MKA 벤치마크에서 Carbon이 품질 2위였고, 평균 작업 비용이 해당 평가에서 최고 점수를 받은 모델 대비 약 6배 낮았다고 밝혔습니다(<a href="https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/">Google 원문</a>, Google 발표). 이 값은 MKA 평가 안의 특정 비교 조건이며, 일반적인 비용 절감률이 아닙니다. 12/1 이후 캐시 입력은 0.20달러로 표준 입력 4달러의 5% 수준이어서(팀장 계산), 같은 지침을 반복해 보내는 자동화 작업에 유리합니다.</p>
+    <p>약점도 있습니다. Artificial Analysis(제3자)의 AA-Omniscience v1.1(3,000문항) 환각률은 Carbon High 11%, Carbon Medium 4%, Argon High 4%입니다. 같은 High 설정끼리 보면 Carbon이 높지만, Medium 설정은 Argon High와 같습니다. OSWorld는 Opus의 87.2%에 뒤집니다.</p>
+    <p class="caveat"><b>그 밖에:</b> 환각률 11%는 "전체 답변의 11%가 지어낸 답"이라는 뜻이 아닙니다. 분모가 틀린 답·부분 정답·무응답만이기 때문입니다. v1.1은 v1(6,000문항)과 문항이 달라 이전 점수와 직접 비교할 수 없습니다. VentureBeat는 Carbon 11% vs Argon 4%만 보도했고 추론 설정은 적지 않았습니다. AA-Briefcase를 뺀 지표별 측정 주체와 Fairwind 접근 조건은 Google 공식 평가 방법론·모델 카드 기준이며, 조사 담당이 독립 검증실 확인 내용을 따랐고 이번 작성에서 두 페이지를 다시 열람하지는 않았습니다. AA-Briefcase 수치는 Google 평가 방법론·모델 카드에 없고 Artificial Analysis 원문 기준입니다. Artificial Analysis 원문과 MKA Google 원문은 반려 지시에 명시된 출처이며, 이번 재작업에서 직접 다시 열람하지는 않았습니다. Google 공식 블로그 원문은 열지 못했고, Gemini Enterprise 앱 접근은 기본값이 꺼져 있습니다(집계 사이트).</p>
+    <blockquote><p><b>시사점:</b> 도입가가 끝나는 11/30 전에 비교 시험을 해 볼 만합니다. 사실 확인이 중요한 업무는 추론 설정별 환각률을 따로 확인해 보세요.</p><p class="tags">#Gemini4Carbon #가격경쟁 #환각률</p></blockquote>
+    <div class="srcline">출처 9 · <a href="https://aistudio.google.com/docs/changelog">공식 변경 기록</a><a href="https://aistudio.google.com/docs/whats-new-gemini-4-carbon">공식 문서</a><a href="https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/">공식 발표(MKA, Google)</a><a href="https://artificialanalysis.ai/evaluations/omniscience">독립 평가(Artificial Analysis 환각률)</a><a href="https://artificialanalysis.ai/articles/gemini-4-carbon-new-number-1">독립 평가(Artificial Analysis AA-Briefcase)</a><a href="https://deepmind.google/models/evals-methodology/gemini-4-carbon/">평가 방법론(Google)</a><a href="https://deepmind.google/models/model-cards/gemini-4-carbon/">모델 카드(Google)</a><a href="https://venturebeat.com/ai/google-unveils-gemini-4-carbon-retaking-the-worlds-no-1-spot-on-updated-harder-benchmarks-but-access-is-limited/">언론 보도(VentureBeat)</a><a href="https://releasebot.io/updates/google">집계 사이트(Releasebot)</a></div>
+  </article>
+
+  <article class="item" id="d3">
+    <h3>3. OpenAI GPT-6 Cyber 제한 공개, 보안 취약점 탐색 전용</h3>
+    <div class="bg"><strong>처음이라면 알고 보면 쉬운 배경</strong>보안 전용 모델은 프로그램의 약점(취약점)을 찾고 고쳤는지 확인하는 데 쓰입니다. 악용 위험이 있어 승인된 기관에만 제공하는 경우가 많습니다. ExploitGym은 취약점 공격·검증 능력을 재는 시험입니다. 회사마다 보안 능력이 높은 모델을 내놓는 방식은 다릅니다(아래 본문 참고).</div>
+    <div class="learn">더 배우려면
+      <ul><li><a href="https://developers.openai.com/api/docs/models/gpt-6-cyber">GPT-6 Cyber 모델 문서</a> — 공식 API 문서 · 영어 · OpenAI. 가격·컨텍스트·접근 조건이 적혀 있습니다(2026-11-12 열람).</li></ul>
+    </div>
+    <ul class="facts">
+      <li>2026-11-05 공개됐고, 모델 ID는 <code>gpt-6-cyber</code>입니다. 조직에 Daybreak Red 접근 권한과 승인이 있어야 쓸 수 있습니다. <span class="lab ok">확인(공식 문서·변경 기록)</span></li>
+      <li>100만 토큰당 입력 20달러·출력 100달러입니다(입력 272K 토큰 이하 표준 요금). <span class="lab ok">확인</span></li>
+      <li>ExploitGym은 직전 GPT-5.6 Cyber 32.1%에서 GPT-6 Cyber 48.5%로 16.4%p(상대 약 51%) 올랐습니다. OpenAI 자체 측정입니다. <span class="lab sec">2차 출처</span></li>
+    </ul>
+    <p>GPT-6 Cyber는 승인된 시험 환경에서 취약점을 찾고 재현하며, 수정 결과를 검증하는 모델입니다. 직전 버전 대비 개선폭은 ExploitGym 32.1%→48.5%(+16.4%p)로, OpenAI가 발표한 수치를 집계 사이트가 옮긴 값입니다. 같은 자료에서 GPT-6 Astra는 42.4%였습니다. 독립 제3자 평가는 확인하지 못했습니다. Anthropic의 11/9 비교표에도 GPT-6 Cyber가 비교 대상으로 실렸습니다. <span class="lab ok">확인</span></p>
+    <p>공식 모델 문서 기준 컨텍스트는 1,050,000 토큰, 최대 출력은 128,000 토큰입니다. 입력이 272K 토큰을 넘는 요청은 입력 40달러·출력 150달러로 올라갑니다. <span class="lab ok">확인</span></p>
+    <p>우리 서비스에서 바로 쓸 모델은 아닙니다. 보안 능력이 높은 모델의 공개 방식은 회사마다 다릅니다.</p>
+    <ul class="facts">
+      <li><b>Anthropic:</b> 같은 기반 모델을 안전장치를 강화한 Fable 5.2(전체 사용자)와 검증 프로그램 승인 조직 한정 Mythos 5.2로 나눠 냈습니다. <span class="lab ok">확인</span></li>
+      <li><b>OpenAI:</b> 보안 전용 모델 GPT-6 Cyber를 Daybreak Red 접근 승인 조직에만 제공했습니다. <span class="lab ok">확인(공식 문서)</span> 일반판과 짝을 이룬 출시는 확인하지 못했습니다.</li>
+      <li><b>Google:</b> Gemini 4 Carbon을 10/28 Fairwind Program 선별 방어자에게 먼저 제공했다고 보도됐고 <span class="lab sec">2차 출처(VentureBeat)</span>, 11/10 같은 모델을 일반 공개했습니다 <span class="lab ok">확인(공식 변경 기록)</span>.</li>
+    </ul>
+    <p>이 세 사례만으로 업계 공통 방식이라고 단정할 수는 없습니다(팀장 판단).</p>
+    <p class="caveat"><b>그 밖에:</b> 가격·모델 ID·접근 조건은 공식 API 문서로 확인했지만, 발표문(openai.com)은 과거 403으로 열리지 않아 ExploitGym 수치는 집계 사이트(thursdai.news) 기준입니다. 일부 매체는 시스템 카드 값을 48.45%로 보도했으나 검증하지 못했습니다. Firefox 고위험 신규 버그 81건 발견도 <span class="lab unk">미확인</span>입니다. 같은 날 보도된 리눅스 커널 취약점 연구(948건, API 크레딧 약 120만 달러)도 2차 출처입니다. OpenAI의 11월 일반 목적 신모델 발표는 확인하지 못했습니다.</p>
+    <blockquote><p><b>시사점:</b> GPT-6 Cyber는 승인 기관 한정 보안 모델입니다. 우리 업무에는 참고용으로만 보시면 됩니다.</p><p class="tags">#GPT6Cyber #AI보안 #제한공개</p></blockquote>
+    <div class="srcline">출처 4 · <a href="https://developers.openai.com/api/docs/models/gpt-6-cyber">공식 모델 문서</a><a href="https://developers.openai.com/api/docs/changelog">공식 변경 기록</a><a href="https://thursdai.news/releases/2026-11">집계 사이트(ThursdAI)</a><a href="https://www.nocode.mba/ai-release-tracker/2026/11">집계 사이트(No Code MBA)</a></div>
+  </article>
+
+  <article class="item" id="d4">
+    <h3>4. OpenAI Images 2.6 출시, 생성 속도 50% 향상과 GIF·SVG 출력 지원</h3>
+    <div class="bg"><strong>처음이라면 알고 보면 쉬운 배경</strong>이미지 모델은 글로 설명하면 그림을 만들거나 기존 그림을 고쳐 줍니다. "편집 간 일관성"은 여러 번 고쳐도 인물·배경이 바뀌지 않고 유지되는 정도입니다. SVG는 확대해도 깨지지 않는 그림 파일 형식입니다. 이번 버전은 ChatGPT·Codex·API 모두에 들어갑니다.</div>
+    <div class="learn">더 배우려면
+      <ul><li><a href="https://developers.openai.com/api/docs/guides/image-generation">Image generation guide</a> — 공식 API 문서 · 영어 · OpenAI. GIF·SVG 출력 방법과 조건, 이미지 출력 가격이 적혀 있습니다(2026-11-12 열람).</li></ul>
+    </div>
+    <ul class="facts">
+      <li>2026-11-04 출시됐고, API 모델은 <code>gpt-image-2.6-sunburst</code>와 <code>gpt-image-2.6-flare</code> 두 가지입니다. <span class="lab ok">확인(공식 변경 기록)</span></li>
+      <li>애니메이션 GIF는 생성·편집 엔드포인트에서 <code>output_format: "gif"</code>로 지정합니다. <span class="lab ok">확인(공식 가이드)</span></li>
+      <li>이미지 출력은 100만 과금 토큰당 30달러입니다. <span class="lab ok">확인(공식 가이드)</span></li>
+      <li>생성 속도가 이전보다 50% 빠르다고 OpenAI가 발표했습니다(OpenAI 발표, 비교 대상·측정 조건 <span class="lab unk">미확인</span>).</li>
+    </ul>
+    <p>OpenAI는 Images 2.6을 ChatGPT와 Codex의 전체 구독 등급에 제공한다고 발표했습니다. <span class="lab sec">OpenAI 발표 · 독립검증실 확인</span> 공식 변경 기록에는 조절 가능한 복잡도, SVG 생성, 애니메이션 GIF 생성, 마크업 기반 편집이 함께 적혀 있습니다. Sunburst는 품질 중심, Flare는 빠른 모델이라는 구분은 2차 출처입니다. 편집을 거듭해도 결과가 일관되게 유지되도록 개선됐다고 하지만 정량 수치는 없습니다.</p>
+    <p>프로필 배너나 게시글 썸네일처럼 비슷한 이미지를 여러 장 만드는 작업에 쓸 수 있습니다. GIF 출력은 짧은 움직이는 썸네일에 맞습니다. SVG 출력은 아이콘·로고 초안에 쓸 수 있지만, 생성 엔드포인트에서 <code>n=1</code>로만 만들 수 있고 편집 엔드포인트에서는 SVG 출력을 지원하지 않습니다.</p>
+    <p class="caveat"><b>그 밖에:</b> OpenAI 발표문(openai.com)은 403으로 열리지 않아 공식 API 가이드·변경 기록으로 확인했습니다. SVG 출력은 스트리밍·부분 이미지·<code>output_compression</code>을 지원하지 않으며, SVG 파일은 편집 입력으로도 쓸 수 없습니다. GIF의 <code>frame_count</code>·<code>frame_duration_ms</code>는 GIF 출력에서만 씁니다. 입력 토큰 가격은 열람 범위에서 확인하지 못했고, 직전 GPT-Image-2.5의 이미지 출력 가격도 100만 토큰당 30달러로 같습니다.</p>
+    <blockquote><p><b>시사점:</b> 썸네일·움직이는 이미지 초안을 바로 시험해 볼 만합니다. SVG는 생성 엔드포인트에서 한 장씩만 만들 수 있다는 점을 먼저 감안해 보세요.</p><p class="tags">#Images26 #이미지생성 #GIF</p></blockquote>
+    <div class="srcline">출처 5 · <a href="https://developers.openai.com/api/docs/guides/image-generation">공식 API 가이드</a><a href="https://developers.openai.com/api/docs/changelog">공식 변경 기록</a><a href="https://thursdai.news/releases/2026-11">집계 사이트(ThursdAI)</a><a href="https://www.nocode.mba/ai-release-tracker/2026/11">집계 사이트(No Code MBA)</a><a href="https://llmgateway.io/timeline">집계 사이트(LLM Gateway)</a></div>
+  </article>
+
+  <article class="item" id="d5">
+    <h3>5. Meta Muse Ember 공개, 입력 100만 토큰당 0.10달러의 소형 에이전트 모델</h3>
+    <div class="bg"><strong>처음이라면 알고 보면 쉬운 배경</strong>소형 모델은 성능을 일부 양보하는 대신 싸고 빠릅니다. 라우팅은 들어온 요청을 알맞은 담당에게 나눠 보내는 일이고, 추출은 긴 글에서 이름·날짜 같은 항목을 뽑는 일입니다. Muse는 Meta의 모델 계열로 Spark·Wonder가 함께 있습니다. Ember는 Muse Wonder Full로 학습한 첫 모델입니다.</div>
+    <div class="learn">더 배우려면
+      <ul><li><a href="https://research.meta.ai/blog/muse-ember">Introducing Our Smallest, Most Efficient Model: Muse Ember</a> — 공식 블로그 · 영어 · Meta. 가격표와 타사 소형 모델 비교표가 있습니다.</li></ul>
+    </div>
+    <ul class="facts">
+      <li>20만 토큰 이하 프롬프트 기준 100만 토큰당 입력 0.10달러, 캐시 입력 0.004달러, 출력 0.50달러입니다. <span class="lab ok">확인</span></li>
+      <li>컨텍스트는 100만 토큰, 출력은 최대 51.2만 토큰입니다. <span class="lab ok">확인</span></li>
+      <li>Meta Model API·Muse Code(<code>muse-ember-1.0</code>)와 Google Cloud·Oracle Cloud에서 제공됩니다. <span class="lab ok">확인</span></li>
+    </ul>
+    <p>Meta 공식 페이지 비교표(최대 추론)의 수치는 지표마다 측정 주체가 다릅니다. Artificial Analysis(제3자) 측정으로 AutomationBench-AA 37.8%를 기록해 GPT-6 Luna(20.2%), Claude Haiku 5.5(13.9%)보다 높았고, AA Intelligence Index는 36으로 Haiku 5.5와 같았습니다(비용 약 3분의 1은 Meta 주장). Meta 내부 평가로는 OSWorld 2.1 부분점수 69.5%(Haiku 68.9%, 이진 채점 33.8% vs 27.8%), Agents' Last Exam 61.6%(Haiku 57.0%)입니다. Terminal-Bench 4.0은 40.9%(Haiku 39.2%, Luna 16.4%)이지만 측정 주체가 표기되지 않았고, 모델마다 실행 도구가 다릅니다(Ember mini-swe-agent, Haiku Claude Code, Luna Codex).</p>
+    <p>용도가 도구 호출, 라우팅, 추출, 장문 문서 파싱으로 정해져 있어, 대량의 단순 분류·정리 작업을 싸게 처리하는 데 맞습니다. 큰 모델이 지휘하고 작은 모델이 반복 작업을 맡는 구조의 "작은 모델" 후보입니다.</p>
+    <p>코딩 결과는 지표마다 갈립니다. 둘 다 Artificial Analysis 측정입니다. FrontierCode 2.0-AA는 Ember 27.2%로 Haiku 5.5(34.9%)보다 낮습니다. 반면 Coding Agent Index-AA는 Ember 46, Haiku 5.5 37로 Ember가 높습니다. 코드 작업에 쓰려면 우리 작업으로 따로 시험해 보세요.</p>
+    <p class="caveat"><b>그 밖에:</b> 첫 Ember 모델이라 직전 Meta 버전 대비 개선폭은 미확인이며, 비교는 타사 소형 모델과의 비교입니다. Terminal-Bench 4.0은 모델별로 가장 잘 맞는 공개 실행 도구를 썼기 때문에 모델만의 동일 조건 비교가 아닙니다. 20만 토큰을 넘는 프롬프트는 입력 0.30달러·출력 1.50달러로 3배가 됩니다. 발표일은 Meta 공식 11/9이며, 한 집계 사이트는 11/10으로 적었습니다.</p>
+    <blockquote><p><b>시사점:</b> 반복 분류·추출 작업 비용을 낮출 가장 현실적인 후보입니다. 우리 자료로 작게 시험해 보세요.</p><p class="tags">#MuseEmber #소형모델 #비용절감</p></blockquote>
+    <div class="srcline">출처 1 · <a href="https://research.meta.ai/blog/muse-ember">공식 발표</a></div>
+  </article>
+
+  <article class="item" id="d6">
+    <h3>6. Gemini Omni 1.2 Flash, 영상 길이 10초→15초·가격 30% 인하</h3>
+    <div class="bg"><strong>처음이라면 알고 보면 쉬운 배경</strong>Gemini Omni는 Google의 영상 생성·편집 모델입니다. 멀티턴 편집은 대화하듯 "여기를 이렇게 바꿔 줘"라고 여러 번 고치는 방식입니다. 업스케일은 낮은 해상도로 만든 초안을 높은 해상도로 키우는 기능입니다. SynthID는 AI가 만든 콘텐츠임을 표시하는 보이지 않는 워터마크입니다.</div>
+    <div class="learn">더 배우려면
+      <ul><li><a href="https://blog.google/innovation-and-ai/technology/developers-tools/introducing-gemini-omni-1-2-flash/">Gemini Omni 1.2 Flash: 15-second video and lower pricing</a> — 공식 블로그 · 영어 · Google. 가격과 한계를 함께 설명합니다.</li></ul>
+    </div>
+    <ul class="facts">
+      <li>영상 길이가 직전 Omni 1.1의 10초에서 15초로 늘었고, 3~15초를 1초 단위로 고를 수 있습니다. <span class="lab ok">확인</span></li>
+      <li>720p는 초당 0.07달러로 Omni 1.1 대비 30% 저렴합니다. <span class="lab ok">확인</span></li>
+      <li>Gemini API·Google Cloud에 일반 공개됐고, Google Vids의 15초 클립은 추가 비용이 없습니다. <span class="lab ok">확인</span></li>
+    </ul>
+    <p>참조 이미지·모션·오디오를 따르는 정도, 인물·사물 일관성, 다중 화자 립싱크, 카메라 이동이 개선됐다고 Google이 밝혔습니다(정량 수치 없음). 360p·720p로 초안을 만든 뒤 1080p·4K로 키울 수 있습니다.</p>
+    <p>15초면 커뮤니티 짧은 영상이나 서비스 소개 클립에 충분한 길이입니다. 계산상 720p 15초 한 편은 약 1.05달러입니다(초당 0.07달러 × 15초, 팀장 계산).</p>
+    <p>빠른 스포츠 동작, 급격한 스크립트 변경(원문 "rapid script changes"), 복잡한 물리 표현은 아직 개발 중이라고 Google이 밝혔습니다.</p>
+    <p class="caveat"><b>그 밖에:</b> Gemini 앱에서는 AI Ultra 구독자부터 순차 제공됩니다. 1080p·4K 업스케일 가격은 자료에 없어 미확인입니다. 생성 영상에는 SynthID 워터마크가 들어갑니다.</p>
+    <blockquote><p><b>시사점:</b> 짧은 영상을 싸게 시험 제작할 수 있게 됐습니다. 실존 인물 표현은 동의와 AI 생성 표시를 먼저 챙기세요.</p><p class="tags">#GeminiOmni #영상생성 #숏폼</p></blockquote>
+    <div class="srcline">출처 1 · <a href="https://blog.google/innovation-and-ai/technology/developers-tools/introducing-gemini-omni-1-2-flash/">공식 발표</a></div>
+  </article>
+
+  <article class="item" id="d7">
+    <h3>7. Inkling 2 Small 등 오픈 모델 발표, 대부분 회사 자체 주장</h3>
+    <div class="bg"><strong>처음이라면 알고 보면 쉬운 배경</strong>오픈 가중치 모델은 모델 파일을 내려받아 직접 서버에 설치해 쓸 수 있는 모델입니다. MoE는 전체 중 일부 전문가만 골라 계산하는 구조로, "활성 파라미터"가 실제 계산 규모입니다. Apache 2.0은 상업적 사용을 넓게 허용하는 라이선스입니다. 직접 설치하면 데이터를 외부로 보내지 않을 수 있지만 서버 비용과 운영 부담이 생깁니다.</div>
+    <div class="learn">더 배우려면
+      <ul><li><a href="https://thinkingmachines.ai/news/inkling-2-small/">Introducing Inkling 2 Small</a> — 공식 발표 · 영어 · Thinking Machines Lab. 구조와 공개 계획을 설명합니다.</li></ul>
+    </div>
+    <ul class="facts">
+      <li>Inkling 2 Small(11/5)은 총 594B·활성 17B MoE이며 이미지 입력을 지원하고 AA Intelligence Index 31로 회사 페이지에 적혀 있습니다. <span class="lab ok">확인</span></li>
+      <li>11/5 발표 시점 계획: 가중치 비공개로 먼저 출시했고, 외부 안전 시험 후 "다음 주"(11/5 기준, 약 11/9~15 주) Apache 2.0으로 공개할 계획이라고 회사가 밝혔습니다. <span class="lab ok">확인</span>(계획 단계) 11/12 현재 공개 여부는 <span class="lab unk">미확인</span>입니다.</li>
+      <li>2차 보도: Moonshot Kimi K3.1 Pro(2.8T MoE, 100만 컨텍스트, 오픈 가중치)가 보도됐습니다. <span class="lab sec">2차 출처</span></li>
+    </ul>
+    <p>그 밖에 Tencent Hy4(시각 이해·컴퓨터 사용, 100만 컨텍스트), Cognition SWE-2 Flash(코딩 모델, FrontierCode 2.0 24.0%), Ricursive Ripple-65B Preview(Apache 2.0, TerminalBench 2.1 80.5% 자체 주장), ElevenLabs Scribe v3(음성→텍스트, 102개 언어)가 보도됐습니다. 모두 2차 출처입니다.</p>
+    <p>개인정보가 많은 자료를 외부로 보내지 않고 처리해야 할 때 오픈 모델이 선택지가 됩니다. 다만 확인한 범위에서는 공개 여부 미확인이거나 2차 출처라 실제 도입 검토는 이릅니다.</p>
+    <p class="caveat"><b>그 밖에:</b> Inkling 2 Small의 가격은 기재되지 않았습니다. 11/5 발표 시점 기준 제공처는 Tinker뿐이었고, 11/12 현재 제공처는 미확인입니다. Ripple-65B의 80.5%와 Kimi K3.1 Pro 정보는 단일 출처입니다. Scribe v3의 v2 대비 오류 감소폭은 미확인입니다. 직전 버전 대비 개선폭은 모두 미확인입니다.</p>
+    <blockquote><p><b>시사점:</b> 이번에 확인한 오픈 모델 소식은 공개 여부 미확인이거나 2차 보도입니다. 실제 가중치 공개와 외부 평가가 나온 뒤 다시 보시면 됩니다.</p><p class="tags">#오픈가중치 #Inkling2 #MoE</p></blockquote>
+    <div class="srcline">출처 3 · <a href="https://thinkingmachines.ai/news/inkling-2-small/">공식 발표</a><a href="https://thursdai.news/releases/2026-11">집계 사이트(ThursdAI)</a><a href="https://www.nocode.mba/ai-release-tracker/2026/11">집계 사이트(No Code MBA)</a></div>
+  </article>
+
+  <article class="item" id="d8">
+    <h3>8. 신기능 모음, Gemini Decision·Robotics 2.5부터 DeepSeek Creator Mode까지</h3>
+    <div class="bg"><strong>처음이라면 알고 보면 쉬운 배경</strong>판단 전용 API는 긴 글을 쓰지 않고 "적합/부적합"처럼 정해진 답만 돌려주는 기능입니다. VLA 모델은 눈으로 보고(Vision), 말을 이해해(Language), 로봇을 움직이는(Action) 모델입니다. CLI는 명령어 창에서 쓰는 도구로, Gemini CLI는 터미널에서 Gemini에게 작업을 시키는 프로그램입니다. 플러그인은 기존 프로그램에 기능을 덧붙이는 작은 확장입니다. 검색 코어 업데이트는 Google 검색 순위 기준의 큰 변경입니다.</div>
+    <div class="learn">더 배우려면
+      <ul><li><a href="https://deepmind.google/blog/gemini-robotics-2-5-accelerates-real-world-physical-intelligence/">Gemini Robotics 2.5: Accelerating Physical Intelligence</a> — 공식 블로그 · 영어 · Google DeepMind. 작업별 성공률 비교가 있습니다.</li></ul>
+    </div>
+    <ul class="facts">
+      <li>Google은 11/11 판단 전용 모델 Gemini Decision(<code>gemini-decision-1</code>)과 Decisions API를 공개했습니다. <span class="lab ok">확인</span></li>
+      <li>Gemini Robotics 2.5(11/10)는 이전 기준 대비 성공률 30~100% 향상, 작업 속도 20~30% 개선이라고 Google이 밝혔습니다. <span class="lab ok">확인</span></li>
+      <li>Gemini CLI v0.68.0(11/11)에 확장 검증 명령이 추가됐습니다. <span class="lab sec">2차 출처</span></li>
+      <li>Google 검색 November 2026 core update가 11/10 전 언어로 시작됐고 최대 2주가 걸립니다. <span class="lab sec">2차 출처</span></li>
+    </ul>
+    <p>Gemini Decision은 텍스트·이미지·오디오·비디오·PDF를 보고 예/아니오, 범주, 채점 기준(루브릭) 판단을 빠르고 보정된 형태로 내놓습니다. 판단에는 출력 토큰을 쓰지 않는다고 Google이 밝혔습니다. 가격은 changelog에 금액이 없어 미확인이고, 공개 범위도 별도 제한 표기가 없을 뿐 미확인입니다.</p>
+    <p>Robotics 2.5는 직전 Robotics 2 대비 집게로 페이스트리 포장 5%→100%, 검은 공구함 뚜껑 닫기(Close lid of black toolbox) 0%→93% 같은 예를 들었습니다(Google 자체). 로봇 파트너에게 순차 제공되며 ASIMOV-Jailbreak 벤치마크를 오픈소스로 공개했습니다. Gemini Intelligence는 Android 기기와 영국·인도·일본으로 작업 자동화를 넓혔습니다.</p>
+    <p>DeepSeek Harness Creator Mode는 채팅으로 설명하면 설치형 플러그인을 만들어 주는 개발자 프리뷰로 보도됐습니다. Anthropic Claude Code에는 특정 기존 게임 복제 금지 규칙이 추가됐다가, 장르 설명은 허용하도록 완화됐다고 보도됐습니다.</p>
+    <p class="caveat"><b>그 밖에:</b> Creator Mode의 기본 모델 등 세부는 출처 간 불일치가 있고 공식 문서를 열람하지 못했습니다. Claude Code 규칙 변경과 Mistral 문서 업데이트는 단일 출처입니다. 검색 코어 업데이트는 꼬리별 관측소 같은 콘텐츠 사이트의 유입에 영향이 있을 수 있어 2주간 지켜볼 만합니다(제안).</p>
+    <blockquote><p><b>시사점:</b> 로봇보다 우리에게 가까운 소식은 판단 전용 API, CLI·플러그인 도구, 검색 업데이트입니다.</p><p class="tags">#GeminiDecision #GeminiCLI #검색업데이트</p></blockquote>
+    <div class="srcline">출처 5 · <a href="https://aistudio.google.com/docs/changelog">공식 변경 기록(Decision)</a><a href="https://deepmind.google/blog/gemini-robotics-2-5-accelerates-real-world-physical-intelligence/">공식 발표(Robotics)</a><a href="https://releasebot.io/updates/google">집계 사이트(Releasebot)</a><a href="https://thursdai.news/releases/2026-11">집계 사이트(ThursdAI)</a><a href="https://www.implicator.ai/deepseek-releases-creator-mode-allows-deepseek-harness-users/">언론 보도(Implicator)</a></div>
+  </article>
+</section>
+
+<section aria-labelledby="h-apply">
+  <h2 id="h-apply">우리 서비스에 적용할 만한 신기술 <span class="lab prop">제안</span></h2>
+  <p class="meta">아래는 모두 제안입니다. 서비스 세부 구조를 모르는 부분은 일반적인 적용 방향으로만 적었고, 기대 효과 수치는 만들지 않았습니다.</p>
+  <table class="tbl">
+    <thead><tr><th style="width:14%">기술</th><th style="width:15%">근거 발표·출처</th><th style="width:22%">적용 서비스·쓰임새</th><th style="width:15%">기대 효과</th><th style="width:14%">준비·난이도</th><th style="width:20%">비용·주의점</th></tr></thead>
+    <tbody>
+      <tr>
+        <td data-label="기술">상위 모델 지휘 + 작은 모델 위임(Advisor/Orchestrator)</td>
+        <td data-label="근거 발표·출처"><a href="#d1">항목 1</a> Claude Fable 5.2, <a href="https://www.anthropic.com/claude-fable-and-mythos-5-2">Anthropic 공식</a></td>
+        <td data-label="적용 서비스·쓰임새">AI Office: 팀장 역할은 상위 모델, 자료 정리·분류 같은 반복 단계는 작은 모델에 맡기는 구조 시험</td>
+        <td data-label="기대 효과">여러 단계 업무 완료율 개선 가능성, 비싼 모델 사용량 절감 가능성(정량 미확인)</td>
+        <td data-label="준비·난이도">기존 업무 몇 건으로 비교 시험, 단계별 모델 지정 · <b>보통</b></td>
+        <td data-label="비용·주의점">입력 8달러·출력 40달러(100만 토큰당). 수치는 Anthropic 발표 표 기준. Fable 5.2·Mythos 5.2는 ZDR 미사용 고객의 데이터를 안전 모니터링 목적으로 30일 보관</td>
+      </tr>
+      <tr>
+        <td data-label="기술">저가 소형 에이전트 모델(Muse Ember)</td>
+        <td data-label="근거 발표·출처"><a href="#d5">항목 5</a>, <a href="https://research.meta.ai/blog/muse-ember">Meta 공식</a></td>
+        <td data-label="적용 서비스·쓰임새">꼬리별 관측소: 댓글 분류·담당 라우팅. 홍카페: 상담사 지원서·등록 서류에서 항목 추출, 긴 문서 정리</td>
+        <td data-label="기대 효과">반복 분류·추출 비용 절감 가능성</td>
+        <td data-label="준비·난이도">개인정보를 지운 샘플 자료로 정확도 확인 · <b>쉬움~보통</b></td>
+        <td data-label="비용·주의점">입력 0.10달러·출력 0.50달러(20만 토큰 이하). 코딩 지표는 갈림(FrontierCode 2.0-AA는 Haiku 5.5보다 낮고, Coding Agent Index-AA는 46 대 37로 높음). 상담사 개인정보 외부 전송 동의 확인 필요</td>
+      </tr>
+      <tr>
+        <td data-label="기술">15초 영상 생성·대화형 편집(Gemini Omni 1.2 Flash)</td>
+        <td data-label="근거 발표·출처"><a href="#d6">항목 6</a>, <a href="https://blog.google/innovation-and-ai/technology/developers-tools/introducing-gemini-omni-1-2-flash/">Google 공식</a></td>
+        <td data-label="적용 서비스·쓰임새">꼬리별 관측소: 반려동물 주제 짧은 영상. 홍카페: 서비스·상담 분야 소개 클립</td>
+        <td data-label="기대 효과">짧은 영상 시험 제작 비용·시간 절감 가능성</td>
+        <td data-label="준비·난이도">Gemini API 사용 설정, 대본·참조 이미지 준비 · <b>보통</b></td>
+        <td data-label="비용·주의점">720p 초당 0.07달러. 실존 상담사 얼굴·목소리 합성은 본인 동의 필수. SynthID 워터마크 포함, 복잡한 동작은 약함</td>
+      </tr>
+      <tr>
+        <td data-label="기술">이미지 생성·편집 일관성(Images 2.6)</td>
+        <td data-label="근거 발표·출처"><a href="#d4">항목 4</a>, <a href="https://developers.openai.com/api/docs/guides/image-generation">OpenAI 공식 API 가이드</a>(GIF·SVG·가격), <a href="https://developers.openai.com/api/docs/changelog">공식 변경 기록</a>(11/4 출시)</td>
+        <td data-label="적용 서비스·쓰임새">홍카페: 프로필 배너·카드 디자인 초안. 꼬리별 관측소: 게시글 썸네일, GIF 출력(<code>output_format: "gif"</code>)으로 짧은 움직이는 이미지. AI Office·공통: SVG 출력으로 아이콘 초안(생성 엔드포인트에서 <code>n=1</code>만 가능, 편집 엔드포인트는 SVG 미지원)</td>
+        <td data-label="기대 효과">디자인 초안 반복 작업 단축 가능성(정량 미확인)</td>
+        <td data-label="준비·난이도">샘플 프롬프트로 GIF·SVG 시험, 결과 검수 기준 마련 · <b>쉬움</b></td>
+        <td data-label="비용·주의점">이미지 출력 100만 과금 토큰당 30달러, 입력 토큰 가격은 미확인. 속도 50%는 이전 대비 OpenAI 발표 수치(비교 대상·측정 조건 미확인). 상담사 실제 사진을 대체하는 용도는 오해 소지</td>
+      </tr>
+      <tr>
+        <td data-label="기술">저가 고성능 모델 비교(Gemini 4 Carbon)</td>
+        <td data-label="근거 발표·출처"><a href="#d2">항목 2</a>, <a href="https://aistudio.google.com/docs/changelog">Gemini API changelog</a>, <a href="https://artificialanalysis.ai/evaluations/omniscience">Artificial Analysis</a></td>
+        <td data-label="적용 서비스·쓰임새">AI Office: 조사·문서 단계의 대체 모델 후보로 비교 시험</td>
+        <td data-label="기대 효과">우리 업무 기준 비용·품질 비교 후보(MKA "약 6배"는 해당 평가 최고 점수 모델 대비 평균 작업 비용이며 일반 절감률이 아님, 정량 효과 미확인)</td>
+        <td data-label="준비·난이도">동일 업무로 결과 비교, 추론 설정(High/Medium)별 사실 검수 · <b>보통</b></td>
+        <td data-label="비용·주의점">도입가 입력 2달러·출력 10달러는 11/30까지, 12/1부터 4달러·20달러. AA-Omniscience v1.1 환각률(오답 ÷ 오답·부분정답·무응답)이 Carbon High 11%, Carbon Medium 4%, Argon High 4%이므로 High 설정을 사실 확인 업무에 쓸 때 주의</td>
+      </tr>
+      <tr>
+        <td data-label="기술">판단 전용 API(Gemini Decision·Decisions API)</td>
+        <td data-label="근거 발표·출처"><a href="#d8">항목 8</a>, <a href="https://aistudio.google.com/docs/changelog">Gemini API changelog</a></td>
+        <td data-label="적용 서비스·쓰임새">꼬리별 관측소: 댓글 규칙 위반 여부 1차 판정. 홍카페: 상담사 지원 서류가 필수 항목을 갖췄는지 판정. AI Office: 검수 단계의 통과/보완 판정 보조</td>
+        <td data-label="기대 효과">정해진 기준의 예/아니오 판정을 일관되게 처리할 가능성(정량 미확인)</td>
+        <td data-label="준비·난이도">판정 기준(루브릭) 문서화, 사람 판정과 비교 · <b>보통</b></td>
+        <td data-label="비용·주의점">가격·공개 범위 미확인. 시작 문서 미열람. 최종 판정은 사람이 확인</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="reco"><b>우선 검토 추천</b>
+    <ol>
+      <li><b>Muse Ember로 댓글·서류 분류 시험</b>: 가격이 가장 낮고 공식 출처가 분명하며, 개인정보를 지운 샘플로 바로 시험할 수 있습니다.</li>
+      <li><b>AI Office 지휘·위임 구조 시험</b>: 우리 프로그램의 팀장-직원 구조와 맞닿아 있어, 기존 업무 2~3건으로 비교해 볼 만합니다.</li>
+      <li><b>Omni 1.2 Flash로 꼬리별 짧은 영상 1편 시험</b>: 15초 720p 한 편이 약 1.05달러(팀장 계산)로 시험 비용이 작습니다.</li>
+    </ol>
+  </div>
+</section>
+
+<section aria-labelledby="h-temp">
+  <h2 id="h-temp">오늘의 온도</h2>
+  <dl class="temp">
+    <dt>성장</dt><dd>Anthropic·Google·OpenAI 대표 모델이 직전 대비 자동화·코딩·보안 점수가 약 6%p에서 20%p대까지 올랐습니다. 측정 주체는 회사 자체·제3자·미확인(Anthropic 표)이 섞여 있습니다.</dd>
+    <dt>전환</dt><dd>보안 능력이 높은 모델의 공개 방식이 회사별로 갈립니다. Anthropic은 Fable(일반)·Mythos(승인 조직)로 나눴고, OpenAI는 보안 전용 GPT-6 Cyber를 제한 공개했으며, Google은 Carbon을 Fairwind 선별 제공 뒤 일반 공개했습니다.</dd>
+    <dt>주의</dt><dd>성능 수치 대부분이 회사가 발표한 값(자체 측정 또는 측정 주체 미확인)이고, 제3자 평가에서 Carbon High 설정의 환각률이 Argon High보다 높았던 점은 따로 봐야 합니다.</dd>
+  </dl>
+</section>
+
+<section aria-labelledby="h-tips">
+  <h2 id="h-tips">오늘의 실무 팁</h2>
+  <ol class="tips">
+    <li>벤치마크 숫자를 볼 때는 측정 주체부터 확인해 보세요. 회사 자체 측정과 Artificial Analysis 같은 제3자 평가는 같은 무게로 읽으면 안 됩니다.</li>
+    <li>새 모델은 우리 실제 업무 2~3건으로 직접 비교해 보세요. 공개 벤치마크보다 우리 자료에서의 결과가 도입 판단에 더 정확합니다.</li>
+    <li>반복해서 보내는 지침은 캐시 입력 할인을 활용해 보세요. Gemini 4 Carbon은 12/1부터 캐시 입력 0.20달러(표준 4달러), Muse Ember는 0.004달러(표준 0.10달러)입니다.</li>
+    <li>개인정보가 담긴 자료를 외부 모델에 보내기 전에 데이터 보관 조건을 확인해 보세요. Fable 5.2·Mythos 5.2는 ZDR을 쓰지 않는 고객의 데이터를 안전 모니터링 목적으로 30일 보관한다고 Anthropic이 밝혔습니다.</li>
+    <li>AI로 만든 영상·이미지에는 AI 생성임을 밝혀 두세요. 실존 인물 표현은 본인 동의를 먼저 받으세요.</li>
+  </ol>
+</section>
+
+<section aria-labelledby="h-method">
+  <h2 id="h-method">확인 방식과 라벨 가이드</h2>
+  <p>조사 담당(aitrend-2)이 2026-11-12 각 회사 공식 블로그·발표 페이지를 1차로 열람하고, 열리지 않은 곳은 언론·집계 사이트로 보완했습니다. 팀장은 조사 원본(<code>aitrend/aitrend-2-frontier-ai-research.md</code>)에 출처와 함께 적힌 수치만 옮겼고, 개선폭(p)은 원본의 전후 값 차이입니다. 영상 1편 비용(약 1.05달러)과 Carbon 캐시 입력 비율(표준 입력의 5%)만 팀장이 공식 단가로 계산했습니다.</p>
+  <ul class="guide">
+    <li><span class="lab ok">확인</span> 회사 공식 페이지를 직접 열람해 확인한 내용</li>
+    <li><span class="lab sec">2차 출처</span> 언론·집계 사이트에서 확인했고 공식 원문은 열지 못한 내용</li>
+    <li><span class="lab unk">미확인</span> 단일 출처이거나 측정 조건을 확인하지 못한 수치, 출처 간 불일치</li>
+    <li><span class="lab prop">제안</span> 사실이 아니라 우리 서비스 적용을 위한 팀장 제안</li>
+    <li><span class="lab est">추정</span> 확인한 수치에서 팀장이 미루어 본 내용(사실로 쓰지 않음)</li>
+  </ul>
+  <h3>한계와 미확인 항목</h3>
+  <ul class="facts">
+    <li>openai.com 발표문은 403으로 열리지 않았습니다. OpenAI 항목(3·4번)의 출시일·모델 ID·가격·GIF·SVG 조건은 공식 API 문서·변경 기록(developers.openai.com, 2026-11-12 열람)으로 확인했습니다. GPT-6 Cyber의 ExploitGym 수치는 2차 출처이고, Images 2.6의 속도 50%는 이전 대비 OpenAI 발표 수치로, 비교 대상·측정 조건을 확인하지 못했습니다. ChatGPT·Codex 전체 구독 등급 제공은 독립검증실이 확인한 OpenAI 발표 내용을 따랐습니다. OpenAI의 11월 일반 목적 신모델은 확인하지 못했습니다.</li>
+    <li>Gemini 4 Carbon은 <a href="https://aistudio.google.com/docs/changelog">Gemini API changelog</a>에서 11/10 일반 공개와 도입가 11/30 종료를, <a href="https://aistudio.google.com/docs/whats-new-gemini-4-carbon">what's new 문서</a>에서 12/1 이후 가격을 확인했습니다. Google 공식 블로그 원문은 열지 못했습니다.</li>
+    <li>Gemini 4 Carbon의 지표별 측정 주체(Artificial Analysis / Proximal 공개 순위표 / Google 자체)와 사이버 평가값의 "Fairwind 접근 시 성능" 표기는 Google 평가 방법론·모델 카드 기준으로, 독립 검증실 확인 내용을 따랐습니다(이번 작성에서 재열람하지 않음). 단, AA-Briefcase Elo(Argon High 1,483 → Carbon High 1,609)는 Google 자료가 아니라 <a href="https://artificialanalysis.ai/articles/gemini-4-carbon-new-number-1">Artificial Analysis 원문</a> 기준이며, 이 원문과 MKA <a href="https://blog.google/innovation-and-ai/models-and-research/gemini-models/multimodal-knowledge-agent-benchmark/">Google 원문</a>은 이번 재작업에서 직접 다시 열람하지 않았습니다.</li>
+    <li>Claude Fable 5.2 벤치마크 표의 지표별 측정 주체는 RoboDojo Sim(Anthropic 내부 실행)을 빼고 공식 표만으로 확정되지 않아 미확인입니다(발표 주체는 Anthropic). Anthropic 발표 페이지의 11/11 수정 내용도 미확인입니다.</li>
+    <li>Inkling 2 Small 가중치의 11/12 현재 공개 여부와 현재 제공처는 확인하지 못했습니다(11/5 발표 시점 계획만 확인).</li>
+    <li>Gemini 4 Carbon의 10/28 Fairwind 선별 공개일은 VentureBeat(2차 출처)로만 확인했고, 11/10 일반 공개는 공식 변경 기록으로 확인했습니다.</li>
+    <li>Gemini Decision·Decisions API의 가격과 공개 범위는 미확인입니다. Muse Ember Terminal-Bench 4.0과 Claude WANDR의 측정 주체도 미확인입니다.</li>
+    <li>발표 시각(KST)은 모든 항목에서 확인하지 못했습니다. CNBC 기사 게재 시각(11/10 04:00 KST)은 발표 시각이 아닙니다.</li>
+    <li>Claude Fable 5.2의 컨텍스트 길이, Fable 5.1 대비 가격 인하폭, Images 2.6의 입력 토큰 가격은 미확인입니다.</li>
+    <li>Claude Fable 5.2의 안전장치 차단 약 55% 감소는 claude.ai·Claude Code·Cowork 초기 테스트 결과이고, Mythos 5.2 샌드박스 이탈 3.1%는 의도적 취약점이 있는 적대적 평가 조건의 값입니다. 일반 사무 업무에서의 효과는 확인하지 못했습니다.</li>
+    <li>xAI·Microsoft·Mistral은 기간 내 큰 발표를 확인하지 못했습니다. DeepSeek은 신규 모델 없이 Creator Mode 보도만 있습니다.</li>
+    <li>이전 보고서 입력이 없어 이미 보고한 소식과 중복 여부를 거르지 못했습니다.</li>
+  </ul>
+</section>
+
+<footer>
+  <p>AI 브리핑 · 2026.11.12 · AI트렌드부. 사실·2차 출처·미확인·제안을 라벨로 구분했습니다. 확인하지 못한 수치는 결론의 근거로 쓰지 않았습니다.</p>
+</footer>
+
+</main>
+</body>
+</html>

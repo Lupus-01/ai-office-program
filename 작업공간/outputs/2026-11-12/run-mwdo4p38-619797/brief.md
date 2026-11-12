@@ -1,0 +1,4 @@
+# AI 업무 자체평가 개선 노트
+
+- s1-worklog: operations-1 / outputs/2026-11-12/run-mwdo4p38-619797/operations/operations-1-work-log-review.md / 2026-11-12 업무 폴더 5건(run-mwdj6eik, run-mwdjhtjx, run-mwdjxdlu, run-mwdmined, run-mwdngf5r)마다 업무 이름·담당 부서/직원·단계 수·완료 여부(report.md 없음 포함)·반려/재작업 횟수와 사유·계획 대비 누락 산출물·소요 시간 추정(근거 파일 시각 명시)을 표로 정리. 각 업무 폴더 안의 plan.json·brief.md·review-notes.md·reviews/·산출물 파일 목록을 직접 확인한 것만 사실로 쓰고, 확인 못 한 항목은 '미확인'으로 표시. 확인한 사실과 추정을 구분하고 업무 간 반복되는 실수·지연 요인 후보를 목록으로 남김. 비밀번호·토큰·계정 정보는 기록하지 않음.
+- s2-eval-note: operations-kpi / outputs/2026-11-12/run-mwdo4p38-619797/operations/operations-kpi-improvement-note.md / s1 분석을 근거로 업무별 평가(요청 충족·산출물 품질·절차 준수·속도, 잘된 점/아쉬운 점)와 종합 평가를 작성하고, 반복 문제의 원인 분석, 다음 업무에 바로 적용할 개선 노트(부서·단계별 체크리스트 형태, 우선순위 표시), 직원 지침·계획 기준 수정안(대상 직원/부서, 현재 문제, 수정 문구 제안)을 담은 md 1개. 모든 평가 항목에 근거 업무 id·파일을 적고 확인 사실·추정·제안을 구분. org/·.claude/agents 파일은 직접 고치지 않고 수정안만 제시(반영은 대시보드에서 대표가 함).
