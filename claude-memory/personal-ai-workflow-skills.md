@@ -5,10 +5,10 @@ metadata:
   node_type: memory
   type: reference
   originSessionId: 62d70f7b-dbe6-464f-b5ed-81df344de44d
-  modified: 2026-11-05T07:39:16.000Z
+  modified: 2026-11-12T12:29:14.987Z
 ---
 
-`~/.claude/skills/execute`와 `~/.claude/skills/pr-lifecycle`은 https://github.com/JISANGHYEOK-0901/personal-ai-workflow 의 `skills/`를 그대로 복사한 것이다. 기준은 `develop` 브랜치 `5e8abfa`(2026-10-30, 2026-11-05 설치)이고, 저장소 기본 브랜치도 `develop`이다. `main`은 오래됐다.
+`~/.claude/skills/execute`, `~/.claude/skills/pr-lifecycle`, `~/.claude/skills/handoff`는 https://github.com/JISANGHYEOK-0901/personal-ai-workflow 의 `skills/`를 그대로 복사한 것이다. 기준은 `develop` 브랜치 `2a2ca6f`(2026-11-06, 2026-11-12에 6개 파일 blob 일치 확인)이고, 저장소 기본 브랜치도 `develop`이다. `main`은 오래됐다. 처음 설치 기준은 `5e8abfa`였다.
 
 **업데이트 방법:** 임시 폴더에 받아 `git -c core.autocrlf=false archive origin/develop skills/execute skills/pr-lifecycle`로 원본 바이트를 꺼내 덮어쓰고, `git hash-object --no-filters`로 blob과 대조한다. 스킬 내용을 직접 고치지 않는다. 바뀐 내용은 설치 전에 읽고, 실행 코드가 새로 들어왔는지 확인한다.
 

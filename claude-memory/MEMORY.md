@@ -1,6 +1,6 @@
 - [Windows 테스트·원격 구성](windows-test-setup.md) — 한글 경로 cpSync 크래시로 영문 경로 복사본에서 테스트, origin은 포크·upstream이 원본(11-09부터 쓰기 권한, 로컬 main은 upstream 추적)
 - [꼬리별 관측소 글·댓글 업무](kkoribyeol-cafe-posting.md) — 카페 주소, 아이스베어 글에 댓글 금지 규칙, 이미 올린 글 번호, 핫플 게시판·비율(10개 중 3개), 11-10부터 상시 위임: 터미널 AI가 "끝까지 자동으로"를 붙여 넘긴다(이 카페 글·댓글만)
-- [personal-ai-workflow 스킬](personal-ai-workflow-skills.md) — execute·pr-lifecycle 출처·업데이트 방법, 설치하지 않은 항목
+- [personal-ai-workflow 스킬](personal-ai-workflow-skills.md) — execute·pr-lifecycle·handoff 출처·업데이트 방법, 설치하지 않은 항목
 - [프로필제작부 업무](profile-production.md) — 상담사 워드→소개서 워드+PPT, 기준서·도구 위치, 대표 결정, 함정(Bash 권한·끝난 단계 파일 수정 금지·단계 output은 파일)
 - [PR·머지 요청 범위](pr-request-scope.md) — "PR해줘"는 CI 확인까지, 머지는 "머지해줘"로 따로 지시. 원본은 웬만한 작업 main 직접 push(검증·fast-forward·CI 확인)
 - [회사 데이터 백업 저장소](workspace-backup-repo.md) — 집 PC용 비공개 저장소 ai-office-workspace: 포함·제외 기준(상담사 개인정보·계정 제외), 갱신 방법, 포크 main 맞춘 방식
