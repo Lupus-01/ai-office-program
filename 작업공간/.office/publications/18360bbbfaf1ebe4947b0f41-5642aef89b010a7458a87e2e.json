@@ -1,0 +1,10 @@
+{
+  "status": "uncertain",
+  "action": "post",
+  "service": "naver_cafe",
+  "connection": "38b50fda70230a14504b796b",
+  "contentHash": "f7c38f335bb2899002cdc26f0c5b6c5a6f9fb716b467bbef79a3e175e77a32ae",
+  "instructionKey": "f3bcf1132c4a9924b54d8c7fe06cf95d5bf7b6b5d9c486586cf7482c38bafd6d",
+  "target": "https://cafe.naver.com/f-e/cafes/31520563/menus/44",
+  "updatedAt": "2026-11-04T08:28:30.062Z"
+}

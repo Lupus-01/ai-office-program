@@ -1,0 +1,12 @@
+{
+  "status": "confirmed",
+  "action": "post",
+  "service": "naver_cafe",
+  "connection": "38b50fda70230a14504b796b",
+  "contentHash": "a9461f0ea36393c478cc3ccca396bbd035e9258c84c8afd0e24a1dcdc0a06db8",
+  "instructionKey": "2d13b8aafa19bd0752fa48f2be21c979a574a8b347aa4df098fece0b1909509e",
+  "target": "https://cafe.naver.com/f-e/cafes/31520563/menus/24?viewType=L",
+  "updatedAt": "2026-11-09T05:38:41.571Z",
+  "confirmedBy": "user",
+  "confirmedAt": "2026-11-09T06:00:55.109Z"
+}

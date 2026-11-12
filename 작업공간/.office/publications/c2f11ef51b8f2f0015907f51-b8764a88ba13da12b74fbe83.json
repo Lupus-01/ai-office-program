@@ -1,0 +1,12 @@
+{
+  "status": "confirmed",
+  "action": "comment",
+  "service": "naver_cafe",
+  "connection": "38b50fda70230a14504b796b",
+  "contentHash": "4af561a2d08d3ac7451d11b99643235cbce2301da5734b2c738899cc962de86c",
+  "instructionKey": "598c9ef763cf70fba12686a683d14a45acafc30542120a9dba127cfa9a0e70e4",
+  "target": "https://m.cafe.naver.com/ca-fe/web/cafes/31520563/articles/10714",
+  "updatedAt": "2026-11-09T06:12:50.677Z",
+  "resultUrl": "https://m.cafe.naver.com/ca-fe/web/cafes/31520563/articles/10714/comments?focus=116180933",
+  "confirmedAt": "2026-11-09T06:12:50.677Z"
+}

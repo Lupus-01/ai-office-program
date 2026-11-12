@@ -1,0 +1,13 @@
+{
+  "mode": "auto",
+  "chief": {
+    "engine": "claude",
+    "model": "sonnet",
+    "effort": "high"
+  },
+  "budget": {
+    "calls": 80,
+    "minutes": 60
+  },
+  "postGapSeconds": 30
+}

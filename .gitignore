@@ -1,0 +1,8 @@
+# 계정 정보·실행 상태는 절대 올리지 않는다
+*.env
+*.env.*
+private/
+.office/runs/
+.office/server.lock
+.office/sessions.json
+.office/dashboard-access.json
