@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 927f2e8a-aaad-4699-a3d3-7be709ad567b
-  modified: 2026-11-12T14:45:11.270Z
+  modified: 2026-11-12T15:10:54.006Z
 ---
 
 2026-11-12 대표 요청("집에 가서도 셋팅해서 사용할 수 있도록 내 GIT에 업로드")으로 만들었다.
@@ -17,5 +17,7 @@ metadata:
 - 처음 `gh repo create … --private --push`는 auto mode 분류기가 막았다(공개 데이터 업로드로 판단). 대표 승인이나 대표의 직접 실행이 필요하다.
 
 **Why:** 작업 공간 `보관함/`은 프로그램이 `.gitignore`(`*`)로 Git에서 빼 두었고, 포크는 공개 저장소라 회사 데이터를 둘 수 없다.
+
+**설정 동기화(2026-11-13 추가):** 대표가 "설정 동기화해줘"라고 하면 로컬 복사본 폴더에서 `node sync.mjs`(처음 한 번은 `--program <프로그램 폴더>`)를 실행하고 결과 줄을 그대로 전한다. 복사본이 없으면 `gh repo clone Lupus-01/ai-office-workspace`로 먼저 받는다. 회사 설정·예약·메모·AI트렌드부/AI평가부 업무 폴더를 비교해 최신 쪽으로 맞추고, 덮어쓰기 전 내용은 `.sync-backups/`에 남긴다. 먼저 `--check`로 방향을 보여 주고 싶으면 그렇게 한다. 대표는 두 PC를 동시에 켜지 않는다고 했다. 프로필 양식·inputs·게시 기록은 이 도구가 다루지 않으므로 아래 수동 갱신을 쓴다.
 
 **How to apply:** "회사 데이터 저장소 갱신해줘"라고 하면 같은 목록을 다시 복사한 뒤 올리기 전에 개인정보 패턴(전화·메일·계좌)을 다시 검사하고 커밋해서 push한다. 계정 파일 이름은 명령·파일에 쓰지 않는다(훅 차단). [[windows-test-setup]] [[profile-production]]
