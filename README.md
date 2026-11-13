@@ -127,7 +127,7 @@ node sync.mjs --push                               # 무조건 이 PC → Git
 | AI트렌드부·AI평가부 업무 폴더(`outputs/`) | 없는 폴더만 서로 채움(덮어쓰지 않음) | 연락처·메일·계좌로 보이는 내용이 있으면 올리지 않음 |
 | 프로그램 코드 위치(`program.json`) | 올린 PC가 쓰는 브랜치·커밋. 다른 PC의 코드가 그보다 오래됐으면 알려 줌 | 코드는 자동으로 바꾸지 않고 맞추는 명령을 보여 줌 |
 
-- **프로그램 코드(2026-11-13):** 엑셀 내려받기(`browser_download`)와 메일 본문 서식은 포크의 `feat/site-download` 브랜치에 있습니다(원본 `main`에는 아직 없음). 회사 PC에서 처음 맞출 때: 프로그램 폴더에서 `npm run office:stop` → `git fetch origin` → `git switch feat/site-download` → `npm ci` → `npm run office:start`. 상담사 분석 메일 업무는 이 코드가 있어야 엑셀에서 메일 주소를 읽고 서식 있는 메일을 보냅니다.
+- **프로그램 코드(2026-11-13):** 엑셀 내려받기(`browser_download`)와 메일 본문 서식은 포크(`Lupus-01/ai-office`)의 `main`과 `feat/site-download` 브랜치에 있습니다(2026-11-14 포크 `main`에 합침. 여러 탭 한 번에 읽기 `browser_collect`와 외부 작업 질문 전달 수정도 포함. 원본 `main`에는 아직 없음). 회사 PC에서 처음 맞출 때: 프로그램 폴더에서 `npm run office:stop` → `git fetch origin` → `git switch feat/site-download` → `npm ci` → `npm run office:start`. 상담사 분석 메일 업무는 이 코드가 있어야 엑셀에서 메일 주소를 읽고 서식 있는 메일을 보냅니다.
 - 덮어쓰기 전의 내용은 이 저장소 폴더의 `.sync-backups/`에 남습니다(Git에는 올리지 않음).
 - 두 PC에서 **둘 다** 설정을 바꾼 뒤 동기화하면 더 나중 것이 이기고, 진 쪽 변경은 백업에만 남습니다. 자리를 옮기기 전에 한 번 동기화하면 이런 일이 없습니다.
 - 예약 문구만 고친 경우처럼 시각이 남지 않는 변경은 방향을 잘못 고를 수 있습니다. 결과가 예상과 다르면 `--push`나 `--pull`로 방향을 정합니다.
