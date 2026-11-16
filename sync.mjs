@@ -49,11 +49,18 @@ function run(cmd, cmdArgs, cwd, { allowFail = false } = {}) {
 const git = (gitArgs, o) => run('git', ['-c', 'core.quotepath=false', ...gitArgs], REPO, o);
 const commitTime = (rel) => { const r = git(['log', '-1', '--format=%ct', '--', rel], { allowFail: true }); return r.ok && r.out ? Number(r.out) * 1000 : 0; };
 const maxMtime = (files) => Math.max(0, ...files.filter((f) => fs.existsSync(f)).map((f) => fs.statSync(f).mtimeMs));
+// fs.cpSync는 일부 Windows·Node 조합(회사 PC, Node 24.14)에서 한글 경로의 폴더를 복사하다 프로세스째 종료된다(exit 127).
+// 서버를 끈 채 멈추지 않도록 폴더·파일을 직접 복사한다.
+function copyTree(source, dest) {
+  if (!fs.statSync(source).isDirectory()) { fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.copyFileSync(source, dest); return; }
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(source, { withFileTypes: true })) copyTree(path.join(source, entry.name), path.join(dest, entry.name));
+}
 function backup(name, source) {
   if (!fs.existsSync(source)) return null;
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
   const dest = path.join(BACKUP_DIR, `${stamp()}-${name}`);
-  fs.cpSync(source, dest, { recursive: true });
+  copyTree(source, dest);
   return dest;
 }
 
@@ -219,12 +226,12 @@ if (FORCE !== 'pull') for (const rel of taskDirs(localOut)) {
   const pii = findPii(path.join(localOut, rel));
   if (pii) { skipped.push(`${rel} (연락처·메일·계좌로 보이는 내용: ${pii})`); continue; }
   upTasks.push(rel);
-  if (!CHECK) fs.cpSync(path.join(localOut, rel), path.join(repoOut, rel), { recursive: true });
+  if (!CHECK) copyTree(path.join(localOut, rel), path.join(repoOut, rel));
 }
 if (FORCE !== 'push') for (const rel of taskDirs(repoOut)) {
   if (fs.existsSync(path.join(localOut, rel))) continue;
   downTasks.push(rel);
-  if (!CHECK) fs.cpSync(path.join(repoOut, rel), path.join(localOut, rel), { recursive: true });
+  if (!CHECK) copyTree(path.join(repoOut, rel), path.join(localOut, rel));
 }
 if (!upTasks.length && !downTasks.length && !skipped.length) actions.push('AI 브리핑·평가 업무 폴더: 같음');
 if (upTasks.length) { actions.push(`AI 브리핑·평가 업무 폴더: 이 PC → Git ${upTasks.length}건`); if (!CHECK) toCommit.push(`업무 폴더 ${upTasks.length}건`); }
