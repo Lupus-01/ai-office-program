@@ -5,4 +5,5 @@
 - [상담사 분석 메일 업무](counselor-analysis-mail.md) — 홍카페 ERP 화면·대상(파트너 1~6단계만)·메일 주소 출처·수치 해석·호칭, 매달 10일 목표, 아직 안 된 것
 - [업데이트는 바로 Git에](push-updates-immediately.md) — 코드는 포크 작업 브랜치로 바로 push, 설정·메모는 sync.mjs로 바로 올림(원본·머지·PR은 따로 지시)
 - [PR·머지 요청 범위](pr-request-scope.md) — "PR해줘"는 CI 확인까지, 머지는 "머지해줘"로 따로 지시. 원본은 웬만한 작업 main 직접 push(검증·fast-forward·CI 확인)
+- [홍카페 정책 지식창고](policy-knowledge-base.md) — 상담사모집부→홍카페정책부(11-16), Notion 정책서 DB를 policy-sync.cjs(haiku로 Notion 읽기·첨부 변환)로 보관함/지식/홍카페정책에 저장, 현행판만·매일 13시 갱신·자료는 저장소에 안 올림
 - [회사 데이터 백업 저장소](workspace-backup-repo.md) — 집 PC용 비공개 저장소 ai-office-workspace: 포함·제외 기준(상담사 개인정보·계정 제외), 갱신 방법, 포크 main 맞춘 방식, "설정 동기화해줘"는 저장소의 sync.mjs 실행

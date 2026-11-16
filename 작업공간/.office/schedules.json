@@ -17,8 +17,22 @@
       "enabled": true,
       "createdAt": "2026-11-12T12:34:07.458Z",
       "untilDate": null,
-      "nextAt": "2026-11-13T02:00:00.000Z",
-      "completed": false
+      "nextAt": "2026-11-17T02:00:00.000Z",
+      "completed": false,
+      "lastSkipped": {
+        "at": "2026-11-16T01:04:58.884Z",
+        "reason": "앱이 실행되지 않은 예약 시각은 건너뛰었습니다."
+      },
+      "lastSlot": "2026-11-16",
+      "lastRun": {
+        "slot": "2026-11-16",
+        "status": "done",
+        "startedAt": "2026-11-16T02:00:00.961Z",
+        "id": "mwim8uz3-03ea92",
+        "rootId": "mwim8uz3-03ea92",
+        "task": "2026-11-16/run-mwim8uz3-03ea92",
+        "summary": "# 대장급 AI 일일 동향 보고 2026-11-16 ## 완료 - 조사 기간 2026-11-09~11-16의 Claude·GPT·Gemini 모델 특이사항을 수집해 HTML 보고서 1개로 정리했습니다. - 수집 원본: `outputs/2026-11-16/run-mwim8uz3-03ea92/aitrend/aitrend-2…"
+      }
     },
     {
       "id": "2930ac04efc71a58",
@@ -36,7 +50,40 @@
       "enabled": true,
       "createdAt": "2026-11-12T14:51:54.601Z",
       "untilDate": null,
-      "nextAt": "2026-11-13T03:00:00.000Z",
+      "nextAt": "2026-11-17T03:00:00.000Z",
+      "completed": false,
+      "lastSkipped": {
+        "at": "2026-11-16T01:04:58.884Z",
+        "reason": "앱이 실행되지 않은 예약 시각은 건너뛰었습니다."
+      },
+      "lastSlot": "2026-11-16",
+      "lastRun": {
+        "slot": "2026-11-16",
+        "status": "done",
+        "startedAt": "2026-11-16T03:00:00.811Z",
+        "id": "mwioe0mw-190bdb",
+        "rootId": "mwioe0mw-190bdb",
+        "task": "2026-11-16/run-mwioe0mw-190bdb",
+        "summary": "# AI 업무 자체평가 · 개선노트 (2026-11-16 정오 회차) ## 완료 - 지난 평가(2026-11-12) 이후 끝난 업무 2건을 평가해 다음 업무에 적용할 개선노트를 만들었습니다. - A: 꼬리별 관측소 숏츠·핫플 글 10건·댓글 20건 (run-mwikg03w-a93a56) - B: 대장급 AI 일일 동향 …"
+      }
+    },
+    {
+      "id": "9fedd7ce06db72fb",
+      "prompt": "매일 오후 1시에 홍카페정책부 정책자료담당이 정책 지식 갱신해줘. 갱신 도구(보관함/지식/홍카페정책/도구/policy-sync.cjs)를 실행해서 Notion 「정책서 이력 관리」에서 바뀐 문서만 지식창고에 반영하고, 바뀐 게 없으면 짧게 기록만 남겨줘.",
+      "time": "13:00",
+      "startDate": null,
+      "times": null,
+      "chief": {
+        "engine": "claude",
+        "model": "sonnet",
+        "effort": "high"
+      },
+      "policy": null,
+      "timeZone": "Asia/Seoul",
+      "enabled": true,
+      "createdAt": "2026-11-16T04:45:26.782Z",
+      "untilDate": null,
+      "nextAt": "2026-11-17T04:00:00.000Z",
       "completed": false
     }
   ]
