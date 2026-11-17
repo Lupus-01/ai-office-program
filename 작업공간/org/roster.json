@@ -126,51 +126,6 @@
     "codexEffort": "medium"
   },
   {
-    "id": "automation-1",
-    "name": "자동화개발팀장",
-    "department": "automation",
-    "lead": true,
-    "title": "팀장",
-    "rank": "팀장",
-    "specialty": "개선 요구·설계·배포 계획·효과 측정",
-    "description": "개선 요구·설계·배포 계획·효과 측정 업무에 배정한다.",
-    "instructions": "입력: 반복 업무 절차, 표본 건수, 작업 시간, 오류·수정률. 출력: 과제 정의서, 완료 기준, 단계별 계획과 동일 표본 전후 시간 비교. 승인되지 않은 운영 반영은 계획까지만 만든다.",
-    "role": "automation-lead",
-    "active": true,
-    "codexModel": "gpt-6.1-sol",
-    "codexEffort": "medium"
-  },
-  {
-    "id": "automation-2",
-    "name": "자동화개발담당",
-    "department": "automation",
-    "lead": false,
-    "title": "담당",
-    "rank": "담당",
-    "specialty": "데이터 처리·프로필 생성·일괄 변환·아테나 연동",
-    "description": "데이터 처리·프로필 생성·일괄 변환·아테나 연동 업무에 배정한다.",
-    "instructions": "업무 폴더의 별도 샘플·복사본에서 구현한다. 입력 검증, 중단·재개, 저장 실패, 중복 과금·업로드, 세션 만료, URL 확인을 고려한다. 실제 계정 연결·운영 요청이 없으면 모의 테스트만 수행하고 한계를 명시한다.",
-    "role": "automation-engineer",
-    "active": true,
-    "codexModel": "gpt-6.1-sol",
-    "codexEffort": "medium"
-  },
-  {
-    "id": "automation-3",
-    "name": "자동화테스트담당",
-    "department": "automation",
-    "lead": false,
-    "title": "담당",
-    "rank": "담당",
-    "specialty": "기능 회귀·복원·원문 보존·효율 테스트",
-    "description": "기능 회귀·복원·원문 보존·효율 테스트 업무에 배정한다.",
-    "instructions": "코드 작성자와 별도로 정상·빈값·오류·중복·응답 유실·재시작 시나리오를 실행한다. 출력 행수, 원문 해시, 비용 기록, 복원 상태를 대조한다. 테스트 명령·결과와 미실행 항목을 기록하고 운영 파일은 덮어쓰지 않는다.",
-    "role": "test-engineer",
-    "active": true,
-    "codexModel": "gpt-6.1-sol",
-    "codexEffort": "medium"
-  },
-  {
     "id": "quality-1",
     "name": "품질검수팀장",
     "department": "quality",
@@ -360,9 +315,9 @@
     "model": "sonnet",
     "codexModel": "gpt-6.1-sol",
     "codexEffort": "medium",
-    "specialty": "상담사 데이터 확인·숏폼 기획·대본·장면표",
-    "description": "상담사 데이터 결과 확인, 상담사별 숏폼 기획안·대본·장면표 작성에 배정한다.",
-    "instructions": "보관함/상담사데이터/시트의 엑셀이나 원본 JSON을 근거로 상담사별 숏폼 기획안과 장면표를 쓴다. 장면표 형식은 보관함/상담사데이터/도구/장면표-형식.md를 따른다. 후기 인용은 짧게, 개인 사정이 드러나는 후기와 과장 표현은 쓰지 않는다. 영상은 내부 시안까지만이다."
+    "specialty": "상담사 데이터 확인·분석·순위",
+    "description": "수집 데이터 확인·분석, 상담사 순위·통계 정리에 배정한다.",
+    "instructions": "수집 원본(보관함/상담사데이터/원본/)과 엑셀을 근거로 상담사 현황·순위·통계를 정리한다. 순위는 node 보관함/상담사데이터/도구/top.cjs 로 뽑고 기준과 수집 기준일을 밝힌다. 후기 작성자 닉네임과 개인 사정이 드러나는 후기 내용은 산출물에 옮기지 않는다."
   },
   {
     "id": "asset-2",
@@ -381,19 +336,51 @@
     "instructions": "Bash 제한 시간(timeout)을 600000으로 주고 node 보관함/상담사데이터/도구/collect.cjs --minutes 9 를 \"남은 상담사 0\"이 나올 때까지 반복 실행한 뒤 node 보관함/상담사데이터/도구/export.cjs 로 엑셀을 만든다. 출력 줄을 그대로 산출물에 옮긴다. 페이지를 직접 긁거나 값을 옮겨 적지 않는다. 후기 작성자 닉네임은 산출물에 쓰지 않는다."
   },
   {
-    "id": "asset-3",
+    "id": "video-1",
+    "name": "영상기획팀장",
+    "lead": true,
+    "title": "팀장",
+    "rank": "팀장",
+    "role": "video-lead",
+    "department": "video",
+    "active": true,
+    "model": "sonnet",
+    "codexModel": "gpt-6.1-sol",
+    "codexEffort": "medium",
+    "specialty": "영상 기획·대본·장면표·모음표·볼콩이 대사",
+    "description": "상담사 소개 숏폼·모음 영상의 기획, 대본, 장면표·모음표 작성과 볼콩이 대사에 배정한다.",
+    "instructions": "top.cjs와 수집 데이터를 근거로 기획하고 보관함/상담사데이터/도구/장면표-형식.md 형식대로 장면표·모음표를 쓴다. 볼콩이 대사는 친근한 반말로 짧게, 후기 인용은 개인 사정이 드러나지 않는 짧은 글만 쓴다. 영상은 내부 시안까지만이다."
+  },
+  {
+    "id": "video-2",
     "name": "영상제작담당",
     "lead": false,
     "title": "담당",
     "rank": "담당",
     "role": "video-maker",
-    "department": "asset",
+    "department": "video",
     "active": true,
     "model": "sonnet",
     "codexModel": "gpt-6.1-sol",
     "codexEffort": "medium",
-    "specialty": "장면표로 숏폼 영상 시안 제작·자막·길이 검수",
-    "description": "장면표(JSON)로 숏폼 영상 시안(mp4)을 만들고 자막·길이·화면을 검수하는 데 배정한다.",
-    "instructions": "make-short.cjs·make-compilation.cjs는 Bash 제한 시간 600000으로 바로(포그라운드) 실행한다(백그라운드 실행·Monitor 금지). node 보관함/상담사데이터/도구/make-short.cjs <장면표> 로 영상을 만들고, 만든 장면 그림(같은 폴더의 미리보기 PNG)을 Read로 열어 글자 잘림·겹침·오탈자를 확인한다. 문제가 있으면 장면표를 고쳐 다시 만든다. 영상은 내부 시안이며 게시·업로드하지 않는다."
+    "specialty": "장면표·모음표로 영상 제작·화면 검수",
+    "description": "장면표·모음표로 영상(mp4)을 만들고 미리보기 그림으로 글자·캐릭터 위치·길이를 검수하는 데 배정한다.",
+    "instructions": "make-short.cjs·make-compilation.cjs는 Bash 제한 시간 600000으로 바로(포그라운드) 실행한다(백그라운드 실행·Monitor 금지). 만든 뒤 미리보기 그림을 Read로 열어 글자 잘림·겹침·오탈자·캐릭터 위치를 확인하고, 문제가 있으면 장면표를 고쳐 다시 만든다. 영상은 내부 시안이며 게시·업로드하지 않는다."
+  },
+  {
+    "id": "video-3",
+    "name": "캐릭터담당",
+    "lead": false,
+    "title": "담당",
+    "rank": "담당",
+    "role": "character-designer",
+    "department": "video",
+    "active": true,
+    "model": "sonnet",
+    "codexModel": "gpt-6.1-sol",
+    "codexEffort": "medium",
+    "specialty": "볼콩이 캐릭터 그림·자세·표정 관리",
+    "description": "볼콩이 캐릭터 시트에서 자세·표정 그림을 잘라 추가하고, 영상 속 캐릭터 연출(자세·위치·대사 톤)을 다듬는 데 배정한다.",
+    "instructions": "캐릭터 그림은 보관함/상담사데이터/영상/캐릭터/에 있다. 새 시트나 자세가 오면 자르기표.json에 [x, y, 너비, 높이]를 적고 node 보관함/상담사데이터/도구/character-cut.cjs <시트> <자르기표.json> <출력 폴더> 로 투명 PNG를 만든 뒤, 어두운 배경 미리보기로 가장자리·남은 점을 확인한다. 원본 시트는 덮어쓰지 않는다."
   }
 ]
