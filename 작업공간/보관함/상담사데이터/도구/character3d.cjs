@@ -8,14 +8,14 @@
 //   자세: 기본 인사 하트 감동 웃음 수줍 팻말_<글자>. 안 주면 기본 자세 5개와 팻말_1~10을 만든다.
 // 사용(다른 도구에서): const { renderJobs } = require('./character3d.cjs'); await renderJobs([{ name, pose, expression, prop }])
 'use strict';
-const { fs, path, ROOT, needProgram } = require('./lib.cjs');
+const { fs, path, ROOT, needProgram, FONT_CSS, useLocalFonts } = require('./lib.cjs');
 const crypto = require('crypto');
 
 const OUT = path.join(ROOT, '영상', '캐릭터', '3d');
-const MODEL_VERSION = 5; // 모델·소품 모양을 바꾸면 올린다(저장해 둔 동작 그림을 새로 만들게 함)
+const MODEL_VERSION = 8; // 모델·소품 모양을 바꾸면 올린다(저장해 둔 동작 그림을 새로 만들게 함)
 
 const PAGE = String.raw`<!doctype html><html><head><meta charset="utf-8">
-<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@500;700;900&display=swap" rel="stylesheet">
+<style>__FONT_CSS__</style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head><body style="margin:0;background:transparent"><canvas id="c"></canvas>
 <script type="module">
@@ -66,17 +66,25 @@ const belly = sphere(0.45, plush(BELLY), 1, 1.05, 0.32); belly.position.set(0, 0
 const arms = {};
 for (const side of ['L', 'R']) {
   const seg = addOutline(new THREE.Mesh(new THREE.CylinderGeometry(0.125, 0.14, 1, 40, 1), plush(CREAM)), 0.028);
+  const seg2 = addOutline(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.125, 1, 40, 1), plush(CREAM)), 0.028);
+  const elbow = sphere(0.128, plush(CREAM), 1, 1, 1, 32);
   const paw = addOutline(sphere(0.175, plush(CREAM), 1.0, 1.0, 0.92));
-  bodyG.add(seg); bodyG.add(paw); arms[side] = { seg, paw };
+  bodyG.add(seg, seg2, elbow, paw); arms[side] = { seg, seg2, elbow, paw };
 }
 const SHOULDER = { L: new THREE.Vector3(-0.46, 0.5, 0.1), R: new THREE.Vector3(0.46, 0.5, 0.1) };
 const UP = new THREE.Vector3(0, 1, 0);
-function setArm(side, x, y, z) {
-  const a = SHOULDER[side], b = new THREE.Vector3(x, y, z), { seg, paw } = arms[side];
-  const dir = b.clone().sub(a); const len = Math.max(dir.length() - 0.08, 0.05);
-  seg.position.copy(a).addScaledVector(dir, 0.5); seg.scale.set(1, len, 1);
-  seg.quaternion.setFromUnitVectors(UP, dir.normalize());
-  paw.position.copy(b);
+function bone(mesh, a, b) {
+  const dir = b.clone().sub(a); const len = Math.max(dir.length(), 0.05);
+  mesh.position.copy(a).addScaledVector(dir, 0.5); mesh.scale.set(1, len, 1);
+  mesh.quaternion.setFromUnitVectors(UP, dir.normalize());
+}
+function setArm(side, x, y, z, elbow = null) {
+  const a = SHOULDER[side], b = new THREE.Vector3(x, y, z), arm = arms[side];
+  if (elbow) {
+    const e = new THREE.Vector3(...elbow);
+    bone(arm.seg, a, e); bone(arm.seg2, e, b); arm.seg2.visible = true; arm.elbow.visible = true; arm.elbow.position.copy(e);
+  } else { bone(arm.seg, a, b); arm.seg2.visible = false; arm.elbow.visible = false; }
+  arm.paw.position.copy(b);
 }
 
 // 머리: 찹쌀떡처럼 넓고 아래가 평평하게
@@ -103,7 +111,7 @@ function faceCanvas(kind) {
   blush(512 - 330, 470, 120); blush(512 + 330, 470, 120);
   const eye = (x, y, sx, sy, sparkle) => {
     g.fillStyle = ink; g.beginPath(); g.ellipse(x, y, sx, sy, 0, 0, Math.PI * 2); g.fill();
-    const gr = g.createLinearGradient(x, y - sy, x, y + sy); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(110,70,100,0.35)'); g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, sx, sy, 0, 0, Math.PI * 2); g.fill();
+    const gr = g.createLinearGradient(x, y - sy, x, y + sy); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(90,55,85,0.25)'); g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, sx, sy, 0, 0, Math.PI * 2); g.fill();
     g.fillStyle = '#fff'; g.beginPath(); g.arc(x - sx * 0.3, y - sy * 0.35, sx * 0.34, 0, Math.PI * 2); g.fill();
     g.beginPath(); g.arc(x + sx * 0.3, y + sy * 0.3, sx * 0.14, 0, Math.PI * 2); g.fill();
     if (sparkle) { g.beginPath(); g.arc(x + sx * 0.38, y - sy * 0.5, sx * 0.11, 0, Math.PI * 2); g.fill(); g.beginPath(); g.arc(x - sx * 0.45, y + sy * 0.25, sx * 0.08, 0, Math.PI * 2); g.fill(); }
@@ -116,10 +124,12 @@ function faceCanvas(kind) {
     g.fillStyle = '#8b2f3d'; g.beginPath(); g.moveTo(462, 438); g.quadraticCurveTo(512, 438, 562, 438); g.quadraticCurveTo(560, 520, 512, 524); g.quadraticCurveTo(464, 520, 462, 438); g.fill();
     g.fillStyle = '#f48a92'; g.beginPath(); g.ellipse(512, 500, 30, 18, 0, 0, Math.PI * 2); g.fill();
   } else if (kind === 'touched') {
-    eye(512 - 215, 350, 64, 74, true); eye(512 + 215, 350, 64, 74, true);
-    g.fillStyle = 'rgba(160,215,255,0.9)'; for (const s of [-1, 1]) { g.beginPath(); g.ellipse(512 + s * 215, 412, 46, 12, 0, 0, Math.PI * 2); g.fill(); }
+    eye(512 - 215, 350, 62, 72, true); eye(512 + 215, 350, 62, 72, true);
+    g.fillStyle = 'rgba(150,205,255,0.95)'; for (const s of [-1, 1]) { g.beginPath(); g.ellipse(512 + s * 228, 414, 30, 9, 0, 0, Math.PI * 2); g.fill(); }
     g.strokeStyle = ink; g.lineWidth = 10; g.lineCap = 'round'; for (const s of [-1, 1]) { g.beginPath(); g.moveTo(512 + s * 170, 252); g.quadraticCurveTo(512 + s * 215, 236, 512 + s * 262, 258); g.stroke(); }
     nose(); g.lineWidth = 13; g.beginPath(); g.moveTo(478, 450); g.quadraticCurveTo(495, 436, 512, 450); g.quadraticCurveTo(529, 464, 546, 450); g.stroke();
+  } else if (kind === 'blink') {
+    arcEye(512 - 215, 350, false); arcEye(512 + 215, 350, false); nose(); omega();
   } else if (kind === 'shy') {
     arcEye(512 - 215, 350, false); arcEye(512 + 215, 350, false); nose(); omega();
     g.strokeStyle = 'rgba(232,110,120,0.9)'; g.lineWidth = 9; for (const s of [-1, 1]) for (let k = 0; k < 3; k++) { g.beginPath(); g.moveTo(512 + s * 300 + k * 26 - 30, 488); g.lineTo(512 + s * 300 + k * 26 - 12, 456); g.stroke(); }
@@ -128,7 +138,7 @@ function faceCanvas(kind) {
   }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
 }
-const faces = { normal: faceCanvas('normal'), happy: faceCanvas('happy'), touched: faceCanvas('touched'), shy: faceCanvas('shy') };
+const faces = { normal: faceCanvas('normal'), happy: faceCanvas('happy'), touched: faceCanvas('touched'), shy: faceCanvas('shy'), blink: faceCanvas('blink') };
 const faceMat = new THREE.MeshPhysicalMaterial({ map: faces.normal, transparent: true, roughness: 0.45, clearcoat: 0.3, polygonOffset: true, polygonOffsetFactor: -4, depthWrite: false });
 scene.updateMatrixWorld(true);
 const decal = new THREE.Mesh(new DecalGeometry(head, new THREE.Vector3(0, -0.05, 0.9), new THREE.Euler(0, 0, 0), new THREE.Vector3(2.0, 1.5, 1.6)), faceMat);
@@ -168,9 +178,9 @@ function boardTexture(kind, prop) {
     if (m) { g.fillStyle = '#e0607e'; g.font = font(400, 150, 'Jua'); g.fillText('TOP', W * 0.3, H * 0.53); g.fillStyle = '#3b2430'; g.font = font(400, 360, 'Jua'); g.fillText(t, W * 0.64, H * 0.55); }
     else { g.fillStyle = '#3b2430'; g.font = font(400, 170, 'Jua'); g.fillText(t, W / 2, H / 2); }
   } else {
-    g.fillStyle = '#f08aa0'; g.font = font(900, 230, 'Noto Sans KR'); g.textAlign = 'left'; g.fillText('“', 60, 150);
+    g.fillStyle = '#f08aa0'; g.font = font(900, 200, 'Noto Sans KR'); g.textAlign = 'left'; g.fillText('“', 250, 205);
     g.fillStyle = '#2e1a24'; g.font = font(900, 118); g.textAlign = 'center';
-    const lines = wrapLines(g, prop.text || '', W - 200, 3); const lh = 158; const y0 = H * 0.5 - ((lines.length - 1) * lh) / 2 - 10;
+    const lines = wrapLines(g, prop.text || '', W - 340, 3); const lh = 156; const y0 = H * 0.56 - ((lines.length - 1) * lh) / 2;
     lines.forEach((l, i) => g.fillText(l, W / 2, y0 + i * lh));
     if (prop.meta) { g.fillStyle = '#9a78b0'; g.font = font(700, 60); g.textAlign = 'right'; g.fillText(prop.meta, W - 70, H - 70); }
   }
@@ -214,25 +224,26 @@ function frame(job, u) {
   const faceKind = job.expression || ({ wave: 'happy', heart: 'happy', happy: 'happy', touched: 'touched', shy: 'shy' }[pose] || 'normal');
   root.position.y = 0.035 * Math.abs(w); root.scale.set(1 + 0.012 * w, 1 - 0.012 * w, 1);
   setArm('L', -0.68, 0.12 + 0.015 * w, 0.3); setArm('R', 0.68, 0.12 - 0.015 * w, 0.3);
-  if (pose === 'wave') { setArm('R', 1.38 + 0.12 * w2, 1.5 + 0.05 * Math.cos(u * Math.PI * 4), 0.75); headG.rotation.z = -0.05 + 0.03 * w; }
+  if (pose === 'wave') { setArm('R', 1.52 + 0.1 * w2, 1.1 + 0.05 * Math.cos(u * Math.PI * 4), 0.45, [1.18, 0.6, 0.32]); headG.rotation.z = -0.05 + 0.03 * w; }
   else if (pose === 'heart') { heart.visible = true; heart.position.set(0, 0.42, 0.92); heart.scale.setScalar(1 + 0.08 * Math.max(0, w2)); setArm('L', -0.36, 0.38, 1.0); setArm('R', 0.36, 0.38, 1.0); root.rotation.z = 0.035 * w; }
-  else if (pose === 'happy') { const j = Math.abs(Math.sin(u * Math.PI * 2)); root.position.y = 0.2 * j; root.scale.set(1 + 0.05 * (1 - j), 1 - 0.05 * (1 - j), 1); setArm('L', -0.92, 0.82 + 0.22 * j, 0.36); setArm('R', 0.92, 0.82 + 0.22 * j, 0.36); }
-  else if (pose === 'touched') { headG.rotation.set(-0.22, 0.12, -0.08 + 0.025 * w); setArm('L', -0.14, 0.64, 0.86); setArm('R', 0.14, 0.64, 0.86); root.position.y = 0.015 * w; }
-  else if (pose === 'shy') { headG.rotation.z = 0.08 * w; setArm('L', -0.6, 0.95, 0.8); setArm('R', 0.6, 0.95, 0.8); }
+  else if (pose === 'happy') { const j = Math.abs(Math.sin(u * Math.PI * 2)); root.position.y = 0.2 * j; root.scale.set(1 + 0.05 * (1 - j), 1 - 0.05 * (1 - j), 1); setArm('L', -1.48, 0.98 + 0.16 * j, 0.42, [-1.15, 0.58, 0.3]); setArm('R', 1.48, 0.98 + 0.16 * j, 0.42, [1.15, 0.58, 0.3]); }
+  else if (pose === 'touched') { headG.rotation.set(-0.1, 0.08, -0.06 + 0.02 * w); setArm('L', -0.15, 0.5, 0.86); setArm('R', 0.15, 0.5, 0.86); root.position.y = 0.015 * w; }
+  else if (pose === 'shy') { headG.rotation.z = 0.07 * w; headG.rotation.x = 0.05; setArm('L', -0.17 - 0.03 * w, 0.22, 0.74); setArm('R', 0.17 - 0.03 * w, 0.22, 0.74); }
   if (job.prop && ['sign', 'card', 'photo'].includes(job.prop.type) && propMesh) {
     // 소품을 앞에 들고, 두 손으로 양쪽 가장자리를 앞에서 감싸 쥔다. 후기 카드·사진은 내려다본다(팻말은 정면)
     const p = propMesh; const card = job.prop.type === 'card', photo = job.prop.type === 'photo';
     p.rotation.z = 0.02 * w; p.position.y = (card ? 0.02 : photo ? -0.12 : 0.4) + 0.02 * Math.abs(w);
-    const gx = card ? 1.18 : photo ? 0.6 : 0.98, gy = p.position.y + (card ? 0.3 : photo ? 0.32 : 0.2), gz = p.position.z + 0.14;
+    const gx = card ? 1.08 : photo ? 0.6 : 0.98, gy = p.position.y + (card ? 0.64 : photo ? 0.32 : 0.2), gz = p.position.z + 0.14;
     setArm('L', -gx, gy, gz); setArm('R', gx, gy, gz);
     if (card || photo) headG.rotation.x = (card ? 0.08 : 0.12) + 0.015 * w;
   }
   if (faceKind === 'touched') sparkles.forEach((s, i) => { const a = u * Math.PI * 2 + i * 1.3; s.visible = true; s.position.set([-1.5, 1.45, -1.25, 1.2, 0][i] + 0.06 * Math.sin(a), [2.05, 2.15, 1.55, 1.6, 2.45][i] + 0.06 * Math.cos(a), 0.6); s.rotation.z = a * 0.5; s.scale.setScalar(0.6 + 0.6 * Math.abs(Math.sin(a * 1.5))); s.material.opacity = 0.65 + 0.35 * Math.abs(Math.sin(a)); });
-  const blink = faceKind === 'normal' && u > 0.84 && u < 0.89; setFace(blink ? 'shy' : faceKind);
+  const blink = faceKind === 'normal' && u > 0.84 && u < 0.89; setFace(blink ? 'blink' : faceKind);
   refreshOutlines();
 }
 window.renderJob = async (job, frames, size) => {
-  await document.fonts.load('400 64px Jua'); await document.fonts.load('700 64px "Noto Sans KR"'); await document.fonts.ready;
+  const t = '가나다라 볼콩이 ABC 123 TOP “'; await Promise.all([document.fonts.load('400 64px Jua', t), document.fonts.load('700 64px "Noto Sans KR"', t), document.fonts.load('900 64px "Noto Sans KR"', t)]); await document.fonts.ready;
+  if (!document.fonts.check('400 64px Jua', t) || !document.fonts.check('900 64px "Noto Sans KR"', t)) throw new Error('글꼴을 불러오지 못했습니다');
   OUTLINE_ON = job.outline !== false;
   renderer.setSize(size, size, false);
   const big = job.prop?.type === 'card' || job.prop?.type === 'photo';
@@ -262,7 +273,8 @@ async function renderJobs(jobs, { frames = 60, size = 900, preview = false, outD
   try {
     const page = await browser.newPage({ viewport: { width: size, height: size } });
     page.on('pageerror', (e) => log(`페이지 오류: ${e.message}`));
-    await page.setContent(PAGE, { waitUntil: 'networkidle' });
+    await useLocalFonts(page);
+    await page.setContent(PAGE.replace('__FONT_CSS__', FONT_CSS), { waitUntil: 'networkidle' });
     await page.waitForFunction(() => window.ready === true, null, { timeout: 30000 });
     for (const j of todo) {
       const shots = await page.evaluate(([job, n, s]) => window.renderJob(job, n, s), [j, preview ? 1 : frames, size]);

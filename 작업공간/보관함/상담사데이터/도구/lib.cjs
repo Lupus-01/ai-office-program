@@ -103,4 +103,26 @@ async function request(url, { form = null, referer = SITE, json = false } = {}) 
   return null;
 }
 
-module.exports = { fs, path, ROOT, RAW, STATE, LOG, SETTINGS, SHEET_DIR, SITE, needProgram, parseJson, readJson, writeAtomic, sleep, kst, decodeEnt, htmlText, siteDate, maskContacts, request };
+// 영상·3D 글꼴: 인터넷 글꼴 대신 도구/글꼴의 파일을 쓴다(장면마다 글꼴이 늦게 와서 굵기가 바뀌던 문제 방지, 2026-11-17)
+const FONT_DIR = path.join(__dirname, '글꼴');
+const FONT_CSS = "@font-face{font-family:'Jua';src:url(https://fonts.local/Jua-Regular.ttf) format('truetype');font-display:block}"
+  + "@font-face{font-family:'Noto Sans KR';src:url(https://fonts.local/NotoSansKR.ttf) format('truetype');font-weight:100 900;font-display:block}";
+async function useLocalFonts(page) {
+  await page.route('https://fonts.local/**', (route) => {
+    const file = path.join(FONT_DIR, decodeURIComponent(new URL(route.request().url()).pathname.slice(1)));
+    if (!fs.existsSync(file)) return route.fulfill({ status: 404, body: '' });
+    return route.fulfill({ status: 200, contentType: 'font/ttf', body: fs.readFileSync(file) });
+  });
+}
+// 페이지의 글꼴을 다 불러올 때까지 기다리고, 못 불러오면 다른 글꼴로 그리지 않게 오류를 낸다
+async function waitFonts(page) {
+  const ok = await page.evaluate(async () => {
+    const t = '가나다라 볼콩이 ABC 123 !?';
+    await Promise.all([document.fonts.load('56px Jua', t), document.fonts.load('400 48px "Noto Sans KR"', t), document.fonts.load('700 48px "Noto Sans KR"', t), document.fonts.load('900 48px "Noto Sans KR"', t)]);
+    await document.fonts.ready;
+    return document.fonts.check('56px Jua', t) && document.fonts.check('700 48px "Noto Sans KR"', t);
+  });
+  if (!ok) throw new Error('글꼴(Jua·Noto Sans KR)을 불러오지 못했습니다. 보관함/상담사데이터/도구/글꼴 폴더를 확인하세요.');
+}
+
+module.exports = { FONT_CSS, useLocalFonts, waitFonts, fs, path, ROOT, RAW, STATE, LOG, SETTINGS, SHEET_DIR, SITE, needProgram, parseJson, readJson, writeAtomic, sleep, kst, decodeEnt, htmlText, siteDate, maskContacts, request };

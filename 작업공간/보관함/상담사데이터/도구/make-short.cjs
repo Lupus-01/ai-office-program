@@ -6,7 +6,7 @@
 //   장면표 형식: 같은 폴더의 장면표-형식.md
 //   결과: <폴더>/<이름>.mp4, <폴더>/미리보기/장면-01.png …  (폴더 기본값은 장면표가 있는 폴더)
 'use strict';
-const { fs, path, ROOT, needProgram, readJson } = require('./lib.cjs');
+const { fs, path, ROOT, needProgram, readJson, FONT_CSS, useLocalFonts, waitFonts } = require('./lib.cjs');
 const { spawnSync } = require('child_process');
 const os = require('os');
 
@@ -155,8 +155,7 @@ function sceneHtml(s, plan, i, n) {
   const bigLogo = logo && ['title', 'cta'].includes(s.type);
   const contentTop = plan.chrome ? 200 : logo ? (bigLogo ? 250 : 200) : 140;
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
-<style>
+<style>${FONT_CSS}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{width:${W}px;height:${H}px;overflow:hidden}
 body{background:${t.bg};color:${t.text};font-family:'Noto Sans KR','Malgun Gothic',sans-serif;position:relative;word-break:keep-all;overflow-wrap:anywhere}
@@ -192,9 +191,12 @@ ${bubbleHtml(box)}
 ${plan.chrome ? `<div class="foot"><span>${esc(s.basis ?? plan.basis ?? '')}</span><span>${esc(plan.progressLabel || `${i + 1}/${n}`)}</span></div><div class="bar"><i></i></div>` : ''}
 <script>
 // 글이 칸을 넘치면 글자 크기를 줄인다
+window.fitText = () => {
 const over = (el) => { const box = el.closest('.center'); return el.scrollWidth > el.clientWidth + 2 || (box && box.scrollHeight > box.clientHeight + 4) || (el.classList.contains('fitb') && el.scrollHeight > 200); };
 for (const el of document.querySelectorAll('.fit, .fitb')) { let size = parseFloat(getComputedStyle(el).fontSize); let guard = 0;
   while (over(el) && size > 26 && guard++ < 90) { size -= 3; el.style.fontSize = size + 'px'; } }
+};
+window.fitText();
 </script></body></html>`;
 }
 
@@ -205,12 +207,15 @@ async function render(plan, outDir) {
   const shots = [];
   try {
     const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
+    await useLocalFonts(page);
     const prev = path.join(outDir, '미리보기');
     fs.mkdirSync(prev, { recursive: true });
     for (let i = 0; i < plan.scenes.length; i++) {
       await page.setContent(sceneHtml(plan.scenes[i], plan, i, plan.scenes.length), { waitUntil: 'networkidle', timeout: 30000 }).catch(() => {});
-      await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
-      await page.waitForTimeout(150);
+      await waitFonts(page);
+      // 글꼴이 바뀐 뒤 글자 크기 맞추기를 다시 한다
+      await page.evaluate(() => window.fitText && window.fitText());
+      await page.waitForTimeout(120);
       const png = path.join(prev, `장면-${String(i + 1).padStart(2, '0')}.png`);
       await page.screenshot({ path: png });
       shots.push(png);
