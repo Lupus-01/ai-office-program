@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 2a2463aa-16e8-460b-9040-ea1aaf0b48fd
-  modified: 2026-11-17T04:46:08.784Z
+  modified: 2026-11-17T05:07:42.773Z
 ---
 
 이 PC(Windows, Node 24.14, 사용자 경로에 한글)에서는 `fs.cpSync`가 한글 경로에서 프로세스째 종료(exit 127)되어 `npm run check`의 chief-guard·session-context·workspace 테스트 파일이 실행되지 못한다. 프로그램 코드는 cpSync를 쓰지 않아 실행에는 영향이 없다.
@@ -20,6 +20,8 @@ metadata:
 
 PR: `gh` 2.103.3을 2026-11-05에 설치했다(`C:\Program Files\GitHub CLI\gh.exe`). 설치 전에 시작한 세션은 PATH에 없어 전체 경로로 부른다. 쓰기 전에 `gh auth status`를 확인하고, 로그인이 안 되어 있으면 대표에게 `gh auth login`을 요청한다. 로그인할 수 없을 때는 대표가 눌러 만드는 compare 링크(`quick_pull=1`)를 쓴다. 영문 경로의 `git worktree`를 쓰면 서버가 쓰는 프로그램 폴더를 건드리지 않고 최신 원본 기준으로 전체 검사까지 할 수 있다.
 
-**2026-11-17 배포 전 점검:** 원본 057ea0c를 포크 main에 merge하고 결함 수정(재발송 판별·요일 예약·내려받기)을 더해 포크 main c996888로 fast-forward push, 회사 PC 로컬 main·서버도 갱신했다(백업 `.office/backup-2026-11-17-before-update/`, org·예약 그대로 확인). 이때 기준 전체 검사는 613개 중 604 통과, 5 건너뜀, 실패 4(같은 환경 실패). 영문 경로 worktree(`C:\Temp\aioffice-release`)로 검증했다. 포크의 공개 브랜치 `feat/chief-upload`(f346d7a)에는 실제 상담사 예명이 테스트에 남아 있어(원본 반영본 833d6ae는 가상 예명) 삭제를 대표에게 물었다.
+**2026-11-17 배포 전 점검:** 원본 057ea0c를 포크 main에 merge하고 결함 수정(재발송 판별·요일 예약·내려받기)을 더해 포크 main c996888로 fast-forward push, 회사 PC 로컬 main·서버도 갱신했다(백업 `.office/backup-2026-11-17-before-update/`, org·예약 그대로 확인). 이때 기준 전체 검사는 613개 중 604 통과, 5 건너뜀, 실패 4(같은 환경 실패). 영문 경로 worktree(`C:\Temp\aioffice-release`)로 검증했다. 포크의 공개 브랜치 `feat/chief-upload`(f346d7a)에 실제 상담사 예명이 테스트에 남아 있어(원본 반영본 833d6ae는 가상 예명), 대표 승인으로 이미 합친 포크 작업 브랜치 4개(chief-upload·site-download·weekly-schedule·preflight-login)를 원격·로컬에서 지웠다. 포크에는 main만 남았고 로컬에는 `backup/fork-main-54b215e`만 남겼다.
+
+**배포 주소(2026-11-17 대표 결정):** "원본에 PR이 아닌 내 깃 메인에" — 다른 사람에게는 포크 `Lupus-01/ai-office` main으로 배포한다. README·GUIDE의 clone·설치 지시 주소를 포크로 바꿨다(a25e8a7, `docs/ASIDE_PORTING.md`는 원본 PR #63 근거라 원본 주소 유지). 원본을 다시 합칠 때 이 주소 줄은 포크 쪽을 유지하고, 원본으로 PR·push는 대표가 따로 말할 때만 한다.
 
 **2026-11-16 로컬 추적 대상 변경:** 대표가 집 PC에서 상담사 분석 메일용 코드(`browser_download`·메일 서식·`browser_collect`·외부 작업 질문 전달)를 포크 `main`에 합쳤다(50e7c1b, 원본에는 없음). 그래서 회사 PC 로컬 `main`을 origin/main으로 fast-forward하고 추적 대상도 `origin/main`으로 바꿨다. 원본 새 커밋은 `git fetch upstream` 뒤 합쳐야 한다(포크 main이 원본보다 앞서 있어 fast-forward가 안 됨). 포크 CI의 macOS 3개는 GitHub 실행기 부족("not acquired by Runner")으로 시작하지 못해 실패로 보였다. Windows·Ubuntu 6개와 browser는 통과했다.
