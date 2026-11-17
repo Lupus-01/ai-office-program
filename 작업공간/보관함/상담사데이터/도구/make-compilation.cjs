@@ -1,5 +1,5 @@
 // 모음 영상 만들기: 모음표(JSON)의 구간(장면표)마다 영상을 만들고 하나로 이어 붙인다. 유튜브 챕터 목록도 만든다.
-// 구간은 각각 30초 안팎의 숏폼으로도 쓸 수 있다. 화면에는 "내부 시안" 표시가 들어간다.
+// 구간은 각각 30초 안팎의 숏폼으로도 쓸 수 있다.
 // 사용: node make-compilation.cjs <모음표.json> [--force]
 //   모음표 형식: 같은 폴더의 장면표-형식.md "모음 영상" 절
 //   결과: <모음표 폴더>/<이름>.mp4, 유튜브챕터.txt, 구간/<NN_제목>/<제목>.mp4(구간별 숏폼)·미리보기/
@@ -79,7 +79,7 @@ async function main() {
   fs.rmSync(list, { force: true });
   const chapters = results.map((x) => `${clock(x.start)} ${x.title}`).join('\n');
   fs.writeFileSync(path.join(base, '유튜브챕터.txt'), `${chapters}\n`);
-  console.log(`모음 영상: ${out} (${clock(t)}, 구간 ${results.length}개${bgm ? ', 배경음 있음' : ', 배경음 없음'}, 내부 시안)`);
+  console.log(`모음 영상: ${out} (${clock(t)}, 구간 ${results.length}개${bgm ? ', 배경음 있음' : ', 배경음 없음'})`);
   console.log(`챕터: ${path.join(base, '유튜브챕터.txt')}`);
 }
 

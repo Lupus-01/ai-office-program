@@ -1,6 +1,6 @@
 // 숏폼 영상 시안 만들기: 장면표(JSON) → 세로 1080×1920 장면 그림(PNG) → ffmpeg로 이어 붙인 mp4.
 // 진행 캐릭터(host)가 있으면 말풍선과 함께 화면에 넣고, 들어올 때 미끄러지고 통통 튀게 움직인다.
-// 화면 오른쪽 위에 "내부 시안" 표시가 들어간다(외부 채널 사용은 법무·상담사 동의 확인 전, 2026-11-16 운영 규칙).
+// 화면 위아래 표시(홍카페·캐릭터 이름·내부 시안·기준·쪽수)는 기본으로 넣지 않는다(2026-11-17 대표 결정, plan.chrome:true면 넣음). 영상은 시안이며 게시·업로드하지 않는다.
 // 사용: node make-short.cjs <장면표.json> [--out <폴더>] [--no-video]
 //   장면표 형식: 같은 폴더의 장면표-형식.md
 //   결과: <폴더>/<이름>.mp4, <폴더>/미리보기/장면-01.png …  (폴더 기본값은 장면표가 있는 폴더)
@@ -42,25 +42,38 @@ const pngSize = (file) => { const b = fs.readFileSync(file); return { w: b.readU
 const dataUrl = (file) => `data:image/png;base64,${fs.readFileSync(file).toString('base64')}`;
 
 // ---------- 진행 캐릭터 ----------
+// 3D(host.style "3d", 기본): 영상/캐릭터/3d/<자세>/f_000.png… 반복 동작. 2D: 영상/캐릭터/자른그림/<prefix><자세>.png 한 장
+const CHAR3D_DIR = path.join(ROOT, '영상', '캐릭터', '3d');
+const is3d = (plan) => (plan.host?.style || '3d') === '3d';
 function hostFile(plan, pose) {
   const host = plan.host;
   if (!host) return null;
+  const name = pose || host.pose || '기본';
+  if (is3d(plan)) {
+    const dir = path.join(host.dir3d ? path.resolve(WORKSPACE, host.dir3d) : CHAR3D_DIR, name);
+    const first = path.join(dir, 'f_000.png');
+    if (!fs.existsSync(first)) throw new Error(`3D 캐릭터 동작이 없습니다: ${dir} (node character3d.cjs ${name} 로 만드세요)`);
+    return { file: first, seq: path.join(dir, 'f_%03d.png') };
+  }
   const dir = host.dir ? path.resolve(WORKSPACE, host.dir) : CHAR_DIR;
-  const file = path.join(dir, `${host.prefix ?? '볼콩_'}${pose || host.pose || '기본'}.png`);
+  const file = path.join(dir, `${host.prefix ?? '볼콩_'}${name}.png`);
   if (!fs.existsSync(file)) throw new Error(`캐릭터 그림이 없습니다: ${file}`);
-  return file;
+  return { file, seq: null };
 }
-// 장면의 캐릭터 자리(화면 픽셀). 아래쪽 바닥선(1640) 위에 선다
+// 장면의 캐릭터 자리(화면 픽셀). 아래쪽 바닥선(1700) 위에 선다. 3D 순위 장면은 팻말을 든 볼콩이를 가운데 크게 둔다
 function hostBox(plan, s) {
-  if (!s.host || !plan.host) return null;
-  const file = hostFile(plan, s.host.pose);
-  const at = s.host.at || 'left';
-  const size = Number(s.host.size) || (at === 'center' ? 640 : 430);
+  if (!plan.host) return null;
+  let host = s.host;
+  if (s.type === 'rank' && is3d(plan)) host = { pose: `팻말_${s.rank}`, at: 'center', size: 760, ...(s.host || {}) };
+  if (!host) return null;
+  const { file, seq } = hostFile(plan, host.pose);
+  const at = host.at || 'left';
+  const size = Number(host.size) || (at === 'center' ? 680 : 470);
   const { w: iw, h: ih } = pngSize(file);
   const h = Math.round(size), w = Math.round((iw * size) / ih);
-  const y = 1640 - h;
-  const x = at === 'right' ? W - 60 - w : at === 'center' ? Math.round((W - w) / 2) : 60;
-  return { file, at, x, y, w, h, say: s.host.say || '' };
+  const y = 1700 - h;
+  const x = at === 'right' ? W - 50 - w : at === 'center' ? Math.round((W - w) / 2) : 50;
+  return { file, seq, at, x, y, w, h, say: host.say || '' };
 }
 
 const THEMES = {
@@ -77,8 +90,8 @@ function sceneBody(s, plan) {
       return `<div class="center"><div class="kicker">${esc(s.kicker || '')}</div><div class="fit big">${lines(s.text)}</div></div>`;
     case 'rank': {
       // 볼콩이가 든 팻말에 순위를 쓴다(팻말 자세 그림 안의 판 위치에 맞춤)
-      const file = plan.host ? hostFile(plan, s.pose || '팻말') : null;
-      const sign = file ? `<div class="signwrap"><img src="${dataUrl(file)}"><div class="signtext"><small>${esc(s.label || 'TOP')}</small><b>${esc(s.rank)}</b></div></div>` : `<div class="fit name">${esc(s.label || 'TOP')} ${esc(s.rank)}</div>`;
+      const file = plan.host && !is3d(plan) ? hostFile(plan, s.pose || '팻말').file : null;
+      const sign = file ? `<div class="signwrap"><img src="${dataUrl(file)}"><div class="signtext"><small>${esc(s.label || 'TOP')}</small><b>${esc(s.rank)}</b></div></div>` : (plan.host && is3d(plan) ? '' : `<div class="fit name">${esc(s.label || 'TOP')} ${esc(s.rank)}</div>`);
       return `<div class="center rankc">${sign}<div class="fit name">${lines(s.title || '')}</div><div class="sub">${lines(s.sub || '')}</div></div>`;
     }
     case 'profile':
@@ -87,7 +100,7 @@ function sceneBody(s, plan) {
         ${(s.chips || []).length ? `<div class="chips">${s.chips.map((c) => `<span>#${esc(c)}</span>`).join('')}</div>` : ''}</div>`;
     case 'quote':
       return `<div class="center"><div class="qmark">“</div><div class="card"><div class="fit quote">${lines(s.text)}</div></div>
-        <div class="meta">${esc(s.meta || '')}</div><div class="note">${esc(s.note || '실제 후기 일부를 줄여 옮김')}</div></div>`;
+        <div class="meta">${esc(s.meta || '')}</div>${s.note ? `<div class="note">${esc(s.note)}</div>` : ''}</div>`;
     case 'stats':
       return `<div class="center"><div class="fit mid">${lines(s.title || '')}</div><div class="stats">${(s.items || []).map((x) => `<div class="stat"><b>${esc(x.value)}</b><span>${esc(x.label)}</span></div>`).join('')}</div></div>`;
     case 'cta':
@@ -107,7 +120,7 @@ function bubbleHtml(box) {
 function sceneHtml(s, plan, i, n) {
   const t = THEMES[plan.theme] || THEMES.night;
   const box = hostBox(plan, s);
-  const contentBottom = box ? H - box.y + (box.say ? 300 : 40) : 300;
+  const contentBottom = box ? H - box.y + (box.say ? 300 : 40) : 240;
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
@@ -117,7 +130,7 @@ body{background:${t.bg};color:${t.text};font-family:'Noto Sans KR','Malgun Gothi
 .stars{position:absolute;inset:0;background-image:radial-gradient(2px 2px at 12% 18%,#fff8,transparent),radial-gradient(2px 2px at 78% 12%,#fff6,transparent),radial-gradient(3px 3px at 64% 34%,#fff5,transparent),radial-gradient(2px 2px at 22% 72%,#fff5,transparent),radial-gradient(2px 2px at 88% 80%,#fff6,transparent);opacity:${plan.theme === 'pastel' ? 0 : 1}}
 .top{position:absolute;top:70px;left:80px;right:80px;display:flex;justify-content:space-between;align-items:center;font-size:34px;color:${t.sub};font-weight:700;letter-spacing:.02em}
 .draft{font-size:28px;border:2px solid ${t.line};border-radius:999px;padding:6px 18px;color:${t.accent}}
-.center{position:absolute;top:200px;bottom:${contentBottom}px;left:90px;right:90px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:32px}
+.center{position:absolute;top:${plan.chrome ? 200 : 150}px;bottom:${contentBottom}px;left:90px;right:90px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:32px}
 .fit{width:100%;max-height:900px;overflow:hidden;line-height:1.35;font-weight:900}
 .big{font-size:100px}.mid{font-size:78px}.name{font-size:110px;color:${t.accent}}.title{font-size:118px;line-height:1.25}
 .quote{font-size:60px;font-weight:700;line-height:1.5;max-height:760px}
@@ -139,10 +152,10 @@ body{background:${t.bg};color:${t.text};font-family:'Noto Sans KR','Malgun Gothi
 .foot{position:absolute;bottom:90px;left:80px;right:80px;display:flex;justify-content:space-between;font-size:28px;color:${t.sub};opacity:.85}
 .bar{position:absolute;bottom:60px;left:80px;right:80px;height:6px;border-radius:6px;background:${t.card}}.bar i{display:block;height:100%;width:${Math.round(((i + 1) / n) * 100)}%;background:${t.accent};border-radius:6px}
 </style></head><body><div class="stars"></div>
-<div class="top"><span>홍카페${plan.host?.name ? ` · ${esc(plan.host.name)}` : ''}</span><span class="draft">내부 시안</span></div>
+${plan.chrome ? `<div class="top"><span>홍카페${plan.host?.name ? ` · ${esc(plan.host.name)}` : ''}</span><span class="draft">내부 시안</span></div>` : ''}
 ${sceneBody(s, plan)}
 ${bubbleHtml(box)}
-<div class="foot"><span>${esc(s.basis ?? plan.basis ?? '')}</span><span>${esc(plan.progressLabel || `${i + 1}/${n}`)}</span></div><div class="bar"><i></i></div>
+${plan.chrome ? `<div class="foot"><span>${esc(s.basis ?? plan.basis ?? '')}</span><span>${esc(plan.progressLabel || `${i + 1}/${n}`)}</span></div><div class="bar"><i></i></div>` : ''}
 <script>
 // 글이 칸을 넘치면 글자 크기를 줄인다
 for (const el of document.querySelectorAll('.fit, .fitb')) { let size = parseFloat(getComputedStyle(el).fontSize); let guard = 0;
@@ -196,7 +209,7 @@ function encode(plan, shots, mp4) {
     const b = boxes[i];
     if (b) {
       // 캐릭터: 0.5초 동안 미끄러져(가운데는 아래에서 튀어) 들어오고, 그 뒤로 통통 튄다
-      args.push('-loop', '1', '-framerate', String(FPS), '-t', String(durs[i]), '-i', b.file);
+      args.push('-loop', '1', '-framerate', String(FPS), '-t', String(durs[i]), '-i', b.seq || b.file);
       const chIn = input++;
       const from = b.at === 'right' ? W : -b.w;
       const xExpr = b.at === 'center' ? `${b.x}` : `${b.x}-(${b.x - from})*pow(1-min(t/0.5,1),2)`;
@@ -258,6 +271,6 @@ if (require.main === module) {
     const outDir = path.resolve(outArg || path.dirname(path.resolve(file)));
     const res = await renderPlan(plan, outDir, { name: plan?.name || path.basename(file, '.json'), noVideo: argv.includes('--no-video') });
     console.log(`장면 그림 ${res.shots.length}장: ${path.join(outDir, '미리보기')}`);
-    if (res.mp4) console.log(`영상: ${res.mp4} (${res.seconds.toFixed(1)}초, ${W}×${H}, 내부 시안)`);
+    if (res.mp4) console.log(`영상: ${res.mp4} (${res.seconds.toFixed(1)}초, ${W}×${H})`);
   })().catch((e) => { console.error(`영상 만들기 오류: ${e.message}`); process.exit(1); });
 }
