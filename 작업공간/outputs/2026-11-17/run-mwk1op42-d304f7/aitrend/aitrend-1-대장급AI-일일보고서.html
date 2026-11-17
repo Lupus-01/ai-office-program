@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>대장급 AI 모델 동향 보고서 · 2026-11-17</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #faf9f6;
+      --ink: #20201e;
+      --muted: #57554f;
+      --accent: #bf2436;
+      --link: #8f1a29;
+      --box: #f0eee7;
+      --line: #dcdad3;
+      --white: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 17px/1.75 "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+    a { color: var(--link); text-underline-offset: 3px; overflow-wrap: anywhere; }
+    a:focus-visible, [tabindex="0"]:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+    code { font-family: ui-monospace, Consolas, monospace; font-size: .86em; background: var(--box); padding: 0 4px; border-radius: 4px; overflow-wrap: anywhere; }
+    .skip { position: absolute; left: 12px; top: -80px; z-index: 10; padding: 8px 12px; background: var(--white); border: 2px solid var(--accent); }
+    .skip:focus { top: 12px; }
+    main { max-width: 800px; margin: 0 auto; padding: 48px 24px 64px; }
+    header { padding-bottom: 24px; border-bottom: 2px solid var(--ink); }
+    .eyebrow { margin: 0; color: var(--accent); font-size: .85rem; font-weight: 800; letter-spacing: .06em; }
+    h1 { margin: 10px 0 14px; font-size: clamp(1.5rem, 4.4vw, 2.15rem); line-height: 1.34; letter-spacing: -.03em; }
+    h2 { margin: 0 0 14px; font-size: 1.4rem; line-height: 1.4; letter-spacing: -.02em; }
+    h3 { margin: 26px 0 10px; font-size: 1.12rem; line-height: 1.45; }
+    h4 { margin: 4px 0 10px; font-size: 1.08rem; line-height: 1.45; }
+    p { margin: 0 0 12px; }
+    ul, ol { margin: 0 0 12px; padding-left: 22px; }
+    li + li { margin-top: 8px; }
+    .lead { font-size: 1.06rem; }
+    .muted { color: var(--muted); font-size: .92rem; }
+    dl.meta { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 14px; margin: 16px 0 14px; font-size: .95rem; }
+    dl.meta dt { font-weight: 700; }
+    dl.meta dd { margin: 0; color: var(--muted); }
+    .note { padding: 12px 14px; background: var(--box); border: 1px solid var(--line); border-radius: 8px; font-size: .93rem; }
+    section { padding: 36px 0 12px; border-top: 1px solid var(--line); }
+    header + section { border-top: 0; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; }
+    .cat, .badge { display: inline-block; padding: 0 8px; border: 1px solid; border-radius: 999px; font-size: .78rem; font-weight: 700; line-height: 1.7; white-space: nowrap; vertical-align: 1px; }
+    .cat { background: var(--box); color: var(--ink); border-color: var(--line); }
+    .badge.new { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .badge.upd { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .badge.same { background: #e7e5de; color: #33322e; border-color: #cfccc3; }
+    .badge.ok { background: #e9f0e6; color: #24421c; border-color: #bfd1b7; }
+    .badge.second { background: #eef0f6; color: #2f3a5c; border-color: #c9cfe0; }
+    .badge.unk { background: #fdf1e3; color: #6f430c; border-color: #e3c79c; }
+    .badge.est { background: var(--white); color: #4a4843; border-color: #8f8c84; border-style: dashed; }
+    .badge.prop { background: var(--white); color: var(--accent); border-color: var(--accent); }
+    .cnt { color: var(--muted); font-size: .8rem; }
+    ol.conclusion { padding-left: 0; list-style: none; counter-reset: c; }
+    ol.conclusion > li { counter-increment: c; position: relative; padding: 14px 0 14px 40px; border-bottom: 1px solid var(--line); margin: 0; }
+    ol.conclusion > li::before { content: counter(c); position: absolute; left: 0; top: 14px; width: 28px; height: 28px; border-radius: 50%; background: var(--ink); color: #fff; font-weight: 800; font-size: .9rem; text-align: center; line-height: 28px; }
+    .delta { display: block; margin-top: 6px; color: var(--muted); font-size: .9rem; }
+    .callout { margin: 14px 0; padding: 14px 16px; background: var(--box); border-left: 4px solid var(--accent); border-radius: 0 8px 8px 0; }
+    .callout > strong:first-child { color: var(--accent); }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 16px 0 8px; }
+    .metric { min-width: 0; padding: 16px 14px; background: var(--white); border: 1px solid var(--line); border-radius: 10px; }
+    .metric .num { display: block; color: var(--accent); font-size: clamp(1.35rem, 4.6vw, 1.8rem); font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; }
+    .metric .lab { display: block; margin-top: 6px; font-weight: 700; font-size: .92rem; line-height: 1.45; }
+    .metric .desc { display: block; margin-top: 4px; color: var(--muted); font-size: .84rem; line-height: 1.5; }
+    .card { margin: 18px 0; padding: 22px 22px 14px; background: var(--white); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+    .card h3 { margin: 6px 0 4px; font-size: 1.2rem; }
+    .card dl { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); gap: 10px 14px; margin: 14px 0 6px; }
+    .card dt { color: var(--muted); font-size: .9rem; font-weight: 700; }
+    .card dd { margin: 0; min-width: 0; }
+    .card dd ul { margin: 0; padding-left: 18px; }
+    .srcline { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line); color: var(--muted); font-size: .88rem; }
+    .srcline a { margin-right: 10px; }
+    .table-wrap { max-width: 100%; overflow-x: auto; margin: 12px 0 14px; background: var(--white); border: 1px solid var(--line); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; line-height: 1.55; }
+    caption { caption-side: top; padding: 10px 12px; text-align: left; color: var(--muted); font-size: .86rem; }
+    th, td { padding: 9px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    thead th { background: var(--box); font-weight: 700; }
+    tbody th[scope="row"] { font-weight: 700; }
+    tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
+    td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    td.up { color: var(--accent); font-weight: 700; }
+    td.top { font-weight: 800; }
+    table.kv th { width: 7.5em; background: var(--box); }
+    .prio { margin: 14px 0; padding: 18px 20px; background: var(--white); border: 2px solid var(--accent); border-radius: 12px; }
+    .prio dl { margin: 0; }
+    .prio dt { margin-top: 8px; font-weight: 700; color: var(--accent); font-size: .9rem; }
+    .prio dd { margin: 0; }
+    ul.timeline { list-style: none; padding-left: 0; }
+    ul.timeline li { padding-left: 14px; border-left: 3px solid var(--line); }
+    ul.timeline time { font-weight: 700; font-variant-numeric: tabular-nums; }
+    dl.labels { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 12px; margin: 10px 0; }
+    dl.labels dd { margin: 0; }
+    footer { margin-top: 24px; padding-top: 24px; border-top: 2px solid var(--ink); }
+    .sources { padding-left: 22px; font-size: .92rem; }
+    @media (max-width: 640px) {
+      body { font-size: 16px; }
+      main { padding: 28px 16px 44px; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .card { padding: 18px 16px 12px; }
+      .card dl { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+      .card dt { margin-top: 10px; }
+      .prio { padding: 16px; }
+      ol.conclusion > li { padding-left: 36px; }
+      table.stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      table.stack, table.stack tbody, table.stack tr, table.stack th[scope="row"], table.stack td { display: block; width: 100%; }
+      table.stack caption { display: block; }
+      table.stack tr { padding: 8px 0; border-bottom: 1px solid var(--line); }
+      table.stack tbody tr:last-child { border-bottom: 0; }
+      table.stack th[scope="row"], table.stack td { padding: 3px 12px; border-bottom: 0; }
+      table.stack th[scope="row"] { font-size: .98rem; }
+      table.stack td::before { content: attr(data-label); display: block; color: var(--muted); font-size: .76rem; font-weight: 700; }
+      table.stack td.num { white-space: normal; }
+      table.kv, table.kv caption, table.kv tbody, table.kv tr, table.kv th, table.kv td { display: block; width: 100%; }
+      table.kv th { padding-bottom: 2px; border-bottom: 0; }
+      dl.labels { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+      dl.labels dd { margin-bottom: 8px; }
+      dl.meta { grid-template-columns: minmax(0, 1fr); gap: 0; }
+      dl.meta dd { margin-bottom: 6px; }
+    }
+    @media print {
+      :root { --paper: #fff; }
+      body { background: #fff; font-size: 10.5pt; line-height: 1.55; }
+      main { max-width: none; padding: 0; }
+      .skip { display: none; }
+      section { padding-top: 18pt; }
+      h2, h3, h4 { break-after: avoid; }
+      .card, .metric, .prio, .callout, tr, ol.conclusion > li { break-inside: avoid; }
+      .table-wrap { overflow: visible; border-color: #999; }
+      thead { display: table-header-group; }
+      a { color: inherit; }
+      .srcline a[href^="http"]::after, .sources a[href^="http"]::after { content: " <" attr(href) ">"; font-size: .8em; word-break: break-all; }
+      .badge, .cat, .callout, thead th, table.kv th, .note, ol.conclusion > li::before { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#report">보고서 본문으로</a>
+  <main id="report">
+
+    <header>
+      <p class="eyebrow">AI 브리핑 · 2026.11.17</p>
+      <h1>Claude Fable 5.2, Anthropic 비교표 9개 지표 중 8개에서 가장 높아… AutomationBench는 Gemini 4 Carbon이 앞서</h1>
+      <p class="lead">대장급 AI 모델 동향 보고서입니다. 이번 기간 새 모델 발표는 Anthropic(Claude Fable 5.2)과 Google(Gemini 4 Hydrogen) 2건입니다. OpenAI는 확인한 범위에서 모델 출시 없이 안전 분류기 1건을 더했습니다. 벤치마크는 대부분 발표한 회사가 직접 잰 값이므로 지표마다 측정 주체를 표에 따로 적었습니다.</p>
+      <dl class="meta">
+        <dt>확인일</dt><dd>2026-11-17</dd>
+        <dt>조사 기간</dt><dd>2026-11-10 ~ 2026-11-17(한국 시각)</dd>
+        <dt>조사 대상</dt><dd>Anthropic(Claude), OpenAI(GPT), Google(Gemini). 기타 회사는 이번에 조사하지 않았습니다.</dd>
+        <dt>항목 수</dt><dd>모델 출시 2건, 기능·정책 소식 7건(Anthropic 2, OpenAI 1, Google 4)</dd>
+        <dt>작성</dt><dd>AI트렌드부</dd>
+      </dl>
+      <p class="note">지난 보고(2026-11-16)와 같은 범위를 이어서 다룹니다. 항목마다 <span class="badge new">신규</span> <span class="badge upd">갱신</span> <span class="badge same">변동 없음</span>을 붙였고, 갱신 항목에는 무엇이 달라졌는지 적었습니다.</p>
+    </header>
+
+    <!-- 1. 오늘의 결론 -->
+    <section aria-labelledby="h-conclusion">
+      <h2 id="h-conclusion">오늘의 결론</h2>
+      <p class="muted">약 5분 · 3개 흐름</p>
+      <ol class="conclusion">
+        <li>
+          <div class="chips"><span class="cat">성능·평가</span><span class="cat">가격·요금</span><span class="badge upd">갱신</span><span class="cnt">근거 출처 3</span></div>
+          <a href="#c1"><strong>Claude Fable 5.2는 조사 자료의 9개 지표 모두에서 Fable 5.1보다 올랐습니다.</strong></a>
+          오른 폭은 5.8%p에서 37.3%p입니다. Anthropic이 함께 실은 비교에서는 9개 중 8개 지표에서 표에 값이 있는 다른 모델(Opus 5.5·GPT-6 Astra·Gemini 4 Carbon)보다 높았고, AutomationBench만 Gemini 4 Carbon(53.9%)이 Fable 5.2(51.4%)보다 높았습니다. 이 비교 값은 Anthropic이 측정해 발표한 것입니다. 가격은 100만 토큰당 입력 8달러·출력 40달러로 Fable 5.1보다 20% 낮습니다.
+          <span class="delta">지난 보고 대비: 다른 회사 모델과의 비교 수치, 지표별 effort 조건, 발표 시각, API 이전 안내를 새로 확인했습니다.</span>
+        </li>
+        <li>
+          <div class="chips"><span class="cat">출시·신기능</span><span class="cat">가격·요금</span><span class="badge upd">갱신</span><span class="cnt">근거 출처 3</span></div>
+          <a href="#c4"><strong>Gemini 4 Hydrogen은 Gemini 3.8 Flash보다 기본 설정에서 약 2.5배 빠르다고 Google이 발표했습니다.</strong></a>
+          Terminal-Bench 4.1은 18.2%에서 57%로 올랐습니다(Google 발표). 가격은 100만 토큰당 입력 1.50달러·출력 7.50달러입니다.
+          <span class="delta">지난 보고 대비: 4,096토큰 이상 캐시 입력 0.075달러, Gemini 4 Carbon·Argon 현재 프로모션가보다 25% 낮다는 비교를 새로 확인했습니다. 두 가지 모두 기사에만 있는 <span class="badge second">2차 출처</span> 값입니다.</span>
+        </li>
+        <li>
+          <div class="chips"><span class="cat">신기능 모음</span><span class="cat">안전·정책</span><span class="badge new">신규</span><span class="cnt">근거 출처 2</span></div>
+          <a href="#c2"><strong>새 모델 대신 운영 기능이 늘었습니다.</strong></a>
+          Anthropic은 Claude Managed Agents 자체 호스팅(11-12)과 Opus 4.6·Opus 4.5·Sonnet 4.5·Haiku 4.5 생성 텍스트 워터마크(11-16)를 내놓았습니다. OpenAI는 승인 조직용 CSAM 이미지 분류 모더레이션 모델(11-16, 승인 조직 무료)을 더했습니다. OpenAI API 변경 기록에는 이번 기간 모델 출시가 없습니다.
+        </li>
+      </ol>
+      <div class="callout">
+        <strong>우리 서비스에는</strong> AI Office는 Claude API의 옛 computer 도구 버전을 쓰는 곳이 있는지 먼저 확인해 보세요. 옛 버전은 이제 오류가 납니다(Bedrock 제외). 꼬리별 관측소는 Hydrogen 캐시 가격을 공식 가격표에서 확인한 뒤 댓글 분류 시험을 검토해 보세요. 홍카페는 오늘 새로 적용할 것이 적어 지난 제안(상담사 프로필 초안 시험)을 유지합니다. <span class="badge prop">제안</span> 자세한 내용은 <a href="#h-apply">우리 서비스 적용 시사점</a>에 있습니다.
+      </div>
+    </section>
+
+    <!-- 2. 회사·모델별 카드 -->
+    <section aria-labelledby="h-cards">
+      <h2 id="h-cards">회사·모델별 카드</h2>
+      <p class="muted">카드마다 발표일, 무엇이 바뀌었나, 얼마나 좋아졌나(이전 대비), 가격·공개 범위, 지난 보고 대비 변화, 출처를 같은 순서로 적었습니다. 따로 라벨이 없는 사실은 회사 공식 발표·문서에서 확인한 값입니다.</p>
+
+      <!-- 카드 1 -->
+      <article class="card" id="c1" aria-labelledby="h-c1">
+        <div class="chips"><span class="cat">출시·신기능</span><span class="cat">성능·평가</span><span class="cat">가격·요금</span><span class="badge upd">갱신</span><span class="cnt">근거 출처 3</span></div>
+        <h3 id="h-c1">1. Anthropic — Claude Fable 5.2 · Claude Mythos 5.2</h3>
+        <dl>
+          <dt>모델</dt>
+          <dd>Claude Fable 5.2(모델 ID <code>claude-fable-5-2</code>)와 Claude Mythos 5.2. 두 모델은 같은 기반 모델입니다. Mythos 5.2는 Cyber·Life Sciences 검증 프로그램 승인 기관만 씁니다.</dd>
+          <dt>발표일</dt>
+          <dd>2026-11-09(미국 기준). 한국 시각 2026-11-10 04:00 KST입니다. 날짜는 Anthropic 뉴스룸·릴리스 노트에서 확인했고, 시각(미국 동부 14:00)은 CNBC 기사 기준입니다 <span class="badge second">2차 출처</span>.</dd>
+          <dt>무엇이 바뀌었나</dt>
+          <dd>
+            <ul>
+              <li>Fable 5.1 대비 코딩·추론·비전이 좋아졌다고 발표했습니다.</li>
+              <li>출력 속도가 최대 30% 빨라졌습니다.</li>
+              <li>Medium effort에서 Fable 5.1보다 적은 토큰으로 작업을 끝낸다고 합니다. 줄어든 폭은 <span class="badge unk">미확인</span>입니다.</li>
+              <li>안전장치가 정상 요청을 잘못 막는 경우가 약 55% 줄었습니다(사이버 약 60%, 생물 약 40%).</li>
+            </ul>
+          </dd>
+          <dt>얼마나 좋아졌나</dt>
+          <dd>비교 대상 Fable 5.1, 측정 주체 Anthropic(안전장치 적용 상태). 차이는 두 값을 빼서 계산했습니다.
+            <ul>
+              <li>FrontierCode 2.0: 32.4% → 49.1%(+16.7%p, Xhigh effort)</li>
+              <li>AutomationBench: 31.4% → 51.4%(+20.0%p, 최고 사용 가능 effort)</li>
+              <li>Remote Labor Index: 17.9% → 41.3%(+23.4%p, Fable 5.2는 High effort)</li>
+              <li>Mythos 5.2 CVE Rediscovery: Mythos 5.1 78.3% → 89.6%(+11.3%p)</li>
+            </ul>
+            Anthropic 발표표의 다섯 모델 열 중(값이 있는 열 기준) Fable 5.2가 9개 지표 가운데 8개에서 가장 높았습니다. AutomationBench는 Gemini 4 Carbon(53.9%)이 가장 높았습니다. 전체 값은 <a href="#t-bench">벤치마크 비교표</a>에 있습니다.</dd>
+          <dt>가격·사양</dt>
+          <dd>100만 토큰당 입력 8달러·출력 40달러(Fable 5.1은 10달러·50달러). Fast mode는 16달러·80달러이고 생성이 최대 2.5배 빠릅니다. Mythos 5.2도 8달러·40달러입니다. Fable 5.2는 컨텍스트 1M, 최대 출력 128K입니다.</dd>
+          <dt>공개 범위</dt>
+          <dd>Fable 5.2는 일반 공개입니다(AWS·Google Cloud·Azure 포함). Mythos 5.2는 제한 공개입니다. 릴리스 노트에 "30일 데이터 보존 필요, ZDR(데이터 무보존)은 별도 승인 필요" 표기가 있습니다. 조사 자료에는 Mythos 5.2 공개 범위와 함께 적혀 있어, Fable 5.2에도 해당하는지는 <span class="badge unk">미확인</span>입니다.</dd>
+          <dt>같은 날 API 변경</dt>
+          <dd>prefix check가 모든 계정에 적용됐습니다(기능 설명은 조사 자료에 없음). <code>computer_20251124</code> 도구는 400 오류를 내므로 <code>computer_toolset_20260801</code>로 옮겨야 합니다(Bedrock 제외).</dd>
+          <dt>지난 보고 대비</dt>
+          <dd><span class="badge upd">갱신</span> 발표 내용·가격·사양은 같습니다. GPT-6 Astra·Gemini 4 Carbon 비교 열, 지표별 effort 조건("최고 사용 가능 effort"), 발표 시각, API 이전 안내, 데이터 보존 조건을 새로 확인했습니다.</dd>
+        </dl>
+        <div class="callout">
+          <strong>우리 서비스에는</strong> AI Office에서 여러 자료를 모아 정리하는 단계에 시험해 볼 후보입니다. 다만 AutomationBench에서는 Gemini 4 Carbon이 더 높게 나왔으니 한 회사 발표만 보고 고르지 마세요. 상담사·회원 정보를 넣을 계획이면 30일 데이터 보존 조건이 어느 모델에 적용되는지 먼저 확인해야 합니다. <span class="badge prop">제안</span>
+        </div>
+        <p class="srcline">출처 3 ·
+          <a href="https://www.anthropic.com/news/claude-fable-and-mythos-5-2">공식 발표</a>
+          <a href="https://platform.claude.com/docs/en/release-notes/overview">릴리스 노트</a>
+          <a href="https://www.cnbc.com/2026/11/09/anthropic-claude-fable-5-2-mythos-5-2.html">CNBC 기사(2차)</a>
+          · 확인 2026-11-17</p>
+      </article>
+
+      <!-- 카드 2 -->
+      <article class="card" id="c2" aria-labelledby="h-c2">
+        <div class="chips"><span class="cat">신기능 모음</span><span class="cat">안전·정책</span><span class="badge new">신규</span><span class="cnt">근거 출처 2</span></div>
+        <h3 id="h-c2">2. Anthropic — Claude 개발자 플랫폼 변경 2건</h3>
+        <dl>
+          <dt>2026-11-12</dt>
+          <dd><strong>자체 호스팅 Claude Managed Agents 출시.</strong> 서비스 전체를 자기 회사 인프라에서 운영하고, 세션 기록도 자체 인프라에 저장합니다. 사용하려면 Anthropic 계정 팀에 요청해야 합니다.</dd>
+          <dt>2026-11-16</dt>
+          <dd><strong>생성 텍스트 워터마크 적용.</strong> 대상은 Opus 4.6·Opus 4.5·Sonnet 4.5·Haiku 4.5이며 지원 플랫폼에서 적용됩니다. temperature·top_p·top_k를 기본값 외로 바꾸면 적용되지 않을 수 있습니다. 목록에 5.x 모델은 없으며, 5.x 모델 적용 여부와 워터마크 확인 방법은 <span class="badge unk">미확인</span>입니다.</dd>
+          <dt>얼마나 좋아졌나</dt>
+          <dd>기능 변경이라 성능 수치는 없습니다.</dd>
+          <dt>그 밖에</dt>
+          <dd>
+            <ul>
+              <li><span class="cat">투자·사업</span> <span class="badge same">변동 없음</span> 2026-11-10 "Anthropic launches roadshow for proposed initial public offering"(상장 추진 로드쇼). 뉴스 목록에서 제목만 확인했습니다.</li>
+              <li><span class="badge unk">미확인</span> 2026-11-17 뉴스 항목은 제목이 없어 내용을 확인하지 못했습니다.</li>
+            </ul>
+          </dd>
+        </dl>
+        <div class="callout">
+          <strong>우리 서비스에는</strong> AI 초안으로 댓글·안내문을 쓰는 곳(꼬리별 관측소·홍카페)은 AI가 쓴 글이 식별될 수 있다는 점을 운영 원칙에 반영해 보세요. 자체 호스팅 Managed Agents는 접근 요청이 필요한 기능이라 AI Office는 정보만 모아 두세요. <span class="badge prop">제안</span>
+        </div>
+        <p class="srcline">출처 2 ·
+          <a href="https://platform.claude.com/docs/en/release-notes/overview">릴리스 노트</a>
+          <a href="https://www.anthropic.com/news">뉴스 목록</a>
+          · 확인 2026-11-17</p>
+      </article>
+
+      <!-- 카드 3 -->
+      <article class="card" id="c3" aria-labelledby="h-c3">
+        <div class="chips"><span class="cat">안전·정책</span><span class="badge new">신규</span><span class="badge same">대표 모델 변동 없음</span><span class="cnt">근거 출처 1</span></div>
+        <h3 id="h-c3">3. OpenAI — 모델 출시 없음, CSAM 이미지 분류기 추가</h3>
+        <dl>
+          <dt>발표일</dt>
+          <dd>2026-11-16(API 변경 기록 날짜, 시각 미확인)</dd>
+          <dt>무엇이 바뀌었나</dt>
+          <dd><code>omni-moderation-csam-latest</code>를 추가했습니다. 승인된 조직이 OpenAI의 CSAM(아동 성착취물) 이미지 분류기를 <code>/v1/moderations</code>에서 쓸 수 있습니다. 실제 CSAM과 AI 생성 CSAM을 별도 신호로 돌려주며, 승인 조직에는 무료입니다.</dd>
+          <dt>얼마나 좋아졌나</dt>
+          <dd>이번 기간 새로 발표된 성능 수치는 없습니다. 모델 성능 소식이 아닙니다.</dd>
+          <dt>대표 모델</dt>
+          <dd><span class="badge same">변동 없음</span> GPT-6 Astra는 100만 토큰당 입력 10달러·출력 50달러, 컨텍스트 1.05M입니다. 지난 보고에서 모델 문서로 확인한 값이며 이번에 다시 열지는 않았습니다. 이번 기간 변경 기록은 없습니다. Anthropic 비교표에 GPT-6 Astra 점수가 실렸지만 Anthropic이 측정한 값입니다.</dd>
+          <dt>기간 밖 참고</dt>
+          <dd><span class="badge same">변동 없음</span> 11-05 <code>gpt-6-cyber</code>, 11-04 <code>gpt-image-2.6-sunburst</code>·<code>gpt-image-2.6-flare</code>, 11-02 <code>gpt-live-1</code>. 지난 보고와 같습니다.</dd>
+          <dt>미확인</dt>
+          <dd>
+            <ul>
+              <li><span class="badge unk">미확인</span> openai.com/news와 ChatGPT 릴리스 노트는 이번에 열지 않았습니다. ChatGPT 앱 쪽 발표는 확인하지 못했습니다.</li>
+              <li><span class="badge second">2차 출처</span> 검색 요약의 GPT-6.1 Terra는 공식 확인 전이라 수치에 쓰지 않았습니다.</li>
+            </ul>
+          </dd>
+        </dl>
+        <div class="callout">
+          <strong>우리 서비스에는</strong> 직접 적용할 곳이 없습니다. CSAM 분류기는 승인 조직 전용입니다. 꼬리별 관측소가 이용자 이미지 업로드를 받는다면 유해 이미지 검수 체계를 점검할 때 참고할 수 있습니다(업로드 기능 여부는 확인 필요).
+        </div>
+        <p class="srcline">출처 1 ·
+          <a href="https://developers.openai.com/api/docs/changelog">API 변경 기록</a>
+          · 확인 2026-11-17</p>
+      </article>
+
+      <!-- 카드 4 -->
+      <article class="card" id="c4" aria-labelledby="h-c4">
+        <div class="chips"><span class="cat">출시·신기능</span><span class="cat">가격·요금</span><span class="badge upd">갱신</span><span class="cnt">근거 출처 3</span></div>
+        <h3 id="h-c4">4. Google — Gemini 4 Hydrogen</h3>
+        <dl>
+          <dt>모델</dt>
+          <dd>Gemini 4 Hydrogen. 발표 제목은 "Introducing Gemini 4 Hydrogen for Agentic Workflows"로, 에이전트 업무용으로 소개했습니다. 사고 수준은 low·medium·high(기본)·xhigh 4단계입니다.</dd>
+          <dt>발표일</dt>
+          <dd>2026-11-12 18:00 UTC. 한국 시각 2026-11-13 03:00 KST입니다(블로그 피드 기준).</dd>
+          <dt>무엇이 바뀌었나</dt>
+          <dd>Gemini 3.8 Flash보다 기본 설정에서 약 2.5배 빠르다고 발표했습니다(Google 발표).</dd>
+          <dt>얼마나 좋아졌나</dt>
+          <dd>
+            <ul>
+              <li>Terminal-Bench 4.1: Gemini 3.8 Flash 18.2% → Hydrogen 57%(+38.8%p, Google 발표 데이터, 설정 미기재)</li>
+              <li>Artificial Analysis Intelligence Index: 51(high 기본 설정). 제3자 지수를 Google이 인용한 값이며, 지난 보고에서 확인한 값입니다.</li>
+            </ul>
+          </dd>
+          <dt>가격</dt>
+          <dd>100만 토큰당 입력 1.50달러·출력 7.50달러입니다. 컨텍스트 길이와 관계없이 같고, 출력에는 thinking 토큰이 포함됩니다.
+            <ul>
+              <li><span class="badge second">2차 출처</span> 4,096토큰 이상 캐시 입력은 0.075달러입니다(GCN 기사).</li>
+              <li><span class="badge second">2차 출처</span> Gemini 4 Carbon·Argon의 현재 프로모션가보다 25% 낮고, Gemini 3.8 Flash 프로모션가보다는 높습니다. 프로모션은 2027-01-01에 끝납니다(GCN 기사).</li>
+              <li><span class="badge unk">미확인</span> Gemini 3.8 Flash의 구체 가격.</li>
+            </ul>
+          </dd>
+          <dt>사양·공개 범위</dt>
+          <dd>컨텍스트 1M입니다(지난 보고에서 공식 발표문으로 확인, 이번 재확인 안 함). 최대 출력은 <span class="badge unk">미확인</span>입니다. Google AI Studio, Gemini API, Gemini 앱, Google 검색, Antigravity(유료 AI Pro·Ultra) 등에 공개됐습니다 <span class="badge second">2차 출처</span>.</dd>
+          <dt>지난 보고 대비</dt>
+          <dd><span class="badge upd">갱신</span> 모델 성능·기본 가격은 같습니다. 캐시 입력 가격, Carbon·Argon·3.8 Flash 프로모션가와의 비교, 프로모션 종료일을 새로 확인했습니다. 모두 기사(2차 출처) 값입니다.</dd>
+        </dl>
+        <div class="callout">
+          <strong>우리 서비스에는</strong> 꼬리별 관측소의 댓글 1차 분류, 홍카페의 상담사 프로필 초안처럼 같은 지시문을 반복해 넣는 작업에 시험해 볼 만합니다. 캐시 가격과 thinking 토큰 과금은 공식 가격표에서 다시 확인한 뒤 쓰세요. <span class="badge prop">제안</span>
+        </div>
+        <p class="srcline">출처 3 ·
+          <a href="https://blog.google/innovation-and-ai/models-and-research/gemini-models/introducing-gemini-4-hydrogen/">공식 발표</a>
+          <a href="https://blog.google/rss/">블로그 피드</a>
+          <a href="https://gcn.com/google-gemini-4-hydrogen-coding/23269/">GCN 기사(2차)</a>
+          · 확인 2026-11-17(공식 발표문은 2026-11-16 열람)</p>
+      </article>
+
+      <!-- 카드 5 -->
+      <article class="card" id="c5" aria-labelledby="h-c5">
+        <div class="chips"><span class="cat">신기능 모음</span><span class="badge new">신규</span><span class="badge unk">본문 미확인</span><span class="cnt">근거 출처 1</span></div>
+        <h3 id="h-c5">5. Google — Gemini 앱·제품 소식 4건과 미확인 항목</h3>
+        <dl>
+          <dt>신규 4건</dt>
+          <dd>블로그 피드에서 제목만 확인했습니다. 수치·가격·공개 범위는 미확인입니다.
+            <ul>
+              <li>11-13 "Connect Google Wallet to Gemini for personal finance insights"(Google Wallet을 Gemini에 연결해 개인 재무 분석)</li>
+              <li>11-16 "Transform notes, research, and sources into interactive sites with Gemini Notebook."(노트·자료를 인터랙티브 사이트로 변환)</li>
+              <li>11-16 "Regional voices are rolling out in the Gemini app."(Gemini 앱 지역별 음성)</li>
+              <li>11-16 "Ask Maps is coming to Europe."(피드에 Gemini 모델 기반이라고 표기)</li>
+            </ul>
+          </dd>
+          <dt>변동 없음</dt>
+          <dd><span class="badge same">변동 없음</span> <span class="badge unk">미확인</span> 2026-11-11 Gemini Decisions API는 이번에도 본문을 열지 않았습니다.</dd>
+          <dt>미확인</dt>
+          <dd>Gemini 4 Carbon·Argon의 공식 출시일은 이번에도 공식 페이지에서 확인하지 못했습니다. 검색 요약에는 Carbon 정식 출시가 11-10으로 나오지만 검증 전입니다 <span class="badge second">2차 출처</span>. Anthropic 비교표에 Carbon 점수가 실려 있지만 Anthropic 측정 값입니다.</dd>
+        </dl>
+        <div class="callout">
+          <strong>우리 서비스에는</strong> 제목만 확인해 오늘은 적용을 제안하지 않습니다. Gemini Notebook은 본문을 확인한 뒤 안내 자료 정리에 쓸 만한지 보겠습니다.
+        </div>
+        <p class="srcline">출처 1 ·
+          <a href="https://blog.google/rss/">블로그 피드</a>
+          · 확인 2026-11-17</p>
+      </article>
+
+      <!-- 카드 6 -->
+      <article class="card" id="c6" aria-labelledby="h-c6">
+        <div class="chips"><span class="badge unk">미조사</span></div>
+        <h3 id="h-c6">6. 기타 회사 — xAI · Meta · Microsoft · Mistral · DeepSeek 등</h3>
+        <p>이번 조사에서는 확인하지 않았습니다. 소식이 없다는 뜻이 아니라 보지 않았다는 뜻입니다.</p>
+      </article>
+
+      <h3>발표 순서(한국 시각)</h3>
+      <p class="muted">시각이 확인된 항목만 KST로 적었습니다. 나머지는 출처에 적힌 날짜이며 시각과 시간대는 미확인입니다.</p>
+      <ul class="timeline">
+        <li><time>2026-11-10 04:00 KST</time> Anthropic Claude Fable 5.2·Mythos 5.2 발표와 API 변경(미국 동부 11-09 14:00, 시각은 2차 출처)</li>
+        <li><time>2026-11-10</time> Anthropic 상장 추진 로드쇼(제목만 확인)</li>
+        <li><time>2026-11-11</time> Google Gemini Decisions API(제목만 확인)</li>
+        <li><time>2026-11-12</time> Anthropic 자체 호스팅 Claude Managed Agents</li>
+        <li><time>2026-11-13 03:00 KST</time> Google Gemini 4 Hydrogen 발표(11-12 18:00 UTC)</li>
+        <li><time>2026-11-13</time> Google Wallet과 Gemini 연결(제목만 확인)</li>
+        <li><time>2026-11-16</time> Anthropic Claude 4.x 일부 모델 텍스트 워터마크</li>
+        <li><time>2026-11-16</time> OpenAI <code>omni-moderation-csam-latest</code></li>
+        <li><time>2026-11-16</time> Google Gemini Notebook, Gemini 앱 지역별 음성, Ask Maps 유럽 출시(제목만 확인)</li>
+        <li><time>2026-11-17</time> Anthropic 뉴스 목록 새 항목(제목 없음, 내용 미확인)</li>
+      </ul>
+    </section>
+
+    <!-- 3. 주요 수치 비교표 -->
+    <section aria-labelledby="h-numbers">
+      <h2 id="h-numbers">주요 수치 비교</h2>
+      <p>회사 공식 발표·문서에 있는 값만 넣었습니다. 값이 없는 칸은 "미확인"입니다. 기사(2차 출처)에만 있는 값은 표에 넣지 않고 <a href="#c4">카드 4</a>에 표시했습니다.</p>
+
+      <h3>핵심 수치</h3>
+      <div class="metrics">
+        <div class="metric">
+          <span class="num">49.1%</span>
+          <span class="lab">Fable 5.2 FrontierCode 2.0</span>
+          <span class="desc">Fable 5.1은 32.4%(+16.7%p). Xhigh effort, Anthropic 자체 발표.</span>
+        </div>
+        <div class="metric">
+          <span class="num">8 / 9</span>
+          <span class="lab">Fable 5.2가 가장 높은 지표 수</span>
+          <span class="desc">Anthropic 비교표, 값이 있는 모델 중. AutomationBench는 Gemini 4 Carbon 53.9%.</span>
+        </div>
+        <div class="metric">
+          <span class="num">20%</span>
+          <span class="lab">Fable 5.2 가격 인하 폭</span>
+          <span class="desc">입력 10→8달러, 출력 50→40달러(100만 토큰당). 표 값으로 계산.</span>
+        </div>
+        <div class="metric">
+          <span class="num">57%</span>
+          <span class="lab">Hydrogen Terminal-Bench 4.1</span>
+          <span class="desc">Gemini 3.8 Flash는 18.2%(+38.8%p). Google 발표.</span>
+        </div>
+      </div>
+
+      <h3 id="t-price">가격·사양</h3>
+      <div class="table-wrap" role="region" aria-label="모델별 가격과 사양 비교표" tabindex="0">
+        <table class="stack">
+          <caption>가격은 100만 토큰당 달러. Fable 5.2의 입력·출력 가격은 Fable 5.1보다 각각 20% 낮습니다(표의 값으로 계산).</caption>
+          <thead>
+            <tr><th scope="col">모델</th><th scope="col">회사</th><th scope="col">입력</th><th scope="col">출력</th><th scope="col">컨텍스트</th><th scope="col">최대 출력</th><th scope="col">이번 기간</th><th scope="col">출처</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Claude Fable 5.2</th><td data-label="회사">Anthropic</td><td class="num" data-label="입력">8달러<br>(Fast mode 16달러)</td><td class="num" data-label="출력">40달러<br>(Fast mode 80달러)</td><td data-label="컨텍스트">1M</td><td data-label="최대 출력">128K</td><td data-label="이번 기간"><span class="badge upd">갱신</span> 11-09 발표</td><td data-label="출처">릴리스 노트</td></tr>
+            <tr><th scope="row">Claude Fable 5.1</th><td data-label="회사">Anthropic</td><td class="num" data-label="입력">10달러</td><td class="num" data-label="출력">50달러</td><td data-label="컨텍스트">미확인</td><td data-label="최대 출력">미확인</td><td data-label="이번 기간">직전 버전</td><td data-label="출처">릴리스 노트</td></tr>
+            <tr><th scope="row">Claude Mythos 5.2</th><td data-label="회사">Anthropic</td><td class="num" data-label="입력">8달러</td><td class="num" data-label="출력">40달러</td><td data-label="컨텍스트">미확인</td><td data-label="최대 출력">미확인</td><td data-label="이번 기간"><span class="badge upd">갱신</span> 승인 기관만</td><td data-label="출처">릴리스 노트</td></tr>
+            <tr><th scope="row">GPT-6 Astra</th><td data-label="회사">OpenAI</td><td class="num" data-label="입력">10달러</td><td class="num" data-label="출력">50달러</td><td data-label="컨텍스트">1.05M</td><td data-label="최대 출력">미확인</td><td data-label="이번 기간"><span class="badge same">변동 없음</span></td><td data-label="출처">모델 문서(지난 보고 확인값)</td></tr>
+            <tr><th scope="row">Gemini 4 Hydrogen</th><td data-label="회사">Google</td><td class="num" data-label="입력">1.50달러</td><td class="num" data-label="출력">7.50달러</td><td data-label="컨텍스트">1M</td><td data-label="최대 출력">미확인</td><td data-label="이번 기간"><span class="badge upd">갱신</span> 11-12 발표</td><td data-label="출처">Google 발표문(지난 보고 열람값)</td></tr>
+            <tr><th scope="row">Gemini 3.8 Flash</th><td data-label="회사">Google</td><td class="num" data-label="입력">미확인</td><td class="num" data-label="출력">미확인</td><td data-label="컨텍스트">미확인</td><td data-label="최대 출력">미확인</td><td data-label="이번 기간">Hydrogen의 비교 대상</td><td data-label="출처">—</td></tr>
+            <tr><th scope="row">Gemini 4 Carbon · Argon</th><td data-label="회사">Google</td><td class="num" data-label="입력">미확인</td><td class="num" data-label="출력">미확인</td><td data-label="컨텍스트">미확인</td><td data-label="최대 출력">미확인</td><td data-label="이번 기간"><span class="badge unk">출시일 미확인</span></td><td data-label="출처">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted">지난 보고 표에 있던 Claude Opus 5.5·Sonnet 5.5·Haiku 5.5, GPT-6.1 Sol·GPT-6 Luna의 가격은 이번 수집에서 다시 확인하지 않아 표에서 뺐습니다. 이번 기간 Claude 릴리스 노트와 OpenAI 변경 기록에는 이 모델들의 가격 변경 항목이 없었습니다.</p>
+
+      <h3 id="t-bench">Claude Fable 5.2 벤치마크 — Anthropic 발표표</h3>
+      <div class="table-wrap" role="region" aria-label="Claude Fable 5.2 벤치마크 비교표" tabindex="0">
+        <table class="stack">
+          <caption>값은 안전장치 적용 상태(Anthropic 표기). Opus 5.5·GPT-6 Astra·Gemini 4 Carbon 값도 Anthropic이 측정해 발표한 값이며, OpenAI·Google 발표나 독립 평가가 아닙니다. 굵은 값은 그 지표에서 가장 높은 값입니다. "차이"는 Fable 5.2에서 Fable 5.1을 뺀 계산값입니다. Gemini 4 Carbon의 "미확인"은 발표표에 값이 없는 칸입니다. 원문 표의 열 정렬이 불분명한 셀이 있어 조사 담당은 일부 값의 원문 재확인을 권장했습니다.</caption>
+          <thead>
+            <tr><th scope="col">지표</th><th scope="col">Fable 5.2</th><th scope="col">Fable 5.1</th><th scope="col">차이</th><th scope="col">Opus 5.5</th><th scope="col">GPT-6 Astra</th><th scope="col">Gemini 4 Carbon</th><th scope="col">조건</th><th scope="col">측정 주체</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">FrontierCode 2.0</th><td class="num top" data-label="Fable 5.2">49.1%</td><td class="num" data-label="Fable 5.1">32.4%</td><td class="num up" data-label="차이">+16.7%p</td><td class="num" data-label="Opus 5.5">45.5%</td><td class="num" data-label="GPT-6 Astra">42.8%</td><td class="num" data-label="Gemini 4 Carbon">41.1%</td><td data-label="조건">Fable 5.2·5.1은 Xhigh, Gemini 4 Carbon은 Medium. Opus 5.5·GPT-6 Astra 설정 미기재</td><td data-label="측정 주체">Anthropic 자체 발표</td></tr>
+            <tr><th scope="row">FrontierSWE v2</th><td class="num top" data-label="Fable 5.2">69.9%</td><td class="num" data-label="Fable 5.1">56.3%</td><td class="num up" data-label="차이">+13.6%p</td><td class="num" data-label="Opus 5.5">62.3%</td><td class="num" data-label="GPT-6 Astra">65.5%</td><td class="num" data-label="Gemini 4 Carbon">61.2%</td><td data-label="조건">최고 사용 가능 effort</td><td data-label="측정 주체">Anthropic 자체 발표</td></tr>
+            <tr><th scope="row">AutomationBench</th><td class="num" data-label="Fable 5.2">51.4%</td><td class="num" data-label="Fable 5.1">31.4%</td><td class="num up" data-label="차이">+20.0%p</td><td class="num" data-label="Opus 5.5">42.5%</td><td class="num" data-label="GPT-6 Astra">41.4%</td><td class="num top" data-label="Gemini 4 Carbon">53.9%</td><td data-label="조건">최고 사용 가능 effort. 9개 중 Fable 5.2가 가장 높지 않은 지표</td><td data-label="측정 주체">Anthropic 자체 발표</td></tr>
+            <tr><th scope="row">Terminal-Bench-Science 0.1</th><td class="num top" data-label="Fable 5.2">74.6%</td><td class="num" data-label="Fable 5.1">52.6%</td><td class="num up" data-label="차이">+22.0%p</td><td class="num" data-label="Opus 5.5">58.7%</td><td class="num" data-label="GPT-6 Astra">68.1%</td><td class="num" data-label="Gemini 4 Carbon">64.8%</td><td data-label="조건">effort 미기재. Mythos 5.2는 75.3%</td><td data-label="측정 주체">Anthropic 자체 발표</td></tr>
+            <tr><th scope="row">OSWorld 2.1 (offline, partial)</th><td class="num top" data-label="Fable 5.2">89.3%</td><td class="num" data-label="Fable 5.1">83.5%</td><td class="num up" data-label="차이">+5.8%p</td><td class="num" data-label="Opus 5.5">87.2%</td><td class="num" data-label="GPT-6 Astra">79.5%</td><td class="num" data-label="Gemini 4 Carbon">81.5%</td><td data-label="조건">최고 사용 가능 effort</td><td data-label="측정 주체">Anthropic 자체 발표</td></tr>
+            <tr><th scope="row">RoboDojo Sim</th><td class="num top" data-label="Fable 5.2">64.9%</td><td class="num" data-label="Fable 5.1">27.6%</td><td class="num up" data-label="차이">+37.3%p</td><td class="num" data-label="Opus 5.5">39.4%</td><td class="num" data-label="GPT-6 Astra">29.8%</td><td class="num" data-label="Gemini 4 Carbon">미확인</td><td data-label="조건">내부 실행. effort 미기재</td><td data-label="측정 주체">Anthropic 자체 발표(내부 실행)</td></tr>
+            <tr><th scope="row">Remote Labor Index</th><td class="num top" data-label="Fable 5.2">41.3%</td><td class="num" data-label="Fable 5.1">17.9%</td><td class="num up" data-label="차이">+23.4%p</td><td class="num" data-label="Opus 5.5">21.3%</td><td class="num" data-label="GPT-6 Astra">20.8%</td><td class="num" data-label="Gemini 4 Carbon">미확인</td><td data-label="조건">Fable 5.2는 High effort. 다른 모델 설정 미기재</td><td data-label="측정 주체">Anthropic 자체 발표</td></tr>
+            <tr><th scope="row">Humanity's Last Exam (도구 사용)</th><td class="num top" data-label="Fable 5.2">74.2%</td><td class="num" data-label="Fable 5.1">65.6%</td><td class="num up" data-label="차이">+8.6%p</td><td class="num" data-label="Opus 5.5">67.7%</td><td class="num" data-label="GPT-6 Astra">57.2%</td><td class="num" data-label="Gemini 4 Carbon">미확인</td><td data-label="조건">최고 사용 가능 effort</td><td data-label="측정 주체">Anthropic 자체 발표</td></tr>
+            <tr><th scope="row">Chartography (도구 없음)</th><td class="num top" data-label="Fable 5.2">73.4%</td><td class="num" data-label="Fable 5.1">44.8%</td><td class="num up" data-label="차이">+28.6%p</td><td class="num" data-label="Opus 5.5">64.4%</td><td class="num" data-label="GPT-6 Astra">71.0%</td><td class="num" data-label="Gemini 4 Carbon">72.5%</td><td data-label="조건">최고 사용 가능 effort</td><td data-label="측정 주체">Anthropic 자체 발표</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Claude Fable 5.2 · Mythos 5.2 — 속도·안전장치·보안 지표</h3>
+      <div class="table-wrap" role="region" aria-label="Claude Fable 5.2 속도와 안전장치 지표" tabindex="0">
+        <table class="stack">
+          <caption>비교 대상은 직전 버전입니다. "차이"는 두 값을 빼서 계산했습니다.</caption>
+          <thead>
+            <tr><th scope="col">항목</th><th scope="col">값</th><th scope="col">비교 대상</th><th scope="col">차이</th><th scope="col">측정 주체</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Fable 5.2 출력 속도</th><td data-label="값">최대 30% 향상</td><td data-label="비교 대상">Fable 5.1</td><td data-label="차이">—</td><td data-label="측정 주체">Anthropic 발표</td></tr>
+            <tr><th scope="row">Fable 5.2 작업당 토큰</th><td data-label="값">더 적음(감소 폭 미확인)</td><td data-label="비교 대상">Fable 5.1, Medium effort</td><td data-label="차이">—</td><td data-label="측정 주체">Anthropic 발표</td></tr>
+            <tr><th scope="row">안전장치 오차단</th><td data-label="값">약 55% 감소(사이버 약 60%, 생물 약 40%)</td><td data-label="비교 대상">Fable 5.1</td><td data-label="차이">—</td><td data-label="측정 주체">Anthropic 발표</td></tr>
+            <tr><th scope="row">Fable 5.2 Fast mode</th><td data-label="값">생성 최대 2.5배 빠름(16달러·80달러)</td><td data-label="비교 대상">Fable 5.2 기본 모드</td><td data-label="차이">—</td><td data-label="측정 주체">Anthropic 릴리스 노트</td></tr>
+            <tr><th scope="row">Mythos 5.2 CVE Rediscovery</th><td class="num" data-label="값">89.6%</td><td data-label="비교 대상">Mythos 5.1 78.3%</td><td class="num up" data-label="차이">+11.3%p</td><td data-label="측정 주체">Anthropic 자체 발표(조건 미기재)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Gemini 4 Hydrogen — Gemini 3.8 Flash와 비교</h3>
+      <div class="table-wrap" role="region" aria-label="Gemini 4 Hydrogen 비교표" tabindex="0">
+        <table class="stack">
+          <caption>"차이"는 표의 두 값을 빼서 계산했습니다.</caption>
+          <thead>
+            <tr><th scope="col">항목</th><th scope="col">Hydrogen</th><th scope="col">비교 대상</th><th scope="col">차이</th><th scope="col">조건</th><th scope="col">측정 주체</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Terminal-Bench 4.1</th><td class="num" data-label="Hydrogen">57%</td><td data-label="비교 대상">Gemini 3.8 Flash 18.2%</td><td class="num up" data-label="차이">+38.8%p</td><td data-label="조건">설정 미기재</td><td data-label="측정 주체">Google 발표</td></tr>
+            <tr><th scope="row">작업 속도</th><td data-label="Hydrogen">약 2.5배 빠름</td><td data-label="비교 대상">Gemini 3.8 Flash</td><td data-label="차이">—</td><td data-label="조건">기본 설정</td><td data-label="측정 주체">Google 발표</td></tr>
+            <tr><th scope="row">Artificial Analysis Intelligence Index</th><td class="num" data-label="Hydrogen">51</td><td data-label="비교 대상">미확인</td><td data-label="차이">—</td><td data-label="조건">high(기본) 설정. 지난 보고 확인값</td><td data-label="측정 주체">Artificial Analysis(제3자) 지수, Google 인용</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 4. 우리 서비스 적용 시사점 -->
+    <section aria-labelledby="h-apply">
+      <h2 id="h-apply">우리 서비스 적용 시사점</h2>
+      <p class="muted">아래는 모두 <span class="badge prop">제안</span>입니다. 시험 전이라 효과 수치는 적지 않았습니다. 서비스의 실제 구조를 모르는 부분은 "확인 필요"로 두었습니다. 지난 보고의 제안을 이어받은 것은 <span class="badge upd">갱신</span> 또는 <span class="badge same">변동 없음</span>으로 표시했습니다.</p>
+
+      <h3>우선 검토 3건</h3>
+      <div class="prio" id="p1">
+        <div class="chips"><span class="badge prop">제안</span><span class="badge new">신규</span><span class="cat">AI Office</span><span class="cnt">난이도 쉬움</span></div>
+        <h4>1. Claude computer 도구 버전 점검하기</h4>
+        <dl>
+          <dt>무엇을</dt><dd>AI Office가 Claude API의 computer 도구를 직접 호출하는지, 호출한다면 <code>computer_20251124</code> 버전을 쓰는지 확인합니다.</dd>
+          <dt>왜 지금</dt><dd>2026-11-09 릴리스 노트에 따르면 이 버전은 400 오류를 내고 <code>computer_toolset_20260801</code>로 옮겨야 합니다(Bedrock 제외). <a href="#c1">카드 1</a></dd>
+          <dt>첫 단계</dt><dd>프로그램 설정과 코드에서 <code>computer_20251124</code>를 찾아 보세요. 없으면 해당 없습니다. 있으면 프로그램 수정이 필요하며, 이는 대표가 프로그램 폴더에서 직접 할 일입니다.</dd>
+        </dl>
+      </div>
+      <div class="prio" id="p2">
+        <div class="chips"><span class="badge prop">제안</span><span class="badge upd">갱신</span><span class="cat">AI Office</span><span class="cnt">난이도 보통</span></div>
+        <h4>2. 취합 단계에 Claude Fable 5.2 비교 시험하기</h4>
+        <dl>
+          <dt>무엇을</dt><dd>여러 부서 자료를 모아 정리하는 단계 하나를 지금 쓰는 모델과 Fable 5.2에 같은 지시로 맡겨 결과를 비교합니다.</dd>
+          <dt>왜 지금</dt><dd>Remote Labor Index가 17.9%에서 41.3%(Fable 5.2 High effort), AutomationBench가 31.4%에서 51.4%로 올랐고 가격은 20% 내렸습니다(Anthropic 자체 발표). 새로 확인한 비교에서 AutomationBench는 Gemini 4 Carbon(53.9%)이 더 높아, 한 모델로 정하기 전에 비교가 필요합니다. <a href="#c1">카드 1</a></dd>
+          <dt>첫 단계</dt><dd>지난 업무 1건을 골라 호출 수·작업 시간·검토 지적 수를 나란히 기록해 보세요. 모델 시험에는 비용이 들어 대표 확인 후 진행합니다.</dd>
+        </dl>
+      </div>
+      <div class="prio" id="p3">
+        <div class="chips"><span class="badge prop">제안</span><span class="badge upd">갱신</span><span class="cat">꼬리별 관측소</span><span class="cnt">난이도 보통</span></div>
+        <h4>3. Gemini 4 Hydrogen으로 댓글 1차 분류 시험하기(캐시 활용)</h4>
+        <dl>
+          <dt>무엇을</dt><dd>분류 기준표를 고정 지시문으로 두고, 새 댓글을 "답변 필요 / 일반 / 운영 확인 필요"로 나누며 답글 초안을 받습니다. 게시는 운영자가 확인한 뒤 직접 합니다.</dd>
+          <dt>왜 지금</dt><dd>4,096토큰 이상 캐시 입력이 0.075달러라는 기사가 나왔습니다 <span class="badge second">2차 출처</span>. 같은 기준표를 반복해 넣는 작업이라면 입력 비용이 줄 수 있습니다 <span class="badge est">추정</span>. <a href="#c4">카드 4</a></dd>
+          <dt>첫 단계</dt><dd>Google 공식 가격표에서 캐시 가격을 먼저 확인해 보세요. 그다음 닉네임 등 개인정보를 지운 지난 댓글 사본으로 Google AI Studio에서 시험해 보세요.</dd>
+        </dl>
+      </div>
+
+      <h3 id="svc-hong">홍카페</h3>
+      <div class="table-wrap" role="region" aria-label="홍카페 적용 제안" tabindex="0">
+        <table class="kv">
+          <caption><span class="badge prop">제안</span> <span class="badge upd">갱신</span> 상담사 프로필 초안 작성 — 지난 제안에 캐시 가격 정보를 더했습니다.</caption>
+          <tbody>
+            <tr><th scope="row">기술</th><td>Gemini 4 Hydrogen, 캐시 입력</td></tr>
+            <tr><th scope="row">근거</th><td>Google 발표(2026-11-12): Gemini 3.8 Flash 대비 기본 설정에서 약 2.5배 빠름, 입력 1.50달러·출력 7.50달러. 기사(2차 출처): 캐시 입력 0.075달러. <a href="#c4">카드 4</a></td></tr>
+            <tr><th scope="row">쓰임새</th><td>운영 담당자가 상담사 제출 자료(자기소개·경력)를 넣으면 정해진 양식의 프로필 초안을 받습니다. 운영자가 다듬고 상담사 확인을 거쳐 등록합니다.</td></tr>
+            <tr><th scope="row">기대 효과</th><td>프로필 첫 초안을 쓰는 시간을 줄일 수 있을 것으로 봅니다. 효과 수치는 시험 전이라 없습니다.</td></tr>
+            <tr><th scope="row">준비·난이도</th><td>보통. 프로필 양식과 좋은 예시 몇 개가 필요합니다. 홍카페의 실제 프로필 등록 방식은 확인이 필요합니다.</td></tr>
+            <tr><th scope="row">비용·주의점</th><td>API 사용료가 듭니다. 상담사 개인정보를 외부 AI로 보내므로 상담사 동의가 필요하고, 처리 가능 여부는 홍카페정책부 확인이 필요합니다. 경력·자격은 제출 자료에 있는 내용만 쓰게 하고 사람이 원자료와 대조합니다.</td></tr>
+            <tr><th scope="row">첫 단계</th><td>동의를 받은 기존 프로필 1~2건으로 초안을 만들어 기존 프로필과 비교해 보세요.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted">참고: 상담사 정보를 Claude로 처리할 계획이 생기면, Fable 5.2 릴리스 노트의 30일 데이터 보존 조건이 어느 모델에 적용되는지 먼저 확인해 보세요(<a href="#c1">카드 1</a>). Gemini Notebook은 제목만 확인해 오늘은 제안하지 않습니다(<a href="#c5">카드 5</a>).</p>
+
+      <h3 id="svc-kkori">꼬리별 관측소</h3>
+      <div class="table-wrap" role="region" aria-label="꼬리별 관측소 적용 제안 1" tabindex="0">
+        <table class="kv">
+          <caption><span class="badge prop">제안</span> <span class="badge upd">갱신</span> 댓글 1차 분류와 답글 초안 — 지난 제안에 캐시·thinking 토큰 과금 정보를 더했습니다.</caption>
+          <tbody>
+            <tr><th scope="row">기술</th><td>Gemini 4 Hydrogen, 사고 수준 조절(low·medium·high·xhigh), 캐시 입력</td></tr>
+            <tr><th scope="row">근거</th><td>Hydrogen 발표 관련 자료(2026-11-12): 사고 수준 4단계, 출력 가격에 thinking 토큰 포함(공식 가격표 재확인 권장). 기사(2차 출처): 캐시 입력 0.075달러. <a href="#c4">카드 4</a></td></tr>
+            <tr><th scope="row">쓰임새</th><td>운영 담당자가 새 댓글을 모아 넣으면 답변이 필요한 댓글, 일반 댓글, 운영 확인이 필요한 댓글로 나눈 목록과 답글 초안을 받습니다.</td></tr>
+            <tr><th scope="row">기대 효과</th><td>먼저 볼 댓글을 고르는 시간을 줄일 수 있을 것으로 봅니다. 효과 수치는 없습니다.</td></tr>
+            <tr><th scope="row">준비·난이도</th><td>보통. 분류 기준표와 예시 댓글이 필요합니다. 댓글을 어떤 방식으로 모을 수 있는지(내보내기 가능 여부)는 확인이 필요합니다.</td></tr>
+            <tr><th scope="row">비용·주의점</th><td>API 사용료가 듭니다. 출력에 thinking 토큰이 포함되므로 사고 수준을 높이면 출력 비용이 늘 수 있습니다 <span class="badge est">추정</span>. 회원 닉네임 등 개인정보는 지우고 보내세요. 커뮤니티 이용약관상 외부 AI 처리가 가능한지 확인이 필요합니다. 자동 게시는 하지 않습니다.</td></tr>
+            <tr><th scope="row">첫 단계</th><td>개인정보를 지운 지난 댓글 사본을 low와 high로 각각 분류해 결과와 사용량 차이를 비교해 보세요.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-wrap" role="region" aria-label="꼬리별 관측소 적용 제안 2" tabindex="0">
+        <table class="kv">
+          <caption><span class="badge prop">제안</span> <span class="badge new">신규</span> AI 초안 사용 원칙 정리</caption>
+          <tbody>
+            <tr><th scope="row">기술</th><td>Claude 생성 텍스트 워터마크(Opus 4.6·Opus 4.5·Sonnet 4.5·Haiku 4.5)</td></tr>
+            <tr><th scope="row">근거</th><td>Claude 릴리스 노트(2026-11-16). <a href="#c2">카드 2</a></td></tr>
+            <tr><th scope="row">쓰임새</th><td>운영 담당자가 AI 초안을 고쳐 댓글·공지로 올리는 경우에 대비해, AI 초안을 쓰는 범위와 사람 검수 원칙을 운영 메모로 정리합니다. 홍카페 안내 문안에도 같은 원칙을 쓸 수 있습니다.</td></tr>
+            <tr><th scope="row">기대 효과</th><td>AI가 쓴 글이 식별될 때 생길 수 있는 이용자 신뢰 문제를 미리 줄일 수 있을 것으로 봅니다 <span class="badge est">추정</span>.</td></tr>
+            <tr><th scope="row">준비·난이도</th><td>쉬움. 지금 AI 초안에 어떤 모델을 쓰는지 확인이 필요합니다.</td></tr>
+            <tr><th scope="row">비용·주의점</th><td>비용은 없습니다. 워터마크를 누가 어떻게 확인할 수 있는지, 5.x 모델에도 적용되는지는 미확인입니다. AI 생성 표시 의무 같은 법적 판단은 별도 확인이 필요합니다.</td></tr>
+            <tr><th scope="row">첫 단계</th><td>댓글·공지 초안에 쓰는 모델 이름을 확인해 워터마크 대상 목록에 들어가는지 보세요.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted">참고: OpenAI CSAM 이미지 분류기는 승인 조직 전용이라 오늘은 직접 적용할 곳이 없습니다. 이용자 이미지 업로드 기능이 있는지에 따라 나중에 검수 체계 점검 때 참고할 수 있습니다(<a href="#c3">카드 3</a>).</p>
+
+      <h3 id="svc-office">AI Office</h3>
+      <div class="table-wrap" role="region" aria-label="AI Office 적용 제안 1" tabindex="0">
+        <table class="kv">
+          <caption><span class="badge prop">제안</span> <span class="badge new">신규</span> Claude computer 도구 버전 점검</caption>
+          <tbody>
+            <tr><th scope="row">기술</th><td>Claude API computer 도구(<code>computer_20251124</code> → <code>computer_toolset_20260801</code>)</td></tr>
+            <tr><th scope="row">근거</th><td>Claude 릴리스 노트(2026-11-09): 옛 버전은 400 오류, 새 버전으로 이전 필요(Bedrock 제외). <a href="#c1">카드 1</a></td></tr>
+            <tr><th scope="row">쓰임새</th><td>개발 담당이 AI Office 실행 구조에서 이 도구를 직접 호출하는지 확인합니다. 호출하지 않으면 해당 없음입니다.</td></tr>
+            <tr><th scope="row">기대 효과</th><td>화면 조작 업무가 갑자기 실패하는 일을 미리 막을 수 있습니다(해당 도구를 쓰는 경우).</td></tr>
+            <tr><th scope="row">준비·난이도</th><td>확인은 쉬움, 이전 작업은 보통. AI Office가 어떤 방식으로 브라우저·화면 작업을 하는지는 확인이 필요합니다.</td></tr>
+            <tr><th scope="row">비용·주의점</th><td>비용은 거의 없습니다. 프로그램 수정은 대표가 프로그램 폴더에서 직접 할 일입니다.</td></tr>
+            <tr><th scope="row">첫 단계</th><td>프로그램 설정과 코드에서 <code>computer_20251124</code>를 찾아 보세요.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-wrap" role="region" aria-label="AI Office 적용 제안 2" tabindex="0">
+        <table class="kv">
+          <caption><span class="badge prop">제안</span> <span class="badge upd">갱신</span> 복잡한 취합 단계에 Claude Fable 5.2 시험 — 지난 제안에 다른 회사 비교 수치와 데이터 보존 조건을 더했습니다.</caption>
+          <tbody>
+            <tr><th scope="row">기술</th><td>Claude Fable 5.2</td></tr>
+            <tr><th scope="row">근거</th><td>Anthropic 발표(2026-11-09): AutomationBench 31.4%→51.4%, Remote Labor Index 17.9%→41.3%(Fable 5.2 High effort), 가격 10달러·50달러→8달러·40달러. 같은 표에서 AutomationBench는 Gemini 4 Carbon 53.9%(지표별 Anthropic 자체 발표). <a href="#c1">카드 1</a></td></tr>
+            <tr><th scope="row">쓰임새</th><td>여러 직원의 산출물을 모아 정리하는 단계나 긴 보고서 작성 단계를 현재 모델과 Fable 5.2에 각각 맡겨 결과를 비교합니다.</td></tr>
+            <tr><th scope="row">기대 효과</th><td>검토 지적과 다시 고치는 횟수가 줄어드는지 볼 수 있습니다. 효과 수치는 없습니다.</td></tr>
+            <tr><th scope="row">준비·난이도</th><td>보통. 쓰고 있는 Claude 로그인·요금제와 직원 모델 설정에서 Fable 5.2를 고를 수 있는지 확인이 필요합니다.</td></tr>
+            <tr><th scope="row">비용·주의점</th><td>Fast mode는 16달러·80달러로 기본의 두 배 단가입니다. 30일 데이터 보존 조건의 적용 대상은 미확인입니다. 직원 모델 변경은 비용이 드는 결정이라 대표 확인 후 진행합니다.</td></tr>
+            <tr><th scope="row">첫 단계</th><td>지난 업무 1건을 같은 지시로 두 모델에 맡기고 호출 수·작업 시간·검토 지적 수를 기록해 보세요.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-wrap" role="region" aria-label="AI Office 적용 제안 3" tabindex="0">
+        <table class="kv">
+          <caption><span class="badge prop">제안</span> <span class="badge upd">갱신</span> 단계 종류별 추론 강도·비용 기준표 — 지난 제안에 thinking 토큰 과금 정보를 더했습니다.</caption>
+          <tbody>
+            <tr><th scope="row">기술</th><td>추론 강도 조절(Claude의 effort, Gemini의 사고 수준)</td></tr>
+            <tr><th scope="row">근거</th><td>Fable 5.2는 Medium effort에서 Fable 5.1보다 적은 토큰으로 작업을 끝낸다고 발표했습니다(<a href="#c1">카드 1</a>). Hydrogen은 사고 수준 4단계이고 출력 가격에 thinking 토큰이 포함됩니다(<a href="#c4">카드 4</a>). 두 회사의 방식은 서로 다릅니다.</td></tr>
+            <tr><th scope="row">쓰임새</th><td>운영자가 자료 수집, 문서 작성, 최종 취합처럼 단계 종류마다 모델과 추론 강도를 정한 기준표를 만들고 직원 배정 때 참고합니다.</td></tr>
+            <tr><th scope="row">기대 효과</th><td>쉬운 단계의 사용량을 줄이고 어려운 단계에 품질을 모을 수 있을 것으로 봅니다. 효과 수치는 없습니다.</td></tr>
+            <tr><th scope="row">준비·난이도</th><td>보통. 현재 직원별 모델·추론 강도를 어디서 어떻게 정하는지 확인이 필요합니다.</td></tr>
+            <tr><th scope="row">비용·주의점</th><td>강도를 낮추면 품질이 떨어질 수 있어 비교 시험이 먼저입니다. 조직 설정 변경은 대표 확인 후 진행합니다.</td></tr>
+            <tr><th scope="row">첫 단계</th><td>일일 브리핑 같은 반복 업무 하나를 두 가지 강도로 돌려 사용량과 결과 차이를 기록해 보세요.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted">참고: 자체 호스팅 Claude Managed Agents는 Anthropic 계정 팀에 접근을 요청해야 하는 기능입니다. AI Office 실행 구조와 맞는지 확인이 필요해 오늘은 정보 수집만 권합니다(<a href="#c2">카드 2</a>). Claude Mythos 5.2는 승인 기관 전용이라 적용할 곳이 없습니다.</p>
+    </section>
+
+    <!-- 5. 한계 -->
+    <section aria-labelledby="h-limits">
+      <h2 id="h-limits">한계</h2>
+
+      <h3>수치의 성격</h3>
+      <ul>
+        <li>Fable 5.2 벤치마크 표의 값은 지표마다 Anthropic이 측정해 발표한 값입니다. 같은 표의 GPT-6 Astra·Gemini 4 Carbon 값도 OpenAI·Google 발표가 아니라 Anthropic 측정입니다. 독립 기관이 다시 잰 값이 아닙니다.</li>
+        <li>effort 조건이 모델마다 다르거나 빠진 지표가 있습니다. 예를 들어 FrontierCode 2.0의 Gemini 4 Carbon은 Medium이고, Remote Labor Index는 Fable 5.2 외 모델의 설정이 적혀 있지 않습니다. 설정이 다르면 점수가 달라집니다.</li>
+        <li>원문 표의 열 정렬이 불분명한 셀이 있어, 조사 담당은 일부 값의 원문 재확인을 권장했습니다.</li>
+        <li>Hydrogen의 Terminal-Bench 4.1과 속도는 Google 발표 값입니다. Artificial Analysis Intelligence Index는 제3자 지수를 Google이 인용한 값이며, 원 페이지는 직접 확인하지 않았습니다.</li>
+        <li>"차이(%p)"와 "20% 인하"는 표의 두 값으로 계산한 값입니다.</li>
+      </ul>
+
+      <h3>2차 출처와 미확인 항목</h3>
+      <ul>
+        <li><span class="badge second">2차 출처</span> Fable 5.2 발표 시각(CNBC). Hydrogen 캐시 입력 가격, Carbon·Argon·3.8 Flash 프로모션가와의 비교, 공개 범위(GCN).</li>
+        <li><span class="badge second">2차 출처</span> 검색 요약에만 있는 GPT-6.1 Terra, Gemini 4 Carbon 정식 출시 11-10은 공식 확인 전이라 수치에 쓰지 않았습니다.</li>
+        <li><span class="badge unk">미확인</span> openai.com/news와 ChatGPT 릴리스 노트(이번에 열지 않음). ChatGPT 앱 쪽 발표를 확인하지 못했습니다.</li>
+        <li><span class="badge unk">미확인</span> Gemini 4 Carbon·Argon의 공식 출시일과 가격, Gemini 3.8 Flash 가격, Hydrogen 최대 출력(지난 보고의 재확인 권장 상태 그대로).</li>
+        <li><span class="badge unk">미확인</span> Gemini Decisions API 본문, Google 제품 소식 4건 본문(제목만 확인).</li>
+        <li><span class="badge unk">미확인</span> Fable 5.2의 Medium effort 토큰 감소 폭, 30일 데이터 보존 조건의 적용 대상, prefix check 내용, 워터마크 확인 방법과 5.x 모델 적용 여부.</li>
+        <li><span class="badge unk">미확인</span> Anthropic 11-10 상장 로드쇼 본문, 11-17 뉴스 항목 내용, 지난 보고의 11-16 제목 없는 뉴스 항목.</li>
+        <li><span class="badge unk">미조사</span> xAI·Meta·Microsoft·Mistral·DeepSeek 등 기타 회사.</li>
+      </ul>
+
+      <h3>지난 보고와 범위 차이</h3>
+      <ul>
+        <li>지난 보고에 실었던 일부 수치(Fable 5.2 WANDR, Mythos 5.2 CyScenarioBench, Hydrogen의 비교 대상 없는 점수, Claude·OpenAI 하위 모델 가격)는 이번 수집 자료에 없어 싣지 않았습니다. 값이 바뀌었다는 뜻은 아닙니다.</li>
+        <li>항목 수는 목표 최대 10건 중 모델 출시 2건, 기능·정책 소식 7건입니다. 확인한 범위에서 이번 기간 대형 모델 출시가 2건뿐이었고, OpenAI는 기간 내 모델 출시 기록이 없었습니다.</li>
+      </ul>
+
+      <h3>확인 방식과 라벨</h3>
+      <p>조사 담당이 공식 발표문, 릴리스 노트, API 변경 기록, 블로그 피드를 직접 열어 확인한 값을 썼습니다. 일부 값은 지난 보고(2026-11-16)에서 공식 문서로 확인한 값을 다시 인용했고, 그때마다 "지난 보고 확인값"으로 적었습니다. 기사 값은 2차 출처로 표시해 비교표에서 뺐습니다. 결론과 핵심 수치의 숫자는 비교표와 같은 값이며, 결론에 쓴 2차 출처 값(캐시 가격, 25% 비교)은 그렇다고 표시했습니다.</p>
+      <dl class="labels">
+        <dt><span class="badge ok">확인</span></dt><dd>회사 공식 발표·문서에서 확인한 값입니다. 본문에서 따로 라벨이 없는 사실은 확인입니다.</dd>
+        <dt><span class="badge second">2차 출처</span></dt><dd>기사·검색 요약에만 있고 공식 확인 전입니다.</dd>
+        <dt><span class="badge unk">미확인</span></dt><dd>페이지를 열지 않았거나 값이 없습니다.</dd>
+        <dt><span class="badge est">추정</span></dt><dd>확인한 사실에서 우리 팀이 짐작한 내용입니다.</dd>
+        <dt><span class="badge prop">제안</span></dt><dd>우리 팀의 의견이며 사실이 아닙니다.</dd>
+        <dt><span class="badge new">신규</span> <span class="badge upd">갱신</span> <span class="badge same">변동 없음</span></dt><dd>지난 보고 대비 처음 나온 항목 / 같은 항목에 확인 정보가 더해지거나 바뀐 항목 / 지난 보고와 같은 항목입니다.</dd>
+      </dl>
+    </section>
+
+    <!-- 6. 다음 행동 -->
+    <section aria-labelledby="h-next">
+      <h2 id="h-next">다음 행동</h2>
+
+      <h3>다음 보고에서 확인할 것</h3>
+      <ol>
+        <li>OpenAI 뉴스 페이지와 ChatGPT 릴리스 노트를 열어 ChatGPT 쪽 발표를 확인합니다.</li>
+        <li>Gemini 4 Carbon·Argon 공식 페이지에서 출시일·가격을, Google 공식 가격표에서 Hydrogen 캐시 가격과 thinking 토큰 과금을 확인합니다.</li>
+        <li>Fable 5.2 발표 원문 표를 다시 열어 정렬이 불분명한 셀을 확인하고, 릴리스 노트에서 30일 데이터 보존 조건의 적용 대상을 확인합니다.</li>
+        <li>Gemini Decisions API 본문, Google 제품 소식 4건 본문, Anthropic 11-17 뉴스 항목을 확인합니다.</li>
+        <li>xAI·Meta·DeepSeek 등 기타 회사의 큰 발표가 있었는지 확인합니다.</li>
+      </ol>
+
+      <h3>우리 서비스 쪽 첫 단계 <span class="badge prop">제안</span></h3>
+      <ul>
+        <li><strong>AI Office</strong> — computer 도구 버전 점검. 비용이 거의 없고 바로 해 볼 수 있습니다(<a href="#p1">우선 검토 1</a>).</li>
+        <li><strong>꼬리별 관측소</strong> — 공식 캐시 가격 확인 뒤 개인정보를 지운 댓글 사본으로 분류 시험(<a href="#p3">우선 검토 3</a>).</li>
+        <li><strong>AI Office</strong> — Fable 5.2 비교 시험. API 비용이 들어 대표 확인이 필요합니다(<a href="#p2">우선 검토 2</a>).</li>
+        <li><strong>홍카페</strong> — 상담사 프로필 초안 시험은 상담사 동의와 홍카페정책부의 개인정보 처리 확인이 먼저입니다(<a href="#svc-hong">홍카페 제안</a>).</li>
+      </ul>
+    </section>
+
+    <footer aria-labelledby="h-sources">
+      <h2 id="h-sources">출처와 확인일</h2>
+      <ol class="sources">
+        <li>Anthropic, "Introducing Claude Fable 5.2 and Claude Mythos 5.2"(공식 발표, 2026-11-09) — <a href="https://www.anthropic.com/news/claude-fable-and-mythos-5-2">anthropic.com/news/claude-fable-and-mythos-5-2</a> · 확인 2026-11-17</li>
+        <li>Anthropic, "Claude Platform release notes"(릴리스 노트·가격·API 변경) — <a href="https://platform.claude.com/docs/en/release-notes/overview">platform.claude.com/docs/en/release-notes/overview</a> · 확인 2026-11-17</li>
+        <li>Anthropic, 뉴스 목록(제목만 확인) — <a href="https://www.anthropic.com/news">anthropic.com/news</a> · 확인 2026-11-17</li>
+        <li>CNBC, "Anthropic releases Claude Fable 5.2 and Claude Mythos 5.2 ahead of IPO"(2차 출처, 발표 시각) — <a href="https://www.cnbc.com/2026/11/09/anthropic-claude-fable-5-2-mythos-5-2.html">cnbc.com/2026/11/09/…</a> · 확인 2026-11-17</li>
+        <li>OpenAI, API 변경 기록 — <a href="https://developers.openai.com/api/docs/changelog">developers.openai.com/api/docs/changelog</a> · 확인 2026-11-17</li>
+        <li>Google, "Introducing Gemini 4 Hydrogen for Agentic Workflows"(공식 발표, 2026-11-12) — <a href="https://blog.google/innovation-and-ai/models-and-research/gemini-models/introducing-gemini-4-hydrogen/">blog.google/…/introducing-gemini-4-hydrogen/</a> · 확인 2026-11-16(지난 보고 열람값 인용)</li>
+        <li>Google, 블로그 피드(발표 시각·제품 소식 제목) — <a href="https://blog.google/rss/">blog.google/rss/</a> · 확인 2026-11-17</li>
+        <li>GCN, "Google launches Gemini 4 Hydrogen for everyday coding tasks"(2차 출처, 캐시 가격·가격 비교·공개 범위) — <a href="https://gcn.com/google-gemini-4-hydrogen-coding/23269/">gcn.com/google-gemini-4-hydrogen-coding/23269/</a> · 확인 2026-11-17</li>
+      </ol>
+      <p class="muted">추정·제안은 라벨로 표시했고, 확인하지 못한 내용은 결론의 근거로 쓰지 않았습니다.</p>
+    </footer>
+
+  </main>
+</body>
+</html>

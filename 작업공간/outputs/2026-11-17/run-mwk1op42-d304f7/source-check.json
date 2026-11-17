@@ -1,0 +1,14 @@
+{
+  "checked": 8,
+  "broken": [],
+  "mismatched": [
+    {
+      "url": "https://www.anthropic.com/news",
+      "stage": "s2",
+      "title": "Newsroom \\ Anthropic"
+    }
+  ],
+  "unknown": [],
+  "skipped": 0,
+  "relayed": 0
+}
