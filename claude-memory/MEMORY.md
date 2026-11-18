@@ -8,5 +8,5 @@
 - [홍카페 정책 지식창고](policy-knowledge-base.md) — 상담사모집부→홍카페정책부(11-16), Notion 정책서 DB를 policy-sync.cjs(haiku로 Notion 읽기·첨부 변환)로 보관함/지식/홍카페정책에 저장, 현행판만·매일 13시 갱신·자료는 저장소에 안 올림
 - [상담사 데이터 자산화](counselor-data-asset.md) — 상담사등록부→상담사데이터자산화부(11-16), 홍카페 전체 상담사 수집(collect.cjs)·드라이브 엑셀(export.cjs)·숏폼 시안(make-short.cjs), 후기 7일만·금 13시 갱신, 요일 예약은 포크 feat/weekly-schedule
 - [회사 데이터 백업 저장소](workspace-backup-repo.md) — 집 PC용 비공개 저장소 ai-office-workspace: 포함·제외 기준(상담사 개인정보·계정 제외), 갱신 방법, 포크 main 맞춘 방식, "설정 동기화해줘"는 저장소의 sync.mjs 실행
-- [공유 회사 구성](shared-company-org.md) — 대표 구성을 공개 포크 shared/company-org.json에(실명은 자리 표시), publish --name으로 올리고 올리기 전 예시 속 상담사 실명 점검, 파트장 PC는 설치 때 apply·서버 켤 때 자동 맞춤(11-18 대표 결정)
+- [공유 회사 구성·배포](shared-company-org.md) — 대표 구성을 공개 포크 shared/company-org.json에(실명은 자리 표시). "배포해줘"는 npm run office:release(갱신·커밋·push·파트장 안내 문구), 파트장은 링크+"업데이트해줘"→office:update. 올리기 전 예시 속 상담사 실명 점검(11-18 대표 결정)
 - [대표에게는 항상 한국어](reply-in-korean.md) — 진행 안내 한 줄까지 모든 전달은 한국어(11-17 대표 지시, 영어 답을 두 번 되물음)
