@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 927f2e8a-aaad-4699-a3d3-7be709ad567b
-  modified: 2026-11-16T04:47:39.240Z
+  modified: 2026-11-19T08:52:32.356Z
 ---
 
 2026-11-12 대표 요청("집에 가서도 셋팅해서 사용할 수 있도록 내 GIT에 업로드")으로 만들었다.
@@ -22,5 +22,7 @@ metadata:
 **Why:** 작업 공간 `보관함/`은 프로그램이 `.gitignore`(`*`)로 Git에서 빼 두었고, 포크는 공개 저장소라 회사 데이터를 둘 수 없다.
 
 **설정 동기화(2026-11-13 추가):** 대표가 "설정 동기화해줘"라고 하면 로컬 복사본 폴더에서 `node sync.mjs`(처음 한 번은 `--program <프로그램 폴더>`)를 실행하고 결과 줄을 그대로 전한다. 복사본이 없으면 `gh repo clone Lupus-01/ai-office-workspace`로 먼저 받는다. 회사 설정·예약·메모·AI트렌드부/AI평가부 업무 폴더를 비교해 최신 쪽으로 맞추고, 덮어쓰기 전 내용은 `.sync-backups/`에 남긴다. 먼저 `--check`로 방향을 보여 주고 싶으면 그렇게 한다. 대표는 두 PC를 동시에 켜지 않는다고 했다. 프로필 양식·inputs·게시 기록은 이 도구가 다루지 않으므로 아래 수동 갱신을 쓴다.
+
+**집↔회사 이어서 작업하기(2026-11-19 대표 요청 "집에 가서 다운로드 받아서 작업할 수 있게 어떻게 작업 요청해야 하는지도 넣어줘"):** 저장소 최상위 `이어서-작업하기.md`에 마지막 상태(포크 main 커밋·부서·예약 4건·게시 기록), 받는 PC Claude가 할 일(서버 끄기 → 이 저장소 pull → 프로그램 main을 포크 origin/main으로 ff → npm ci → 게시 기록 복사 → `node sync.mjs` → 서버 켜기), 바로 쓰는 요청 문장, 남은 일을 적었다(e0908de). 받는 PC에서 대표가 할 말: "ai-office-workspace 저장소를 git pull로 최신으로 받고, 그 안의 이어서-작업하기.md 대로 집 PC를 최신 상태로 맞춰줘". README 세팅 순서 2번도 upstream 추적에서 포크 origin/main 추적으로 고쳤다. 대표가 "진행상황 깃에 올려줘"라고 하면: 프로그램 레포가 origin/main과 같은지 확인 → 게시 기록 등 수동 항목 diff·복사 → 이 문서의 상태·남은 일 갱신 → 개인정보 검사(날짜 `20YY-MM-DD`는 계좌 패턴 오탐이라 뺀다) → 커밋 → 메모 갱신 뒤 `node sync.mjs`(git add -A·commit·push를 함께 한다). 받는 PC에는 `.office/release.json`이 없어 첫 "배포해줘"에 `--name`이 필요하다([[shared-company-org]]).
 
 **How to apply:** "회사 데이터 저장소 갱신해줘"라고 하면 같은 목록을 다시 복사한 뒤 올리기 전에 개인정보 패턴(전화·메일·계좌)을 다시 검사하고 커밋해서 push한다. 계정 파일 이름은 명령·파일에 쓰지 않는다(훅 차단). [[windows-test-setup]] [[profile-production]]
