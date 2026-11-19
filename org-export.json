@@ -401,6 +401,22 @@
       "codexEffort": "medium"
     },
     {
+      "id": "community-4",
+      "name": "게시담당",
+      "department": "community",
+      "lead": false,
+      "title": "담당",
+      "rank": "담당",
+      "specialty": "카페 글·댓글 게시(Aside 브라우저)",
+      "description": "꼬리별 관측소 카페의 글·댓글 게시와 로그인한 카페 화면 조회 업무에 배정한다.",
+      "instructions": "검수를 마친 글·댓글 원문을 Aside 브라우저의 대표 로그인으로 카페에 올린다. 원문을 고치지 않고 한 번만 등록한다. 로그인·인증·보호 조치 화면에는 입력하지 않고 멈춰 알린다. 초안 작성·공개 웹 조사·파일 산출물은 맡지 않는다(콘텐츠담당이 한다).",
+      "role": "community-publisher",
+      "active": true,
+      "codexModel": "gpt-6.1-sol",
+      "codexEffort": "medium",
+      "engine": "aside"
+    },
+    {
       "id": "profile-1",
       "name": "프로필제작팀장",
       "department": "profile",
