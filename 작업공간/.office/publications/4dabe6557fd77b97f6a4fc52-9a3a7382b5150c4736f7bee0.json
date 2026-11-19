@@ -1,0 +1,12 @@
+{
+  "status": "confirmed",
+  "action": "post",
+  "service": "naver_cafe",
+  "connection": "38b50fda70230a14504b796b",
+  "contentHash": "49a248bb9ba1929d5d9d8150ddc410dc067a873be90e0408c11a8671ca3ef953",
+  "instructionKey": "49a7e9ca47e058aa3fc643d292377dce5c3ee9590fc62159ed598fb0a1b73546",
+  "target": "https://cafe.naver.com/f-e/cafes/31520563/menus/44",
+  "updatedAt": "2026-11-18T02:29:42.967Z",
+  "resultUrl": "https://cafe.naver.com/petdilab?iframe_url_utf8=%2Fca-fe%2Fcafes%2F31520563%2Farticles%2F11269%253Fmenuid%3D44%2526boardtype%3DL%2526oldPath%3D%252FArticleRead.nhn%253Fclubid%253D31520563%2526articleid%253D11269%2526menuid%253D44%2526boardtype%253DL",
+  "confirmedAt": "2026-11-18T02:29:42.967Z"
+}

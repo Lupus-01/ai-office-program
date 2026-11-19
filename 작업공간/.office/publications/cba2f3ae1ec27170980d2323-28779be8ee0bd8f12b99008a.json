@@ -1,0 +1,12 @@
+{
+  "status": "confirmed",
+  "action": "post",
+  "service": "naver_cafe",
+  "connection": "38b50fda70230a14504b796b",
+  "contentHash": "90f7705b15789024617e544bb285098a9c206ad5ab79ddec27b09f183998f827",
+  "instructionKey": "79c970e8650f963a2bc6495e1c5a0f47581419173826384f0f3bdac81daf7fdb",
+  "target": "https://cafe.naver.com/f-e/cafes/31520563/menus/24?viewType=L",
+  "updatedAt": "2026-11-17T06:02:58.788Z",
+  "resultUrl": "https://cafe.naver.com/f-e/cafes/31520563/articles/11207?boardtype=L&menuid=24&referrerAllArticles=false",
+  "confirmedAt": "2026-11-17T06:02:58.788Z"
+}

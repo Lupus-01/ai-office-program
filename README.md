@@ -3,8 +3,10 @@
 대표님 AI Office의 회사 설정과 업무 자료를 다른 PC(집 PC 등)에서 그대로 쓰기 위한 **비공개** 백업입니다.
 프로그램 코드는 별도 저장소에 있습니다: https://github.com/Lupus-01/ai-office (원본: https://github.com/JISANGHYEOK-0901/ai-office)
 
-- 기준 시점: 2026-11-12, 회사 PC
-- 프로그램 버전: 원본 `main` `ff97a92` (포크 `main`도 같은 파일)
+- 처음 만든 시점: 2026-11-12, 회사 PC · 마지막 갱신: 2026-11-19, 회사 PC
+- 프로그램 버전: 포크 `main` `d7a3db6`(2026-11-19). 2026-11-16부터 로컬 `main`은 원본이 아니라 포크 `origin/main`을 따라갑니다.
+
+> **이미 세팅한 집 PC에서 이어서 일할 때는 [이어서-작업하기.md](이어서-작업하기.md)만 보면 됩니다.** 프로그램 폴더의 Claude Code에게 "ai-office-workspace 저장소를 git pull로 최신으로 받고, 그 안의 이어서-작업하기.md 대로 집 PC를 최신 상태로 맞춰줘"라고 말하세요. 아래 "세팅 순서"는 처음 세팅하는 PC용입니다.
 
 ## 가장 쉬운 방법
 
@@ -55,15 +57,12 @@
 
    Poppler는 사용자 PATH에 들어가므로, 설치 뒤 새 터미널에서 서버를 켜야 인식됩니다.
 
-2. **프로그램 받기:** 회사 PC와 같게 로컬 `main`이 원본을 따라가도록 맞춥니다.
+2. **프로그램 받기:** 회사 PC와 같게 로컬 `main`이 포크 `origin/main`을 따라가도록 받습니다(2026-11-16부터. 공유 회사 구성·배포·업데이트·요일 예약은 포크에만 있습니다). 원본은 비교·합치기용으로만 `upstream`에 둡니다.
 
    ```bash
    git clone https://github.com/Lupus-01/ai-office.git AI-Office-App
    cd AI-Office-App
    git remote add upstream https://github.com/JISANGHYEOK-0901/ai-office.git
-   git fetch upstream
-   git switch -C main upstream/main
-   git branch --set-upstream-to=upstream/main main
    npm ci
    npm run doctor
    ```
