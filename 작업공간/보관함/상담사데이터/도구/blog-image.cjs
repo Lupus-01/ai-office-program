@@ -105,14 +105,42 @@ function topicPages(t) {
   return pages;
 }
 
+// 주간 타로: 표지, 이번 주 많았던 고민 그래프, 카드 3장(카드 그림 대신 이름·방향·키워드 카드)
+function weekPages(w) {
+  const foot = [dateKo(w.asOf), '홍카페 이용 후기'];
+  const pages = [];
+  pages.push(['표지', page(`<div class="grow"><div class="eyebrow">${esc(w.week.label)} 주간 타로</div><h1 style="font-size:120px">${esc(w.themeWord)} 타로</h1><div class="sub">이번 주 후기에서 가장 많았던 고민으로 카드 세 장을 뽑았습니다</div><div class="chips">${w.cards.map((c) => `<span class="chip">${esc(c.name)}</span>`).join('')}</div></div>`, foot)]);
+  pages.push(['고민그래프', page(`<div class="eyebrow">최근 7일 후기 ${n(w.reviews7d)}건</div><h1>이번 주 많았던 고민</h1><div class="sub">후기에 붙은 상담 분야 태그 비율</div>${barRows(w.fields.filter((x) => x.name !== '고민').map((x) => ({ name: x.name, share: x.share, note: `${n(x.cnt)}건` })), 'share', '%', 5)}`, foot)]);
+  for (const c of w.cards) {
+    pages.push([`카드_${c.name}`, page(`<div class="grow"><div class="eyebrow">${esc(c.role)}</div><div><span class="name" style="font-size:${c.name.length > 4 ? 110 : 170}px">${esc(c.name)}</span><span class="num">${esc(c.direction)}</span></div><div class="sub">${esc(c.en)} · 메이저 아르카나 ${c.no}번</div><div class="chips">${c.keywords.map((k) => `<span class="chip">${esc(k)}</span>`).join('')}</div></div>`, [`${w.week.label} 주간 타로`, '홍카페'])]);
+  }
+  return pages;
+}
+// 칼럼: 표지(--title)와 상담사 포스팅 인용 카드(--lines "문장|문장", 소재에 있는 문장만)
+function columnPages(c) {
+  const pages = [];
+  const title = arg('--title') || `${c.category} ${c.keyword} 이야기`.trim();
+  pages.push(['표지', page(`<div class="grow"><div class="eyebrow">홍카페 ${esc(c.category || '운세')} 이야기</div><h1 style="font-size:${title.length > 22 ? 78 : 96}px">${esc(title)}</h1><div class="sub">홍카페 상담사가 직접 쓴 글에서 답을 찾았습니다</div></div>`, ['홍카페 운영팀', '']) ]);
+  const lines = String(arg('--lines') || '').split('|').map((s) => s.trim()).filter(Boolean);
+  lines.forEach((line, i) => {
+    const key = line.replace(/\s+/g, ' ');
+    const from = c.posts.find((p) => p.text.replace(/\s+/g, ' ').includes(key));
+    if (!from) { console.log(`  ⚠ 소재에 없는 문장이라 만들지 않았습니다: "${line.slice(0, 30)}…"`); return; }
+    pages.push([`인용${i + 1}`, quoteCard(line, `홍카페 ${from.nick} 선생님 포스팅 「${clip(from.title, 26)}」에서`, ['홍카페 상담사 포스팅', ''])]);
+  });
+  return pages;
+}
+
 async function main() {
-  if (!SRC || !fs.existsSync(SRC)) { console.log('사용: node blog-image.cjs <소재카드.json|큐레이션.json> [--quotes 1,3,6] [--out <폴더>]'); process.exit(2); }
+  if (!SRC || !fs.existsSync(SRC)) { console.log('사용: node blog-image.cjs <소재.json> [--quotes 1,3,6] [--title "칼럼 제목"] [--lines "인용 문장|인용 문장"] [--out <폴더>]'); process.exit(2); }
   const doc = readJson(SRC, null);
-  if (!doc || !['card', 'topic'].includes(doc.kind)) { console.log('blog.cjs 가 만든 소재 카드(.json)나 큐레이션 재료(.json)가 아닙니다.'); process.exit(2); }
+  if (!doc || !['card', 'topic', 'week', 'column'].includes(doc.kind)) { console.log('blog.cjs 가 만든 소재 파일(.json)이 아닙니다.'); process.exit(2); }
   const quoteIdx = String(arg('--quotes', '1,2,3')).split(',').map((s) => Number(s.trim())).filter(Boolean);
-  const pages = doc.kind === 'card' ? cardPages(doc, quoteIdx) : topicPages(doc);
+  const pages = doc.kind === 'card' ? cardPages(doc, quoteIdx) : doc.kind === 'topic' ? topicPages(doc) : doc.kind === 'week' ? weekPages(doc) : columnPages(doc);
   const out = arg('--out') ? path.resolve(arg('--out')) : path.join(ROOT, '블로그', '이미지', path.basename(SRC, '.json'));
   fs.mkdirSync(out, { recursive: true });
+  // 지난번에 만든 그림(번호_이름.png)이 섞이지 않게 이 도구가 만든 그림만 지우고 다시 만든다
+  for (const f of fs.readdirSync(out)) if (/^\d{2}_.+\.png$/.test(f)) fs.unlinkSync(path.join(out, f));
   const { chromium } = needProgram('playwright');
   let browser;
   try { browser = await chromium.launch({ channel: 'chrome', headless: true }); } catch { browser = await chromium.launch({ headless: true }); }
