@@ -1,6 +1,6 @@
 - [Windows 테스트·원격 구성](windows-test-setup.md) — 한글 경로 cpSync 크래시로 영문 경로 복사본에서 테스트, origin은 포크·upstream이 원본(11-09부터 쓰기 권한; 11-16부터 로컬 main은 포크 origin/main 추적, 원본에 없는 포크 기능 포함; 11-17 원본 057ea0c 합친 포크 main c996888, 검사 기준 613·604 통과·실패 4; 배포는 포크 main, README 주소도 포크)
 - [꼬리별 관측소 글·댓글 업무](kkoribyeol-cafe-posting.md) — 카페 주소, 아이스베어 글에 댓글 금지 규칙, 이미 올린 글 번호, 핫플 게시판·비율(10개 중 3개), 11-10부터 상시 위임: 터미널 AI가 "끝까지 자동으로"를 붙여 넘긴다(이 카페 글·댓글만)
-- [personal-ai-workflow 스킬](personal-ai-workflow-skills.md) — execute·pr-lifecycle·handoff 출처·업데이트 방법, 설치하지 않은 항목
+- [personal-ai-workflow 스킬](personal-ai-workflow-skills.md) — execute·pr-lifecycle·handoff·grip-it 출처·업데이트 방법, 회사 PC는 11-20에 4d64f05로 Claude(~/.claude/skills)·Codex(~/.codex/skills) 설치, 훅·CORE는 설치하지 않음
 - [프로필제작부 업무](profile-production.md) — 상담사 워드→소개서 워드+PPT, 기준서·도구 위치, 대표 결정, 함정(Bash 권한·끝난 단계 파일 수정 금지·단계 output은 파일)
 - [상담사 분석 메일 업무](counselor-analysis-mail.md) — 홍카페 ERP 화면·대상(파트너 1~6단계만)·메일 주소 출처·수치 해석·호칭, 매달 10일 목표, 아직 안 된 것
 - [업데이트는 바로 Git에](push-updates-immediately.md) — 코드는 포크 작업 브랜치로 바로 push, 설정·메모는 sync.mjs로 바로 올림(원본·머지·PR은 따로 지시)
