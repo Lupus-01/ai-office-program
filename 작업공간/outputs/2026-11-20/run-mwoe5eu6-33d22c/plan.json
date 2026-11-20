@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "task": "2026-11-20/run-mwoe5eu6-33d22c",
+  "goal": "AI 업무 자체평가 개선 노트 11월 20일",
+  "stages": [
+    {
+      "id": "s1-worklog",
+      "title": "11월 19~20일 진행 업무 8건 기록 분석",
+      "dept": "operations",
+      "agent": "operations-1",
+      "inputs": [
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-19\\run-mwn0uptv-833d49\\plan.json",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-19\\run-mwn0uptv-833d49\\brief.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-19\\run-mwn0uptv-833d49\\report.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-19\\run-mwn4yfbn-f51192\\plan.json",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-19\\run-mwn4yfbn-f51192\\brief.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-19\\run-mwn4yfbn-f51192\\report.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-19\\run-mwn510p3-8b38bc\\plan.json",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-19\\run-mwn510p3-8b38bc\\brief.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-19\\run-mwn510p3-8b38bc\\report.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-20\\run-mwoaestr-830454\\plan.json",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-20\\run-mwoaestr-830454\\brief.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-20\\run-mwoaestr-830454\\report.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-20\\run-mwoc09hg-fbf740\\plan.json",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-20\\run-mwoc09hg-fbf740\\brief.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-20\\run-mwoc09hg-fbf740\\report.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-20\\run-mwoccufn-b19637\\plan.json",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-20\\run-mwoccufn-b19637\\brief.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-20\\run-mwocs9ad-68bc38\\plan.json",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-20\\run-mwocs9ad-68bc38\\brief.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-20\\run-mwoczrd4-874b6e\\plan.json",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-20\\run-mwoczrd4-874b6e\\brief.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-20\\run-mwoczrd4-874b6e\\report.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-19\\run-mwmv09b6-0d5264\\report.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-19\\run-mwmypkp3-740663\\operations\\operations-1-work-log-review.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-19\\run-mwmypkp3-740663\\operations\\operations-kpi-improvement-note.md"
+      ],
+      "output": "outputs/2026-11-20/run-mwoe5eu6-33d22c/operations/operations-1-work-log-review.md",
+      "done": "지난 자체평가(2026-11-19 run-mwmypkp3) 이후 진행된 업무 8건(run-mwn0uptv 홍카페 정책 지식 갱신 11-19, run-mwn4yfbn 주간 베스트 상담사 기준 확인, run-mwn510p3 인기상담사 기준 문서 답변, run-mwoaestr 명경천리 선생님 사주 프로필 제작, run-mwoc09hg 대장급 AI 동향 일일 보고 11-20, run-mwoccufn 꼬리별 숏츠·핫플 글 10건·댓글 20건 11-20, run-mwocs9ad 꼬리별 숏츠 글 1건·댓글 1건 11-20, run-mwoczrd4 꼬리별 숏츠 글 1건·댓글 1건 11-20 2차)마다 업무 이름·담당 부서/직원·단계 수·완료 여부(report.md 유무, run-mwoccufn·run-mwocs9ad는 report.md가 없으므로 진행 중/중단 여부와 멈춘 단계)·반려/재작업 횟수와 사유·검토 지적 항목·외부 게시/댓글 결과(report.md에 적힌 성공·실패 건수)·계획 대비 누락 산출물·소요 시간 추정(근거 파일 시각 명시)을 표로 정리한다. 각 업무 폴더의 plan.json·brief.md·report.md·review-notes.md·reviews/·부서별 산출물 파일 목록을 직접 확인한 것만 사실로 쓰고, 확인 못 한 항목은 '미확인'으로 표시한다. 꼬리별 업무는 11-19(run-mwmv09b6) 회차와 11-20 회차 3건을 비교해 되풀이된 문제와 개선된 문제를 구분하고, 같은 날 비슷한 꼬리별 업무가 3건으로 나뉜 이유를 기록에서 확인한다. 기준 확인 질문 2건(run-mwn4yfbn·run-mwn510p3)은 비슷한 질문이 따로 처리된 점과 답변 근거를 대조한다. 지난 개선 노트(run-mwmypkp3 operations-kpi-improvement-note.md)의 개선 항목이 이번 업무들에서 지켜졌는지 항목별로 지켜짐/안 지켜짐/확인 불가로 대조한다. 확인한 사실과 추정을 구분하고 반복 실수·지연 요인 후보를 목록으로 남긴다. 비밀번호·토큰·계정 정보와 회원 닉네임·상담사 예명 외 개인정보(연락처 등)는 기록하지 않는다. 12시 40분 마감에 맞춰 업무당 핵심만 간결히 적고 8건 분석이 끝나면 바로 마친다.",
+      "dependsOn": [],
+      "parallelGroup": "",
+      "connection": "",
+      "target": ""
+    },
+    {
+      "id": "s2-eval-note",
+      "title": "AI 업무 자체평가 및 다음 업무 개선 노트(2026-11-20 진행 8건)",
+      "dept": "operations",
+      "agent": "operations-kpi",
+      "inputs": [
+        "s1-worklog",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-19\\run-mwmypkp3-740663\\operations\\operations-kpi-improvement-note.md"
+      ],
+      "output": "outputs/2026-11-20/run-mwoe5eu6-33d22c/operations/operations-kpi-improvement-note.md",
+      "done": "s1 분석을 근거로 업무별 평가(요청 충족·산출물 품질·절차 준수·속도, 잘된 점/아쉬운 점)와 종합 평가, 지난 개선 노트 이행 결과 요약, 반복 문제(꼬리별 업무의 되풀이 지적·게시 실패·보고서 없이 멈춘 업무, 비슷한 질문의 중복 처리 등)의 원인 분석, 다음 업무에 바로 적용할 개선 노트(부서·단계별 체크리스트, 우선순위 표시), 직원 지침·계획 기준 수정안(대상 직원/부서, 현재 문제, 수정 문구 제안)을 담은 md 1개. 모든 평가 항목에 근거 업무 id·파일을 적고 확인 사실·추정·제안을 구분한다. org/·.claude/agents 파일은 직접 고치지 않고 수정안만 제시한다(반영은 대표가 대시보드에서 함). 12시 40분 마감에 맞춰 분석 결과 범위 안에서만 작성하고 바로 마친다.",
+      "dependsOn": [
+        "s1-worklog"
+      ],
+      "parallelGroup": "",
+      "connection": "",
+      "target": ""
+    }
+  ],
+  "review": {
+    "by": "chief",
+    "criteria": "지난 평가(run-mwmypkp3) 이후 진행 업무 8건(run-mwn0uptv·run-mwn4yfbn·run-mwn510p3·run-mwoaestr·run-mwoc09hg·run-mwoccufn·run-mwocs9ad·run-mwoczrd4)이 빠짐없이 평가됐는지, 평가·원인이 업무 폴더 기록에 근거하는지, 보고서 없는 업무 2건의 상태가 확인됐는지, 지난 개선 노트 이행 여부가 항목별로 대조됐는지, 꼬리별 11-19·11-20 회차 비교로 반복 문제가 구분됐는지, 개선 노트가 다음 업무에 바로 적용할 수 있는 구체적 항목인지, 지침 수정안이 대상·문구까지 제시됐는지, 사실·추정·제안 구분과 개인정보·계정 정보 미기재, 12시 40분 마감 준수. 가정: 평가 범위는 지난 자체평가 이후 업무 폴더가 생긴 업무(이번 자체평가 업무 제외)로 하고, 진행 중인 업무는 현재 기록 기준으로 평가한다."
+  },
+  "gaps": [],
+  "publications": [],
+  "deliverables": [
+    "s2-eval-note"
+  ]
+}
