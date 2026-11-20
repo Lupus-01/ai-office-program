@@ -1,0 +1,24 @@
+{
+  "checked": 8,
+  "broken": [],
+  "mismatched": [
+    {
+      "url": "https://casrai.org/news/openai-gpt-6-2-astra-sol-release-2026",
+      "stage": "s2-html",
+      "title": "OpenAI GPT-6.2 Astra and Sol: what researchers get — CASRAI"
+    },
+    {
+      "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/introducing-gemini-4-hydrogen/",
+      "stage": "s2-html",
+      "title": "Introducing Gemini 4 Hydrogen for Agentic Workflows"
+    },
+    {
+      "url": "https://www.anthropic.com/claude-fable-and-mythos-5-2",
+      "stage": "s2-html",
+      "title": "Introducing Claude Fable 5.2 and Claude Mythos 5.2 \\ Anthropic"
+    }
+  ],
+  "unknown": [],
+  "skipped": 0,
+  "relayed": 0
+}
