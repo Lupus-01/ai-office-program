@@ -121,12 +121,26 @@ function columnPages(c) {
   const pages = [];
   const title = arg('--title') || `${c.category} ${c.keyword} 이야기`.trim();
   pages.push(['표지', page(`<div class="grow"><div class="eyebrow">홍카페 ${esc(c.category || '운세')} 이야기</div><h1 style="font-size:${title.length > 22 ? 78 : 96}px">${esc(title)}</h1><div class="sub">홍카페 상담사가 직접 쓴 글에서 답을 찾았습니다</div></div>`, ['홍카페 운영팀', '']) ]);
-  const lines = String(arg('--lines') || '').split('|').map((s) => s.trim()).filter(Boolean);
-  lines.forEach((line, i) => {
+  return pages;
+}
+// 인용 카드(모든 소재 공통): --lines "문장|문장" 에 적은 문장을 소재에서 찾아, 누구의 어떤 글인지 붙여 만든다. 소재에 없는 문장은 만들지 않는다
+function linePages(doc) {
+  const src = [];
+  const add = (x, nick) => {
+    for (const q of x.quotes || []) src.push({ text: q.text, by: `${nick} 상담사 실제 이용 후기${q.field ? ` · ${q.field} 상담` : ''}`, foot: '홍카페 이용 후기' });
+    for (const q of x.stories || []) src.push({ text: q.text, by: `${nick} 상담사 ${q.kind || '이용 후기'}${q.field ? ` · ${q.field} 상담` : ''}`, foot: '홍카페 이용 후기' });
+    for (const q of x.replies || []) src.push({ text: q.text, by: `${nick} 선생님이 후기에 단 답글`, foot: '홍카페 상담사 답글' });
+    for (const p of x.posts || []) src.push({ text: p.text, by: `${p.nick || nick} 선생님 포스팅 「${clip(p.title, 24)}」에서`, foot: '홍카페 상담사 포스팅' });
+    for (const t of [x.notice, x.intro].filter(Boolean)) src.push({ text: t, by: `${nick} 선생님이 프로필에 직접 쓴 글`, foot: '홍카페 상담사 프로필' });
+  };
+  add(doc, doc.nick || '');
+  for (const x of [...(doc.items || []), ...(doc.counselors || [])]) add(x, x.nick);
+  const pages = [];
+  String(arg('--lines') || '').split('|').map((s) => s.trim()).filter(Boolean).forEach((line, i) => {
     const key = line.replace(/\s+/g, ' ');
-    const from = c.posts.find((p) => p.text.replace(/\s+/g, ' ').includes(key));
+    const from = src.find((s) => s.text.replace(/\s+/g, ' ').includes(key));
     if (!from) { console.log(`  ⚠ 소재에 없는 문장이라 만들지 않았습니다: "${line.slice(0, 30)}…"`); return; }
-    pages.push([`인용${i + 1}`, quoteCard(line, `홍카페 ${from.nick} 선생님 포스팅 「${clip(from.title, 26)}」에서`, ['홍카페 상담사 포스팅', ''])]);
+    pages.push([`인용${i + 1}`, quoteCard(line, from.by, [from.foot, ''])]);
   });
   return pages;
 }
@@ -135,8 +149,8 @@ async function main() {
   if (!SRC || !fs.existsSync(SRC)) { console.log('사용: node blog-image.cjs <소재.json> [--quotes 1,3,6] [--title "칼럼 제목"] [--lines "인용 문장|인용 문장"] [--out <폴더>]'); process.exit(2); }
   const doc = readJson(SRC, null);
   if (!doc || !['card', 'topic', 'week', 'column'].includes(doc.kind)) { console.log('blog.cjs 가 만든 소재 파일(.json)이 아닙니다.'); process.exit(2); }
-  const quoteIdx = String(arg('--quotes', '1,2,3')).split(',').map((s) => Number(s.trim())).filter(Boolean);
-  const pages = doc.kind === 'card' ? cardPages(doc, quoteIdx) : doc.kind === 'topic' ? topicPages(doc) : doc.kind === 'week' ? weekPages(doc) : columnPages(doc);
+  const quoteIdx = String(arg('--quotes', '')).split(',').map((s) => Number(s.trim())).filter(Boolean);
+  const pages = [...(doc.kind === 'card' ? cardPages(doc, quoteIdx) : doc.kind === 'topic' ? topicPages(doc) : doc.kind === 'week' ? weekPages(doc) : columnPages(doc)), ...linePages(doc)];
   const out = arg('--out') ? path.resolve(arg('--out')) : path.join(ROOT, '블로그', '이미지', path.basename(SRC, '.json'));
   fs.mkdirSync(out, { recursive: true });
   // 지난번에 만든 그림(번호_이름.png)이 섞이지 않게 이 도구가 만든 그림만 지우고 다시 만든다

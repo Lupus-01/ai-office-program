@@ -10,7 +10,7 @@
 //       node blog.cjs check <초안.md>                                   초안 검사(분량·사진 자리·금지 표현·말투·숫자와 인용의 근거)
 // 형식과 쓰는 법은 블로그-폼.md
 'use strict';
-const { fs, path, ROOT, RAW, TREND_DIR, readJson, writeAtomic, kst, loadReviews } = require('./lib.cjs');
+const { fs, path, ROOT, RAW, TREND_DIR, SITE, readJson, writeAtomic, kst, loadReviews, request, htmlText, maskContacts } = require('./lib.cjs');
 
 const argv = process.argv.slice(2);
 const cmd = argv[0];
@@ -54,7 +54,8 @@ const totalReviews = (p) => p.reviewStats?.total ?? p.reviewCountLd ?? p.tabs?.r
 
 // ---------- 인용할 후기 고르기 ----------
 // 건강·임신·사망·폭력·빚·소송 같은 개인 사정, 가림 표시, 인사만 있는 글은 뺀다. 작성자 닉네임은 원본에도 없다.
-const SENSITIVE = /병원|수술|암 |투병|임신|유산|낙태|사망|돌아가|장례|자살|죽고|폭력|폭행|우울증|공황|빚|대출|파산|이혼|소송|경찰|불륜|바람|유부|상간|가림\]/;
+// 건강 결과·도박·당첨처럼 광고 글에 옮기면 효과를 약속하는 것처럼 읽히는 이야기도 뺀다
+const SENSITIVE = /병원|수술|암 |투병|임신|유산|낙태|사망|돌아가|장례|자살|죽고|폭력|폭행|우울증|공황|빚|대출|파산|이혼|소송|경찰|불륜|바람|유부|상간|가림\]|용종|내시경|의사|진단|토토|로또|복권|도박|당첨/;
 const GENERIC = /^(감사합니다|감사해요|고맙습니다|최고|좋아요|굿|짱|감사)[.!~♡♥ ]*$/;
 const SPECIFIC = /재회|연락|속마음|마음|위로|정확|적중|편안|따뜻|다정|친절|공감|명쾌|시원|조언|방향|힘이|용기|든든|신기|소름|맞|풀렸|정리|고민|답답|희망|기다|인연|궁합|취업|합격|사업|이사|타로|카드|사주|공수/g;
 // 결과를 보장하는 것처럼 읽히는 말이 든 후기는 인용 후보에서 뺀다(광고 글로 옮기면 과장이 된다)
@@ -128,13 +129,13 @@ function keywordsFor(nick, category, fields) {
 }
 
 // ---------- 소재 카드 ----------
-function buildCard(ce, list) {
+function buildCard(ce, list, maxQuotes = 12) {
   const main = list[0];
   const category = categoryOf(main) || categoryOf(list[list.length - 1]);
   const fields = sumBy(list.map((p) => p.stats?.fields));
   const styles = sumBy(list.map((p) => p.stats?.styles));
   const posts = ce.startsWith('CE-') ? (readJson(path.join(RAW, '포스팅', `${ce}.json`), { items: [] }).items || []) : [];
-  const quotes = quotesFor(list, { max: 12 });
+  const quotes = quotesFor(list, { max: maxQuotes });
   const total = totalReviews(main);
   const rs = main.reviewStats || null;
   const warn = [];
@@ -170,7 +171,71 @@ function buildCard(ce, list) {
     warnings: warn,
   };
 }
+// ---------- 이야기 재료 더하기(2026-11-20 대표: "내용이 너무 적다, 상담사 내용 활용을 극대화") ----------
+// 글을 쓸 상담사만 그때 받아 온다(상담사 한 명에 요청 3번). 매주 전체 수집의 범위(최근 7일 후기)는 그대로다.
+//   베스트 후기: 고객이 직접 쓴 긴 이야기(홍카페가 베스트로 뽑은 후기) / 상담사 PICK: 상담사가 고른 후기 / 도움돼요 순 상위 후기
+//   + 그 후기에 상담사가 단 답글. 답글 속 고객 닉네임은 ○○으로 가린다. 닉네임은 저장하지 않는다.
+async function fetchPicked(p, want = { best: 10, pick: 30, help: 20 }) {
+  const out = new Map();
+  for (const [kind, extra] of [['best', { type: 'best' }], ['pick', { type: 'pick' }], ['help', { order: 'help' }]]) {
+    if (!want[kind]) continue;
+    let body = null;
+    try {
+      const r = await request(`${SITE}/api/comment/getItemComment`, { form: { offset: 0, limit: want[kind], type: '', order: '', item_code: p.code, profilePage: 'true', item_flag: p.flag, ...extra }, referer: p.url, json: true });
+      body = r?.body?.response === 'success' ? r.body : null;
+    } catch { body = null; }
+    for (const it of body?.items || []) {
+      const no = String(it.cm_no);
+      if (out.has(no)) continue;
+      const nick = String(it.ac_nick || '').trim();
+      const rep = [].concat(it.cm_reply || [])[0];
+      // 답글은 "○○님"으로 시작하는 일이 많고 닉네임을 줄여 부르기도 한다. 닉네임과 답글 첫머리의 부름말을 모두 가린다
+      const called = (htmlText(rep?.cm_content || '').trim().match(/^([^\s,.!~]{1,10}(?: [^\s,.!~]{1,8})?)님/) || [])[1] || '';
+      const names = [nick, called, called.replace(/^우리\s*/, '')].filter((x) => x && x.length >= 2).sort((a, b) => b.length - a.length);
+      const hide = (s) => names.reduce((t, x) => t.split(x).join('○○'), s);
+      const join = (v) => (Array.isArray(v) ? v.filter(Boolean).join(', ') : String(v ?? ''));
+      out.set(no, { no, kind, date: String(it.regist_date || '').slice(0, 10), point: Number(it.cm_point), field: join(it.cm_counsel_field), style: join(it.cm_style), help: Number(it.help_cnt) || 0,
+        text: hide(maskContacts(htmlText(it.cm_content))).replace(/\s+/g, ' ').trim(), reply: rep ? hide(maskContacts(htmlText(rep.cm_content || ''))).replace(/\s+/g, ' ').trim() : '' });
+    }
+  }
+  return [...out.values()];
+}
+const KIND_LABEL = { best: '베스트 후기', pick: '상담사 PICK', help: '도움돼요 많은 후기' };
+async function enrich(card, list, { stories = 12, replies = 6, posts = 6 } = {}) {
+  const main = list[0];
+  const picked = await fetchPicked(main);
+  const usable = picked.filter((r) => r.point === 5 && r.text.length >= 80 && !SENSITIVE.test(r.text) && !OVERCLAIM.test(r.text));
+  const order = { best: 0, pick: 1, help: 2 };
+  card.stories = usable.sort((a, b) => order[a.kind] - order[b.kind] || b.text.length - a.text.length).slice(0, stories)
+    .map((r) => ({ no: r.no, kind: KIND_LABEL[r.kind], date: r.date, field: r.field, style: r.style, text: r.text.slice(0, 1600) }));
+  card.replies = picked.filter((r) => r.reply.length >= 40 && !SENSITIVE.test(r.reply) && !SENSITIVE.test(r.text)).sort((a, b) => b.reply.length - a.reply.length).slice(0, replies)
+    .map((r) => ({ no: r.no, date: r.date, field: r.field, to: r.text.slice(0, 160), text: r.reply.slice(0, 600) }));
+  const all = card.ceCode.startsWith('CE-') ? (readJson(path.join(RAW, '포스팅', `${card.ceCode}.json`), { items: [] }).items || []) : [];
+  card.posts = all.filter((t) => String(t.content || '').length >= 200 && !SENSITIVE.test(t.title)).sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, posts)
+    .map((t) => ({ title: t.title, date: String(t.date).slice(0, 10), views: t.views || 0, text: maskContacts(String(t.content)).slice(0, 2000) }));
+  card.notice = String(main.notice || '').replace(/^상담사 공지\n/, '').replace(/\n?전체보기\s*$/, '').slice(0, 900);
+  card.faq = (main.faq || []).map((q) => ({ q: q.q, a: String(q.a).slice(0, 400) })).filter((q) => q.q && q.a);
+  card.fetchedAt = kst();
+  return card;
+}
+
 const pct = (list) => list.map((x) => `${x.name} ${x.share}%(${x.cnt.toLocaleString()}건)`).join(' · ');
+function richMarkdown(c, L) {
+  if (c.stories?.length) {
+    L.push('', '## 고객이 직접 쓴 긴 이야기 (글의 중심 재료. 문장 그대로 인용하고, 줄일 때만 … 사용. 닉네임을 붙이지 않는다)');
+    c.stories.forEach((s, i) => L.push(`${i + 1}. [${s.kind} · ${s.date} · ${s.field || '분야 없음'}] ${s.text}`, ''));
+  }
+  if (c.replies?.length) {
+    L.push('## 상담사가 후기에 단 답글 (상담사의 말투와 마음 씀씀이를 보여 주는 재료. 고객 닉네임은 ○○으로 가렸다)');
+    c.replies.forEach((r, i) => L.push(`${i + 1}. [${r.date} · ${r.field || '분야 없음'}] 답글: ${r.text}`, `   (받은 후기: ${r.to}…)`, ''));
+  }
+  if (c.posts?.length) {
+    L.push('## 상담사가 직접 쓴 포스팅 (상담사의 생각과 조언. 인용할 때 문장 그대로, 한 글에서 두세 문장까지)');
+    c.posts.forEach((p, i) => L.push(`### ${i + 1}. ${p.title} (${p.date} · 조회 ${p.views.toLocaleString()})`, '```', p.text, '```', ''));
+  }
+  if (c.notice) L.push('## 상담사 공지 (상담사가 프로필에 직접 쓴 글)', '```', c.notice, '```', '');
+  if (c.faq?.length) { L.push('## 프로필의 자주 묻는 질문'); c.faq.forEach((q) => L.push(`- Q. ${q.q} / A. ${q.a}`)); }
+}
 function cardMarkdown(c) {
   const f = c.facts;
   const L = [];
@@ -195,7 +260,8 @@ function cardMarkdown(c) {
   L.push('', '## 인용할 수 있는 후기 (이 문장만 인용한다. 줄일 때는 … 로 표시, 닉네임·날짜를 지어내지 않는다)');
   c.quotes.forEach((q, i) => L.push(`${i + 1}. [${q.date} · ${q.via} · ${q.field || '분야 없음'}${q.style ? ` · ${q.style}` : ''}] ${q.text}`));
   if (!c.quotes.length) L.push('- 없음');
-  if (c.popularPosts.length) { L.push('', '## 상담사 포스팅 인기 글 (이 상담사가 어떤 주제에 강한지 보여 주는 재료)'); c.popularPosts.forEach((t) => L.push(`- ${t.title} (조회 ${t.views}, ${t.date})`)); }
+  richMarkdown(c, L);
+  if (c.popularPosts.length) { L.push('', '## 상담사 포스팅 인기 글 제목 (이 상담사가 어떤 주제에 강한지 보여 주는 재료)'); c.popularPosts.forEach((t) => L.push(`- ${t.title} (조회 ${t.views}, ${t.date})`)); }
   L.push('', '## 노릴 검색어', `- 이름: ${c.keywords.name.join(' , ')}`, `- 고민: ${c.keywords.topic.join(' , ')}`);
   if (c.warnings.length) { L.push('', '## 주의'); c.warnings.forEach((w) => L.push(`- ${w}`)); }
   return `${L.join('\n')}\n`;
@@ -316,15 +382,16 @@ function toneCheck(body, errors, warns, ok) {
   if (hits.length >= 3) errors.push(`기계가 쓴 글처럼 읽히는 표현 ${hits.length}가지: ${hits.join(', ')} — 말하듯이 바꾸세요.`);
   else if (hits.length) warns.push(`굳은 표현: ${hits.join(', ')} — 말하듯이 바꾸면 더 좋습니다.`);
   const bullets = (body.match(/^- /gm) || []).length;
-  if (bullets > 8) errors.push(`목록(- ) 줄이 ${bullets}개입니다(8개 이하). 숫자와 특징을 목록으로 늘어놓지 말고 문장으로 풀어 쓰세요.`);
+  if (bullets > 12) errors.push(`목록(- ) 줄이 ${bullets}개입니다(12개 이하). 숫자와 특징을 목록으로 늘어놓지 말고 문장으로 풀어 쓰세요.`);
   if (!/저희|저는|전 |제 생각|운영팀이|운영팀에|더라고요|거든요/.test(body.replace(/^>.*$/gm, ''))) errors.push('글쓴이의 목소리가 없습니다. "저희가 후기를 읽어 보니", "~더라고요", "~거든요"처럼 운영팀이 직접 보고 느낀 것을 말하세요.');
   if (!/댓글/.test(body)) warns.push('댓글을 부르는 한마디가 없습니다(반응 좋은 글은 "댓글로 알려 주세요"처럼 묻습니다).');
 }
 
 // ---------- 초안 검사 ----------
+// 2026-11-20 대표: "내용이 너무 적다". 반응이 큰 일반 사용자 글은 2,700~4,700자에 사진 12~15장이었다. 분량과 인용 기준을 올렸다
 const RULES = {
-  소개: { min: 1200, max: 2300, photos: 6, heads: 3, quotes: 2 }, 큐레이션: { min: 1300, max: 3200, photos: 5, heads: 4, quotes: 0 },
-  주간타로: { min: 1100, max: 2200, photos: 5, heads: 3, quotes: 0 }, 칼럼: { min: 1100, max: 2200, photos: 3, heads: 2, quotes: 1 },
+  소개: { min: 2400, max: 4800, photos: 9, heads: 5, quotes: 7, own: 2, story: 1 }, 큐레이션: { min: 2400, max: 5200, photos: 7, heads: 5, quotes: 6, own: 2 },
+  주간타로: { min: 1900, max: 4000, photos: 6, heads: 4, quotes: 3, own: 1 }, 칼럼: { min: 1900, max: 4000, photos: 4, heads: 4, quotes: 4, own: 3 },
 };
 const FAKE_REVIEW = /내돈내산|제가 (?:직접 )?(?:상담|받아|전화)|저는 (?:이번에|직접)|받아봤|다녀왔|찐 ?후기|솔직 ?후기|체험 ?후기|상담받고 왔/;
 const OVERSELL = /100% ?적중|무조건|반드시 (?:재회|합격|성공|맞)|보장|완치|치료|틀림없|국내 ?최초|업계 ?1위|1위|최고의/;
@@ -375,7 +442,8 @@ function checkDraft(file) {
   }
   for (const [re, why] of [[FAKE_REVIEW, '고객이 쓴 체험 후기처럼 읽히는 표현(회사가 쓴 글에는 쓰지 않는다)'], [OVERSELL, '결과 보장·근거 없는 최상급 표현']]) {
     // 인용한 후기(> 줄) 안의 표현은 고객의 말이므로 본문만 본다
-    const own = `${title}\n${body.replace(/^>.*$/gm, '')}`;
+    // 체험 꾸밈 표현은 따옴표 안(상담사 포스팅 제목, 고객이 한 질문을 옮긴 말)에서는 보지 않는다
+    const own = `${re === FAKE_REVIEW ? title.replace(/"[^"\n]{0,80}"/g, '') : title}\n${re === FAKE_REVIEW ? body.replace(/^>.*$/gm, '').replace(/"[^"\n]{0,80}"|“[^”\n]{0,80}”/g, '') : body.replace(/^>.*$/gm, '')}`;
     const m = own.match(re);
     if (m) errors.push(`금지 표현 "${m[0]}": ${why}`);
   }
@@ -391,11 +459,19 @@ function checkDraft(file) {
     if (meta['폼'] !== '칼럼' && !forms.some((x) => body.includes(x))) errors.push(`기준일(${forms[1]})이 본문에 없습니다. 숫자는 "○○ 기준"을 밝힙니다.`);
     // 인용: > 로 시작하는 줄은 소재의 후기 문장이어야 한다
     // 인용할 수 있는 글: 후기(소재 카드·큐레이션·주간 재료)와 상담사가 직접 쓴 포스팅(칼럼 재료). 누구 글인지도 함께 기억한다
+    // 한 상담사(소재 카드, 큐레이션의 한 명, 주간 재료의 한 명)에게서 나오는 인용 재료와 종류
+    //   review 짧은 후기 · story 고객이 쓴 긴 이야기 · post 상담사 포스팅 · own 상담사가 직접 쓴 말(답글·공지·소개·약력)
+    const from = (x, nick, url) => [
+      ...(x.quotes || []).map((q) => ({ text: q.text, nick, url, type: 'review' })),
+      ...(x.stories || []).map((q) => ({ text: q.text, nick, url, type: 'story' })),
+      ...(x.replies || []).map((q) => ({ text: q.text, nick, url, type: 'own' })),
+      ...(x.posts || []).map((p) => ({ text: p.text, nick: p.nick || nick, url: p.profileUrl || url, type: 'post', post: true })),
+      ...[x.notice, x.intro, x.greeting, ...(x.career || []), ...(x.reading || []), ...(x.headline || []), ...(x.faq || []).map((q) => q.a)].filter(Boolean).map((t) => ({ text: String(t), nick, url, type: 'own' })),
+    ];
     const sourcesOfQuote = cards.flatMap((c) => [
-      ...(c.quotes || []).map((q) => ({ text: q.text, nick: c.nick, url: c.profileUrl })),
-      ...(c.items || []).flatMap((x) => (x.quotes || []).map((q) => ({ text: q.text, nick: x.nick, url: x.profileUrl }))),
-      ...(c.counselors || []).flatMap((x) => (x.quotes || []).map((q) => ({ text: q.text, nick: x.nick, url: x.profileUrl }))),
-      ...(c.posts || []).map((p) => ({ text: p.text, nick: p.nick, url: p.profileUrl, post: true })),
+      ...from(c, c.nick, c.profileUrl),
+      ...(c.items || []).flatMap((x) => from(x, x.nick, x.profileUrl)),
+      ...(c.counselors || []).flatMap((x) => from(x, x.nick, x.profileUrl)),
     ]).map((q) => ({ ...q, text: q.text.replace(/\s+/g, ' ') }));
     const pool = sourcesOfQuote.map((q) => q.text);
     const quoted = [...body.matchAll(/^>\s?(.+)$/gm)].map((m) => m[1].trim().replace(/^["“”']|["“”']$/g, ''));
@@ -406,9 +482,19 @@ function checkDraft(file) {
       const from = parts.length ? sourcesOfQuote.find((p) => parts.every((s) => p.text.includes(s))) : null;
       if (!from) { bad++; errors.push(`소재에 없는 인용: "${q.slice(0, 40)}…" (후기·포스팅을 지어내거나 고쳐 쓰지 않는다. 줄일 때만 … 사용)`); } else quotedFrom.push(from);
     }
-    const need = meta['폼'] === '큐레이션' ? cards.flatMap((c) => c.items || []).length : (rule?.quotes ?? 2);
-    if (quoted.length - bad < need) errors.push(`실제 인용(> 줄)이 ${quoted.length - bad}개입니다(이 폼은 ${need}개 이상).`);
+    const people = cards.flatMap((c) => c.items || []);
+    const need = meta['폼'] === '큐레이션' ? Math.max(rule?.quotes || 0, people.length * 2) : (rule?.quotes ?? 2);
+    if (quoted.length - bad < need) errors.push(`실제 인용(> 줄)이 ${quoted.length - bad}개입니다(이 폼은 ${need}개 이상). 고객 후기와 상담사 글을 더 넣어 내용을 채우세요.`);
     else if (!bad) ok.push(`인용 ${quoted.length}개 모두 소재와 일치`);
+    // 상담사 내용 활용: 상담사가 직접 쓴 말(포스팅·답글·공지·소개)과 고객의 긴 이야기를 실제로 썼는지
+    const n = (t) => quotedFrom.filter((q) => (t === 'own' ? q.type === 'own' || q.type === 'post' : q.type === t)).length;
+    const hasStories = sourcesOfQuote.some((q) => q.type === 'story');
+    const hasOwn = sourcesOfQuote.some((q) => q.type === 'post' || q.type === 'own');
+    if (rule?.own && hasOwn && n('own') < rule.own) errors.push(`상담사가 직접 쓴 말(포스팅·답글·공지·소개) 인용이 ${n('own')}개입니다(${rule.own}개 이상). 상담사 내용을 더 살리세요.`);
+    else if (rule?.own && hasOwn) ok.push(`상담사가 직접 쓴 말 인용 ${n('own')}개`);
+    if (rule?.story && hasStories && n('story') < rule.story) errors.push(`고객이 쓴 긴 이야기(베스트 후기·상담사 PICK) 인용이 ${n('story')}개입니다(${rule.story}개 이상). 재료의 "고객이 직접 쓴 긴 이야기"에서 고르세요.`);
+    else if (rule?.story && hasStories) ok.push(`고객의 긴 이야기 인용 ${n('story')}개`);
+    if (meta['폼'] === '큐레이션') for (const x of people) { const k = quotedFrom.filter((q) => q.nick === x.nick).length; if (k < 2) errors.push(`${x.nick} 상담사의 인용이 ${k}개입니다(상담사마다 2개 이상).`); }
     // 상담사 포스팅을 인용했으면 누구 글인지 밝히고 그 상담사 프로필을 건다
     for (const f of quotedFrom.filter((x) => x.post)) {
       if (!body.includes(f.nick)) errors.push(`포스팅을 인용한 상담사 이름(${f.nick})이 본문에 없습니다. 누구 글인지 밝히세요.`);
@@ -449,7 +535,7 @@ function checkDraft(file) {
 }
 
 // ---------- 명령 ----------
-function main() {
+async function main() {
   if (cmd === 'check') {
     const f = argv[1];
     if (!f || !fs.existsSync(f)) { console.log('검사할 초안 파일 경로를 주세요.'); process.exit(2); }
@@ -488,7 +574,18 @@ function main() {
         const c = buildCard(x.ce, x.list);
         return { nick: c.nick, number: c.number, category: c.category, profileUrl: c.profileUrl, themeCnt: x.mine.get(theme), price: c.facts.price, unit: c.facts.unit, styles: c.styles.slice(0, 2), quotes: quotesFor(x.list, { field: theme, max: 3 }) };
       });
-    const doc = { version: 1, kind: 'week', asOf: today(), week: w, reviews7d: reviews, theme, themeWord: FIELD_WORD[theme] || theme, fields, cards: drawCards(w.id), counselors,
+    // 그 고민을 다룬 상담사 포스팅(상담사가 직접 쓴 조언). 카드 풀이에 전문가의 말을 엮는 재료
+    const themePosts = [];
+    for (const [ce, list] of groups) {
+      if (!ce.startsWith('CE-')) continue;
+      for (const t of readJson(path.join(RAW, '포스팅', `${ce}.json`), { items: [] }).items || []) {
+        const text = String(t.content || '');
+        if (text.length < 300 || !(t.title + text).includes(theme) || SENSITIVE.test(t.title)) continue;
+        themePosts.push({ nick: list[0].nick, number: list[0].number060 || '', category: t.category || categoryOf(list[0]), profileUrl: list[0].url, title: t.title, date: String(t.date).slice(0, 10), views: t.views || 0, text: maskContacts(text).slice(0, 1800) });
+      }
+    }
+    themePosts.sort((a, b) => b.views - a.views);
+    const doc = { version: 1, kind: 'week', asOf: today(), week: w, reviews7d: reviews, theme, themeWord: FIELD_WORD[theme] || theme, fields, cards: drawCards(w.id), counselors, posts: themePosts.slice(0, 5),
       keywords: [`주간 타로 ${w.label.split('~')[0]}`, `${FIELD_WORD[theme] || theme} 타로`, `이번 주 타로 운세`, `${FIELD_WORD[theme] || theme} 전화타로`] };
     const base = path.join(BLOG, '주간', w.id);
     writeAtomic(`${base}.json`, `${JSON.stringify(doc, null, 1)}\n`);
@@ -500,6 +597,10 @@ function main() {
     for (const c of counselors) {
       L.push(`- ${c.nick} ${c.number}번 (${c.category}) · 최근 7일 '${theme}' 후기 ${c.themeCnt}건 · ${c.price ?? '-'}코인/${c.unit || '-'} · ${pct(c.styles)} · ${c.profileUrl}`);
       c.quotes.forEach((q, i) => L.push(`  ${i + 1}. [${q.date} · ${q.field}] ${q.text}`));
+    }
+    if (doc.posts.length) {
+      L.push('', `## '${theme}'를 다룬 상담사 포스팅 (카드 풀이에 선생님의 말을 엮는다. 인용하면 이름과 프로필 링크를 넣는다)`);
+      doc.posts.forEach((p, i) => L.push(`### ${i + 1}. ${p.title}`, `- ${p.nick} ${p.number}번 (${p.category}) · ${p.date} · 조회 ${p.views.toLocaleString()} · ${p.profileUrl}`, '```', p.text, '```', ''));
     }
     L.push('', `## 노릴 검색어`, `- ${doc.keywords.join(' , ')}`);
     writeAtomic(`${base}.md`, `${L.join('\n')}\n`);
@@ -562,11 +663,12 @@ function main() {
       hit.forEach(([ce, l]) => console.log(`- ${l[0].nick} ${l[0].number060 || ''}번 [${categoryOf(l[0])}] ${ce}`));
       process.exit(2);
     }
-    const card = buildCard(hit[0][0], hit[0][1]);
+    const card = buildCard(hit[0][0], hit[0][1], 24);
+    await enrich(card, hit[0][1]);
     const base = path.join(CARD_DIR, safeName(`${card.nick}_${card.number || card.ceCode}`));
     writeAtomic(`${base}.json`, `${JSON.stringify(card, null, 1)}\n`);
     writeAtomic(`${base}.md`, cardMarkdown(card));
-    console.log(`소재 카드: ${card.nick}${card.number ? ` ${card.number}번` : ''} [${card.category}] · 누적 후기 ${card.facts.reviewsTotal ?? '-'}건 · 인용 후보 ${card.quotes.length}개${card.warnings.length ? ` · 주의 ${card.warnings.length}개` : ''}`);
+    console.log(`소재 카드: ${card.nick}${card.number ? ` ${card.number}번` : ''} [${card.category}] · 누적 후기 ${card.facts.reviewsTotal ?? '-'}건 · 짧은 후기 ${card.quotes.length}개 · 긴 이야기 ${card.stories.length}개 · 상담사 답글 ${card.replies.length}개 · 포스팅 ${card.posts.length}개${card.warnings.length ? ` · 주의 ${card.warnings.length}개` : ''}`);
     card.warnings.forEach((w) => console.log(`  ⚠ ${w}`));
     console.log(`저장: ${base}.md\n      ${base}.json`);
     return undefined;
@@ -596,13 +698,18 @@ function main() {
     version: 1, kind: 'topic', asOf: today(), field, category: cat,
     criteria: `'${field}' 분야 후기 태그 수가 많은 순서(최근 3개월 후기 ${min3m}건 이상인 상담사${cat ? `, ${cat}` : ''})`,
     keywords: [`${w} ${cat || '타로'} 잘보는곳`, `${w} 전화${cat || '타로'}`, `홍카페 ${w}`, `${w} 상담 추천`],
-    items: rows.map((r, i) => {
-      const c = buildCard(r.ce, r.list);
-      const fq = quotesFor(r.list, { field, max: 4 });
-      return { rank: i + 1, nick: c.nick, number: c.number, category: c.category, ceCode: c.ceCode, profileUrl: c.profileUrl, fieldCnt: r.fieldCnt, fieldShare: r.share,
-        facts: c.facts, styles: c.styles.slice(0, 3), career: c.career, reading: c.reading, headline: c.headline, quotes: fq.length ? fq : c.quotes.slice(0, 3), quotesAreFieldTagged: fq.length > 0 };
-    }),
+    items: [],
   };
+  for (const [i, r] of rows.entries()) {
+    const c = buildCard(r.ce, r.list);
+    await enrich(c, r.list, { stories: 20, replies: 3, posts: 3 });
+    const fq = quotesFor(r.list, { field, max: 6 });
+    // 긴 이야기는 그 고민 태그가 붙은 것을 먼저, 모자라면 다른 것으로 채운다
+    const st = [...c.stories.filter((s) => String(s.field).includes(field)), ...c.stories.filter((s) => !String(s.field).includes(field))].slice(0, 4);
+    doc.items.push({ rank: i + 1, nick: c.nick, number: c.number, category: c.category, ceCode: c.ceCode, profileUrl: c.profileUrl, fieldCnt: r.fieldCnt, fieldShare: r.share,
+      facts: c.facts, styles: c.styles.slice(0, 3), career: c.career, reading: c.reading, headline: c.headline, intro: c.intro.slice(0, 500), quotes: fq.length ? fq : c.quotes.slice(0, 3), quotesAreFieldTagged: fq.length > 0,
+      stories: st, replies: c.replies, posts: c.posts });
+  }
   const base = path.join(TOPIC_DIR, safeName(`${field}${cat ? `_${cat}` : ''}_TOP${rows.length}`));
   writeAtomic(`${base}.json`, `${JSON.stringify(doc, null, 1)}\n`);
   const L = [`# 큐레이션 재료: '${field}' ${cat} 상담사 ${rows.length}명`, '', `- 기준일: ${doc.asOf}`, `- 고른 기준(글 앞부분에 그대로 밝힌다): ${doc.criteria}`, `- 노릴 검색어: ${doc.keywords.join(' , ')}`, ''];
@@ -612,6 +719,8 @@ function main() {
       `- 스타일: ${pct(it.styles)}`, `- 한 줄 소개: ${it.headline.join(' / ')}`, `- 약력: ${it.career.join(' / ') || '-'}`, `- 리딩정보: ${it.reading.slice(0, 3).join(' / ') || '-'}`,
       `- 인용할 수 있는 후기${it.quotesAreFieldTagged ? `('${field}' 태그 후기)` : '(이 분야 태그 후기가 없어 다른 후기)'}:`);
     it.quotes.forEach((q, i) => L.push(`  ${i + 1}. [${q.date} · ${q.field || '분야 없음'}] ${q.text}`));
+    if (it.intro) L.push('- 상담사가 쓴 서비스 소개:', '```', it.intro, '```');
+    richMarkdown(it, L);
     L.push('');
   }
   writeAtomic(`${base}.md`, `${L.join('\n')}\n`);
@@ -620,4 +729,4 @@ function main() {
   console.log(`저장: ${base}.md\n      ${base}.json`);
   return undefined;
 }
-main();
+main().catch((e) => { console.error(`오류: ${e.message}`); process.exit(1); });
