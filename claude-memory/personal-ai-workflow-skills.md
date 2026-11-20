@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: reference
   originSessionId: 62d70f7b-dbe6-464f-b5ed-81df344de44d
-  modified: 2026-11-20T08:32:39.713Z
+  modified: 2026-11-20T08:58:25.095Z
 ---
 
 `execute`·`pr-lifecycle`·`handoff`·`grip-it` 스킬은 https://github.com/JISANGHYEOK-0901/personal-ai-workflow 의 `skills/`를 그대로 복사한 것이다. 저장소 기본 브랜치는 `develop`이고 `main`은 오래됐다.
@@ -25,5 +25,11 @@ metadata:
 - `workflow/CORE.md` 전역 연결. 위 해석이 들어 있고 모든 세션의 행동을 바꾼다.
 - `hooks/communication.py`(PR·push 차단, 독립 리뷰 강제, grip-it 편집 차단 훅)와 `scripts/`. 실행 코드라 설치하지 않았다. 그래서 스킬 속 "훅이 설치된 환경" 절차(증표 기록, `grip-edit-scope` 차단)는 이 PC에서 동작하지 않는다.
 - `third-party/installed-baseline/`. 저장소도 비활성 원본으로 두며, Notion 토큰·쿠키를 다루는 스크립트가 들어 있다.
+
+**Codex 전역 규칙 정리(2026-11-20 대표 지시 "전역 규칙을 옮기고 최신 스킬셋으로 다 변경"):** `~/.codex/AGENTS.md`에 2026-03-19에 만든 홍카페 개발용 "Safety-First" 규칙(승인 전 수정 금지, 항상 Read/Evaluate/Plan 보고서 형식)이 모든 Codex 실행에 걸려 있었다. AI Office 독립검증실(Codex, 첫 줄 `VERDICT:`)과 반대 방향이라 옮겼다.
+- 원본 백업: `~/.codex/backups/AGENTS-전역규칙-2026-03-19.md`
+- 옮긴 곳: `Desktop/홍카페_개발/Ops-Team_work_log/AGENTS.md`, `Desktop/홍카페_개발/profile-builder/AGENTS.md`(같은 내용, 커밋하지 않음). `hongcafe-ops-profile-integrated`는 이미 더 자세한 자체 AGENTS.md가 있어 그대로 뒀다.
+- 전역은 3줄만 남겼다(한국어로 쉽게 설명, 프로젝트 AGENTS.md 따르기, 기존 코드·사용자 변경 보존). 전역에 스킬 연결 문구나 강한 규칙을 넣지 않는다. AI Office 실행기가 직원을 띄울 때 전역 설정을 차단하는 코드를 찾지 못해, 전역 규칙이 대시보드 직원에게도 적용될 수 있다.
+- `~/.claude/CLAUDE.md`는 원래 없고 만들지 않았다.
 
 handoff·grip-it은 `ai-input/`이 Git에서 제외된 저장소에 기록한다(AI-Office-App은 `.gitignore`에 `/ai-input/`가 있다). pr-lifecycle의 PR 생성·머지 단계는 `gh`를 쓴다. 설치 위치와 로그인 확인은 [[windows-test-setup]]을 따른다.
