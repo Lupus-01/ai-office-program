@@ -3,6 +3,7 @@
 // 후기 작성자 닉네임은 원본에도 없고 엑셀에도 넣지 않는다. 엑셀 칸 한도(32,767자)를 넘는 글은 잘라 쓴다.
 // 사용: node export.cjs
 'use strict';
+const { loadReviews } = require('./lib.cjs');
 const { fs, path, RAW, LOG, SETTINGS, SHEET_DIR, STATE, needProgram, readJson, kst } = require('./lib.cjs');
 const ExcelJS = needProgram('exceljs');
 
@@ -54,7 +55,7 @@ async function main() {
   const wsC = sheet('상담사', [['상담사코드', 'ce', 24], ['예명', 'nick', 12], ['대표 프로필', 'code', 24], ['프로필 코드(전체)', 'codes', 30], ['분야', 'field', 30],
     ['060 번호', 'n060', 9], ['가격', 'price', 9], ['단위', 'unit', 8], ['평점', 'rating', 7], ['전체 후기 수', 'reviews', 11], ['최근 3개월 후기', 'r3', 11],
     ['만족도(%)', 'sat', 9], ['1:1문의 수', 'qna', 10], ['포스팅 수', 'posts', 9], ['최근 7일 후기 수', 'r7', 11], ['후기 키워드', 'kw', 30],
-    ['상담분야 TOP3', 'fieldTop', 30], ['상담스타일 TOP3', 'styleTop', 30], ['교육 이수', 'edu', 18], ['상담사 공지', 'notice', 50], ['약력·리딩정보', 'career', 50],
+    ['상담분야 TOP3', 'fieldTop', 30], ['상담스타일 TOP3', 'styleTop', 30], ['교육 이수', 'edu', 18], ['등급', 'grade', 9], ['주 상담시간', 'hours', 12], ['5점 후기 수', 'five', 10], ['상담사 댓글 수', 'replies', 11], ['쌓인 후기 수', 'kept', 10], ['상담사 공지', 'notice', 50], ['약력·리딩정보', 'career', 50],
     ['서비스 소개', 'intro', 50], ['프로필 링크', 'url', 40], ['수집 시각', 'at', 17]]);
   // 2) 판매상품
   const wsP = sheet('판매상품', [['상담사코드', 'ce', 24], ['예명', 'nick', 12], ['프로필 코드', 'from', 24], ['상품 종류', 'kind', 10], ['상품 코드', 'code', 24],
@@ -72,6 +73,10 @@ async function main() {
   const wsS = sheet('통계', [['상담사코드', 'ce', 24], ['예명', 'nick', 12], ['프로필 코드', 'code', 24], ['종류', 'type', 12], ['이름', 'name', 16], ['건수', 'cnt', 8],
     ['추세', 'trend', 8], ['이전', 'prev', 8], ['변화율', 'rate', 8], ['기준일', 'date', 11]]);
 
+  // 3-2) 후기_누적: 매주 모은 최근 7일 후기를 지우지 않고 쌓은 것(2026-11-20 대표 결정)
+  const wsA = sheet('후기_누적', [['상담사코드', 'ce', 24], ['예명', 'nick', 12], ['프로필 코드', 'code', 24], ['후기 번호', 'no', 10], ['작성일', 'date', 17],
+    ['평점', 'point', 6], ['상담 시간', 'duration', 9], ['상담 분야', 'field', 14], ['상담 스타일', 'style', 14], ['베스트', 'best', 7], ['도움돼요', 'help', 8], ['내용', 'content', 60]]);
+  counts.kept = 0;
   const sorted = [...groups.entries()].sort((a, b) => (b[1][0].reviewCountLd || 0) - (a[1][0].reviewCountLd || 0));
   for (const [ce, list] of sorted) {
     list.sort((a, b) => (a.flag === 'call' ? -1 : 1) - (b.flag === 'call' ? -1 : 1));
@@ -81,7 +86,8 @@ async function main() {
       field: (main.knowsAbout || []).slice(0, 6).join(', '), n060: main.number060, price: main.price, unit: main.unit, rating: main.rating,
       reviews: main.reviewCountLd ?? main.tabs?.reviews ?? null, r3: main.recent3m?.reviews ?? null, sat: main.satisfaction, qna: main.tabs?.qna ?? null,
       posts: main.tabs?.postings ?? null, r7, kw: (main.stats?.keywords || []).join(', '), fieldTop: top(main.stats?.fields), styleTop: top(main.stats?.styles),
-      edu: (main.education || []).join(', '), notice: cut(main.notice, 3000), career: cut(main.sections?.['상담사 약력 + 리딩정보'], 3000), intro: cut(main.serviceIntro, 3000),
+      edu: (main.education || []).join(', '), grade: main.grade || '', hours: main.hours || '', five: main.reviewStats?.fivePoint ?? null, replies: main.reviewStats?.replies ?? null,
+      kept: list.reduce((n, p) => n + (p.reviewsKept || 0), 0), notice: cut(main.notice, 3000), career: cut(main.sections?.['상담사 약력 + 리딩정보'], 3000), intro: cut(main.serviceIntro, 3000),
       url: main.url, at: main.collectedAt ? kst(new Date(main.collectedAt)) : '' }).commit();
     counts.counselors++;
     for (const p of list) {
@@ -90,6 +96,11 @@ async function main() {
         wsR.addRow({ ce, nick: p.nick, code: p.code, no: r.no, date: r.date, point: r.point, duration: r.duration, field: [].concat(r.field ?? []).join(', '), style: [].concat(r.style ?? []).join(', '), best: r.best,
           help: r.help, photo: r.photo ? 'O' : '', reply: r.hasReply ? 'O' : '', pinned: r.pinned ? 'O' : '', content: cut(r.content) }).commit();
         counts.reviews++;
+      }
+      for (const r of loadReviews(p.code)) {
+        wsA.addRow({ ce, nick: p.nick, code: p.code, no: r.no, date: r.date, point: r.point, duration: r.duration, field: [].concat(r.field ?? []).join(', '), style: [].concat(r.style ?? []).join(', '),
+          best: r.best, help: r.help, content: cut(r.content) }).commit();
+        counts.kept++;
       }
       for (const [section, text] of Object.entries(p.sections || {})) {
         if (UI_SECTIONS.has(section)) continue;
@@ -113,6 +124,7 @@ async function main() {
       }
     }
   }
+  wsA.commit();
   wsC.commit(); wsP.commit(); wsR.commit(); wsT.commit(); wsD.commit(); wsS.commit();
 
   // 7) 수집기록
@@ -122,7 +134,7 @@ async function main() {
     ['엑셀 만든 시각', `${kst()} (KST)`],
     ['수집 회차', run.runId || ''],
     ['후기 기준', run.cutoff ? `${kst(new Date(run.cutoff))} 이후(최근 7일)` : ''],
-    ['상담사(상담사코드 기준)', counts.counselors], ['판매상품', counts.products], ['후기(최근 7일)', counts.reviews], ['포스팅', counts.postings],
+    ['상담사(상담사코드 기준)', counts.counselors], ['판매상품', counts.products], ['후기(최근 7일)', counts.reviews], ['후기(쌓인 것 전체)', counts.kept], ['포스팅', counts.postings],
     ['없는 페이지(종료 추정)', profiles.length - live.length],
     ['참고', '후기 작성자 닉네임과 1:1문의 내용은 모으지 않음(대표 결정). 전체 원본은 작업 공간 보관함/상담사데이터/원본/'],
   ];
@@ -136,7 +148,7 @@ async function main() {
     try { fs.copyFileSync(tmp, t); saved.push(t); } catch (e) { console.log(`저장 실패: ${t} (${e.code === 'EBUSY' ? '파일이 열려 있음' : e.message})`); }
   }
   fs.rmSync(tmp, { force: true });
-  console.log(`엑셀: 상담사 ${counts.counselors}명 · 판매상품 ${counts.products} · 최근 7일 후기 ${counts.reviews} · 포스팅 ${counts.postings} · 상세 구역 ${counts.details} · 통계 ${counts.stats}`);
+  console.log(`엑셀: 상담사 ${counts.counselors}명 · 판매상품 ${counts.products} · 최근 7일 후기 ${counts.reviews} · 쌓인 후기 ${counts.kept} · 포스팅 ${counts.postings} · 상세 구역 ${counts.details} · 통계 ${counts.stats}`);
   for (const s of saved) console.log(`저장: ${s}`);
   if (!settings.driveFolder) console.log('구글 드라이브 폴더가 아직 설정되지 않아 로컬에만 저장했습니다(설정.json의 driveFolder).');
 }

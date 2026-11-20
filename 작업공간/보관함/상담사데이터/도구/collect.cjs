@@ -2,6 +2,8 @@
 // 사이트맵의 모든 상담사 프로필(전화 items/profile, 채팅 chat/profile)을 읽어 상세정보·판매상품·최근 7일 후기·포스팅·통계를
 // 보관함/상담사데이터/원본/에 상담사별 JSON으로 저장한다. 공개 페이지만 읽고 로그인·글쓰기는 하지 않는다.
 // 대표 결정(2026-11-16): 전체 상담사, 후기는 최근 7일만, 후기 작성자 닉네임은 저장하지 않는다. 1:1문의 내용은 모으지 않는다(건수만).
+// 대표 결정(2026-11-20): 받는 범위는 그대로 최근 7일이지만, 한 번 모은 후기는 지우지 않고 원본/후기/<프로필 코드>.json 에 쌓는다(블로그 인용 재료).
+//   회차가 끝나면 원본/추이/<회차>.json 에 상담사별 후기 수·평점·가격을 한 줄씩 남긴다(주간 변화 비교용).
 //
 // 사용: node collect.cjs                 이어서 수집(기본 8분 동안, 다 못 하면 다음 실행이 이어 감)
 //       node collect.cjs --minutes 5     이번 실행 시간 제한(분)
@@ -9,7 +11,8 @@
 //       node collect.cjs --restart       진행 중인 회차를 버리고 새 회차 시작
 //       node collect.cjs --status        진행 상태만 보기
 'use strict';
-const { fs, path, ROOT, RAW, STATE, LOG, SITE, readJson, writeAtomic, kst, htmlText, siteDate, maskContacts, request } = require('./lib.cjs');
+const { fs, path, ROOT, RAW, STATE, LOG, SITE, REVIEW_DIR, TREND_DIR, readJson, writeAtomic, kst, htmlText, siteDate, maskContacts, request,
+  deriveProfile, cleanSections, archiveReviews, writeSnapshot } = require('./lib.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null; };
@@ -87,9 +90,14 @@ function parseProfile(html, item) {
   const text = htmlText(html);
   const title = (html.match(/<title>([^<]*)<\/title>/) || [])[1] || '';
   const head = text.match(/(\S+)\s+(\d{2,4})\s*번\s*([\d,]+)\s*\(\s*(\d+\s*[초분])\s*\)/);
-  const tabs = text.match(/상세정보\s+판매상품\s*([\d,]+)?\s+후기\s*([\d,]+)?\s+1:1문의\s*([\d,]+)?\s+포스팅\s*([\d,]+)?/);
-  const recent3 = text.match(/최근 3개월\s*([\d,]+)\s*5점\s*([\d,]+)/);
-  const satis = text.match(/만족도\s*([\d.]+)\s*%/);
+  // 탭은 있는 것만 나온다(판매상품·포스팅이 없는 상담사는 줄 자체가 없다). 한 줄씩 따로 읽는다
+  const tabBlock = (text.match(/상세정보\n((?:(?:판매상품|후기|1:1문의|포스팅)[^\n]*\n){1,4})/) || [])[1] || '';
+  const tabNum = (label) => { const m = tabBlock.match(new RegExp(`(?:^|\\n)${label}\\s*([\\d,]+)`)); return m ? num(m[1]) : null; };
+  const hours = text.match(/주 상담시간[\s\S]{0,60}?(\d{1,2})\s*시\s*~\s*(\d{1,2})\s*시/);
+  const total = text.match(/누적상담후기\s*([\d,]+)\s*건/);
+  const five = text.match(/누적 5점\s*([\d,]+)\s*개/);
+  const replies = text.match(/누적상담사댓글\s*([\d,]+)\s*건/);
+  const star = text.match(/누적별점\s*([\d.]+)/);
   const education = [...new Set([...text.matchAll(/\[\s*([^\]\s]+)\s*\]\s*교육\s*이수/g)].map((m) => m[1]))];
 
   // 판매상품: 판매상품 구역과 "판매중인 서비스" 구역의 다른 상품 링크
@@ -108,7 +116,8 @@ function parseProfile(html, item) {
     }
   }
   const pick = (name) => secs[name]?.text || '';
-  return {
+  const secText = Object.fromEntries(Object.entries(secs).map(([n, v]) => [n, v.text]));
+  const base = {
     code: item.code, flag: item.flag, url: item.url,
     ceCode: (html.match(/CE-\d{14}-\d{3}/) || [])[0] || null,
     nick: person.name || head?.[1] || title.split(' ')[0] || '',
@@ -124,19 +133,22 @@ function parseProfile(html, item) {
     number060: head?.[2] || '',
     price: head ? num(head[3]) : null,
     unit: head ? head[4].replace(/\s+/g, '') : '',
-    tabs: tabs ? { products: num(tabs[1]), reviews: num(tabs[2]), qna: num(tabs[3]), postings: num(tabs[4]) } : {},
-    recent3m: recent3 ? { reviews: num(recent3[1]), fivePoint: num(recent3[2]) } : null,
-    satisfaction: satis ? Number(satis[1]) : null,
+    tabs: tabBlock ? { products: tabNum('판매상품'), reviews: tabNum('후기'), qna: tabNum('1:1문의'), postings: tabNum('포스팅') } : {},
+    hours: hours ? `${hours[1]}시~${hours[2]}시` : '',
+    reviewStats: total || five || replies ? { total: total ? num(total[1]) : null, fivePoint: five ? num(five[1]) : null, replies: replies ? num(replies[1]) : null, star: star ? Number(star[1]) : null } : null,
     education,
     greeting: pick('인사말'),
     notice: pick('상담사 공지'),
     serviceIntro: pick('서비스 소개'),
     inside: pick('상담사 인사이드'),
     recentChange: pick('최근 변화'),
-    sections: Object.fromEntries(Object.entries(secs).map(([n, v]) => [n, v.text])),
-    faq: faq ? (faq.mainEntity || []).map((q) => ({ q: q.name || '', a: q.acceptedAnswer?.text || '' })) : [],
+    sections: cleanSections(secText),
+    // 답변에 화면 코드가 통째로 들어오는 상담사가 있다(원본 용량의 절반을 차지했다). 글자만 남긴다
+    faq: faq ? (faq.mainEntity || []).map((q) => ({ q: htmlText(q.name || ''), a: htmlText(q.acceptedAnswer?.text || '').slice(0, 1500) })) : [],
     products,
   };
+  // 최근 3개월 후기·만족도, 채팅 가격, 등급, 약력·리딩정보는 구역 원문에서 뽑는다(이미 모은 원본도 tidy.cjs가 같은 함수로 고친다)
+  return { ...base, ...deriveProfile(base, secText) };
 }
 
 // ---------- 데이터 주소(API) ----------
@@ -223,6 +235,8 @@ async function collectOne(item, run) {
   const cutoff = new Date(run.cutoff);
   profile.reviews7d = await recentReviews(item, cutoff);
   profile.reviewsSince = run.cutoff;
+  const kept = archiveReviews(item.code, profile.reviews7d);
+  profile.reviewsKept = kept.total;
   profile.stats = await stats(item);
   let post = null;
   if (profile.ceCode && !run.postingsDone[profile.ceCode]) {
@@ -232,19 +246,21 @@ async function collectOne(item, run) {
   profile.collectedAt = new Date().toISOString();
   profile.runId = run.runId;
   writeAtomic(path.join(RAW, `${item.code}.json`), `${JSON.stringify(profile, null, 1)}\n`);
-  return { profile, post };
+  return { profile, post, keptNew: kept.added };
 }
 
 // ---------- 회차 진행 ----------
 function newRun(codes) {
   const now = new Date();
   return { runId: kst(now).replace(/[ :]/g, '').slice(0, 12), startedAt: now.toISOString(), cutoff: new Date(now.getTime() - REVIEW_DAYS * 86400e3).toISOString(),
-    codes, next: 0, done: 0, gone: [], failed: [], postingsDone: {}, newReviews: 0, newPostings: 0, finishedAt: null };
+    codes, next: 0, done: 0, gone: [], failed: [], postingsDone: {}, newReviews: 0, newPostings: 0, keptNew: 0, finishedAt: null };
 }
 
 async function main() {
   fs.mkdirSync(RAW, { recursive: true });
   fs.mkdirSync(POSTING_DIR, { recursive: true });
+  fs.mkdirSync(REVIEW_DIR, { recursive: true });
+  fs.mkdirSync(TREND_DIR, { recursive: true });
   if (argv.includes('--status')) {
     const s = readJson(STATE, null);
     if (!s) return console.log('아직 수집한 적이 없습니다.');
@@ -259,7 +275,8 @@ async function main() {
     const res = await collectOne(item, run);
     if (res.gone) return console.log(`${item.code}: ${res.reason}`);
     const p = res.profile;
-    console.log(`${p.nick} (${p.code}) 수집: 판매상품 ${p.products.length} · 최근 7일 후기 ${p.reviews7d.length} · 포스팅 전체 ${res.post?.total ?? '-'}(새 ${res.post?.newCount ?? 0}) · 상세 구역 ${Object.keys(p.sections).length}개`);
+    console.log(`${p.nick} (${p.code}) 수집: 판매상품 ${p.products.length} · 최근 7일 후기 ${p.reviews7d.length}(쌓인 후기 ${p.reviewsKept}, 새로 ${res.keptNew}) · 포스팅 전체 ${res.post?.total ?? '-'}(새 ${res.post?.newCount ?? 0}) · 상세 구역 ${Object.keys(p.sections).length}개`);
+    console.log(`  탭 ${JSON.stringify(p.tabs)} · 최근 3개월 ${JSON.stringify(p.recent3m)} · 누적 ${JSON.stringify(p.reviewStats)} · 가격 ${p.price}/${p.unit} · 등급 ${p.grade} · 상담시간 ${p.hours} · 약력 ${p.career.length}줄 · 리딩정보 ${p.reading.length}줄`);
     console.log(`저장: ${path.join(RAW, `${p.code}.json`)}`);
     return;
   }
@@ -300,6 +317,7 @@ async function main() {
           if (old) writeAtomic(f, `${JSON.stringify({ ...old, gone: true, goneAt: new Date().toISOString() }, null, 1)}\n`);
         } else {
           run.newReviews += res.profile.reviews7d.length;
+          run.keptNew = (run.keptNew || 0) + (res.keptNew || 0);
           run.newPostings += res.post?.newCount || 0;
         }
       } catch (e) {
@@ -315,11 +333,13 @@ async function main() {
   if (!left) {
     run.finishedAt = new Date().toISOString();
     save();
-    const line = `- ${kst(new Date(run.startedAt))} 시작 → ${kst()} 완료: 프로필 ${run.codes.length}개, 최근 7일 후기 ${run.newReviews}건, 새 포스팅 ${run.newPostings}건, 없는 페이지 ${run.gone.length}, 실패 ${run.failed.length}`;
+    const snap = writeSnapshot(run.runId);
+    console.log(`주간 추이 기록: ${snap.file} (프로필 ${snap.rows}개)`);
+    const line = `- ${kst(new Date(run.startedAt))} 시작 → ${kst()} 완료: 프로필 ${run.codes.length}개, 최근 7일 후기 ${run.newReviews}건, 새 포스팅 ${run.newPostings}건, 쌓인 후기 새로 ${run.keptNew || 0}건, 없는 페이지 ${run.gone.length}, 실패 ${run.failed.length}`;
     const prev = fs.existsSync(LOG) ? fs.readFileSync(LOG, 'utf8') : '# 상담사 데이터 수집 기록\n';
     writeAtomic(LOG, `${prev.trimEnd()}\n${line}\n`);
   }
-  console.log(`이번 실행: 프로필 ${thisRun}개 처리 · 전체 ${run.next}/${run.codes.length} · 최근 7일 후기 누적 ${run.newReviews}건 · 새 포스팅 누적 ${run.newPostings}건 · 없는 페이지 ${run.gone.length} · 실패 ${run.failed.length}`);
+  console.log(`이번 실행: 프로필 ${thisRun}개 처리 · 전체 ${run.next}/${run.codes.length} · 최근 7일 후기 누적 ${run.newReviews}건 · 쌓인 후기 새로 ${run.keptNew || 0}건 · 새 포스팅 누적 ${run.newPostings}건 · 없는 페이지 ${run.gone.length} · 실패 ${run.failed.length}`);
   if (run.failed.length) console.log(`실패 예: ${run.failed.slice(-3).map((f) => `${f.code}(${f.reason})`).join(', ')}`);
   console.log(left ? `남은 상담사 ${left} — 같은 명령을 다시 실행하세요` : `남은 상담사 0 — 수집 완료. 이어서 node ${path.join(__dirname, 'export.cjs')} 로 엑셀을 만드세요`);
 }

@@ -125,4 +125,66 @@ async function waitFonts(page) {
   if (!ok) throw new Error('글꼴(Jua·Noto Sans KR)을 불러오지 못했습니다. 보관함/상담사데이터/도구/글꼴 폴더를 확인하세요.');
 }
 
-module.exports = { FONT_CSS, useLocalFonts, waitFonts, fs, path, ROOT, RAW, STATE, LOG, SETTINGS, SHEET_DIR, SITE, needProgram, parseJson, readJson, writeAtomic, sleep, kst, decodeEnt, htmlText, siteDate, maskContacts, request };
+// ---------- 프로필 정리(수집·tidy 공용, 2026-11-20) ----------
+const REVIEW_DIR = path.join(RAW, '후기'); // 쌓아 두는 후기(프로필 코드별)
+const TREND_DIR = path.join(RAW, '추이'); // 회차별 후기 수·평점 기록
+const toNum = (s) => (s === undefined || s === null || s === '' ? null : Number(String(s).replace(/,/g, '')));
+// 화면 조각일 뿐인 구역(버튼·필터·로그인 안내)과 채워지지 않은 화면 틀({{…}})은 저장하지 않는다
+const UI_ONLY = new Set(['후기 필터 탭', '정렬 필터 바', '후기 리스트', '상단 바', '안내 박스', '코인 전화 상담 CTA', '채팅 상담 시작 CTA', '전체 후기 제목 + 평점', '후기가 있을때', '후기가 없을때']);
+function cleanSections(sections) {
+  return Object.fromEntries(Object.entries(sections || {}).filter(([name, text]) => !UI_ONLY.has(name) && !String(text).includes('{{')));
+}
+const bullets = (text) => String(text || '').split('\n').map((l) => l.trim()).filter((l) => l && !/^(•|전체보기|닫기|더보기|상담사 약력|리딩정보)$/.test(l));
+// 구역 원문에서 뽑는 값. base는 지금까지 읽은 프로필, secText는 정리하기 전 구역 원문
+function deriveProfile(base, secText) {
+  const block = secText['프로필+최근3개월 묶음'] || secText['후기가 있을때'] || '';
+  // "최근 3개월 … 후기 1,437 건 5점 만족도 100 %". 예전 식은 화면 아래쪽의 다른 숫자를 읽어 틀렸다
+  const r3 = block.match(/최근 3개월[\s\S]{0,80}?후기\s*([\d,]+)\s*건\s*5점 만족도\s*([\d.]+)\s*%/);
+  const chatPrice = block.match(/\n([\d,]+)\n\(\s*(\d+\s*[초분])\s*\)/); // 채팅 프로필은 060 번호가 없어 머리줄 식에 안 걸린다
+  const gradeLine = (block.match(/\(\s*\d+\s*[초분]\s*\)\n([^\n]{1,12})(?:\n|$)/) || [])[1] || '';
+  const [careerText, readingText = ''] = String(secText['상담사 약력 + 리딩정보'] || '').split(/\n리딩정보\n?/);
+  const kinds = secText['후기 필터 탭'] || '';
+  const kind = (label) => toNum((kinds.match(new RegExp(`${label}\\s*([\\d,]+)`)) || [])[1]);
+  return {
+    recent3m: r3 ? { reviews: toNum(r3[1]), fiveRate: Number(r3[2]) } : null,
+    satisfaction: r3 ? Number(r3[2]) : null,
+    price: base.price ?? (chatPrice ? toNum(chatPrice[1]) : null),
+    unit: base.unit || (chatPrice ? chatPrice[2].replace(/\s+/g, '') : ''),
+    grade: /교육|최근|현재|닫기|더보기/.test(gradeLine) ? '' : gradeLine,
+    career: bullets(careerText),
+    reading: bullets(readingText),
+    reviewKinds: kinds ? { best: kind('베스트 후기'), handwriting: kind('손글씨 후기'), pick: kind('상담사 PICK'), success: kind('성공사례 후기'), story: kind('나만의 점 스토리') } : null,
+  };
+}
+// 후기 쌓기: 프로필 코드별 파일에 후기 번호로 합친다. 다시 받은 후기는 새 값(도움돼요 수 등)으로 바꾼다
+function loadReviews(code) {
+  return readJson(path.join(REVIEW_DIR, `${code}.json`), { items: [] }).items || [];
+}
+function archiveReviews(code, list) {
+  const file = path.join(REVIEW_DIR, `${code}.json`);
+  const prev = loadReviews(code);
+  if (!prev.length && !(list || []).length) return { total: 0, added: 0 };
+  const map = new Map(prev.map((r) => [String(r.no), r]));
+  let added = 0;
+  for (const r of list || []) { if (!map.has(String(r.no))) added++; map.set(String(r.no), r); }
+  const items = [...map.values()].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  if (added || items.length !== prev.length || (list || []).length) writeAtomic(file, `${JSON.stringify({ code, updated: new Date().toISOString(), items }, null, 1)}\n`);
+  return { total: items.length, added };
+}
+// 회차 기록: 상담사 프로필마다 후기 수·평점·가격 한 줄. 지난 회차와 비교해 "이번 주 후기가 많이 는 상담사"를 뽑는 데 쓴다
+function writeSnapshot(runId) {
+  const rows = {};
+  for (const f of fs.readdirSync(RAW)) {
+    if (!f.endsWith('.json')) continue;
+    const p = readJson(path.join(RAW, f), null);
+    if (!p || !p.code || p.gone) continue;
+    rows[p.code] = { ce: p.ceCode || '', nick: p.nick || '', total: p.reviewStats?.total ?? p.reviewCountLd ?? p.tabs?.reviews ?? null,
+      star: p.rating ?? p.reviewStats?.star ?? null, r3: p.recent3m?.reviews ?? null, r7: (p.reviews7d || []).length, price: p.price ?? null, grade: p.grade || '' };
+  }
+  const file = path.join(TREND_DIR, `${runId}.json`);
+  writeAtomic(file, `${JSON.stringify({ runId, at: new Date().toISOString(), rows })}\n`);
+  return { file, rows: Object.keys(rows).length };
+}
+
+module.exports = { FONT_CSS, useLocalFonts, waitFonts, fs, path, ROOT, RAW, STATE, LOG, SETTINGS, SHEET_DIR, SITE, REVIEW_DIR, TREND_DIR, needProgram, parseJson, readJson, writeAtomic, sleep, kst, decodeEnt, htmlText, siteDate, maskContacts, request,
+  cleanSections, deriveProfile, loadReviews, archiveReviews, writeSnapshot };
