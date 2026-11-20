@@ -118,6 +118,8 @@ async function fileTexts(file) {
 function walk(dir) { return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)])); }
 
 async function checkOverlap(d) {
+  // 예시는 실제 상담사 개인정보가 있어 공유하지 않는다. 예시가 없는 PC(파트장 PC 등)는 대조할 문장이 없으니 건너뛴다(반려 사유 아님)
+  if (!fs.existsSync(EXAMPLE_DIR)) return warn('예시 폴더(보관함/프로필제작/예시)가 없어 예시 겹침 검사를 건너뜁니다. 예시는 상담사 개인정보가 있어 공유하지 않는 자료입니다(반려 사유 아님).');
   const N = 15;
   const fixed = new Set();
   for (const f of walk(TEMPLATE_DIR).filter((f) => /\.(docx|pptx)$/i.test(f))) for (const t of await fileTexts(f)) { const n = norm(t); for (let i = 0; i + N <= n.length; i++) fixed.add(n.slice(i, i + N)); }
