@@ -6,13 +6,13 @@
 - 처음 만든 시점: 2026-11-12, 회사 PC · 마지막 갱신: 2026-11-19, 회사 PC
 - 프로그램 버전: 포크 `main` `d7a3db6`(2026-11-19). 2026-11-16부터 로컬 `main`은 원본이 아니라 포크 `origin/main`을 따라갑니다.
 
-> **이미 세팅한 집 PC에서 이어서 일할 때는 [이어서-작업하기.md](이어서-작업하기.md)만 보면 됩니다.** 프로그램 폴더의 Claude Code에게 "ai-office-workspace 저장소를 git pull로 최신으로 받고, 그 안의 이어서-작업하기.md 대로 집 PC를 최신 상태로 맞춰줘"라고 말하세요. 아래 "세팅 순서"는 처음 세팅하는 PC용입니다.
+> **이미 세팅한 집 PC에서 이어서 일할 때는 [이어서-작업하기.md](이어서-작업하기.md)만 보면 됩니다.** 프로그램 폴더의 Claude Code에게 "ai-office-company 저장소를 git pull로 최신으로 받고, 그 안의 이어서-작업하기.md 대로 집 PC를 최신 상태로 맞춰줘"라고 말하세요. 아래 "세팅 순서"는 처음 세팅하는 PC용입니다.
 
 ## 가장 쉬운 방법
 
 아래 "세팅 순서" 1~3까지만 직접 하고, 프로그램 폴더에서 Claude Code를 열어 이렇게 말하세요.
 
-> ai-office-workspace 저장소 README대로 집 PC 세팅해줘
+> ai-office-company 저장소 README대로 집 PC 세팅해줘
 
 ## 들어 있는 것
 
@@ -70,7 +70,7 @@
 3. **이 저장소 받기:** 비공개라 `gh auth login`을 먼저 합니다.
 
    ```bash
-   gh repo clone Lupus-01/ai-office-workspace
+   gh repo clone Lupus-01/ai-office-company
    ```
 
 4. **첫 실행:** 프로그램 폴더에서 `npm run office:start` → http://127.0.0.1:4777 이 열리면 작업 공간 `~/AIOffice`가 만들어집니다. 확인 뒤 `npm run office:stop`으로 끕니다.
@@ -125,7 +125,7 @@ node sync.mjs --pull                               # 무조건 Git → 이 PC
 node sync.mjs --push                               # 무조건 이 PC → Git
 ```
 
-회사 PC에 이 저장소가 아직 없으면 먼저 `gh repo clone Lupus-01/ai-office-workspace`로 받습니다.
+회사 PC에 이 저장소가 아직 없으면 먼저 `gh repo clone Lupus-01/ai-office-company`로 받습니다.
 
 | 맞추는 것 | 최신을 정하는 기준 | 가져올 때 |
 | --- | --- | --- |
