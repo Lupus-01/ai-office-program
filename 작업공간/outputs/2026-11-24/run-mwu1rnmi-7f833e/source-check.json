@@ -1,0 +1,19 @@
+{
+  "checked": 12,
+  "broken": [],
+  "mismatched": [
+    {
+      "url": "https://www.anthropic.com/claude-fable-and-mythos-5-2",
+      "stage": "html",
+      "title": "Introducing Claude Fable 5.2 and Claude Mythos 5.2 \\ Anthropic"
+    },
+    {
+      "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/introducing-gemini-4-hydrogen/",
+      "stage": "html",
+      "title": "Introducing Gemini 4 Hydrogen for Agentic Workflows"
+    }
+  ],
+  "unknown": [],
+  "skipped": 0,
+  "relayed": 0
+}
