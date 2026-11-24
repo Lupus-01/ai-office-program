@@ -31,3 +31,7 @@ metadata:
 
 - **저장소 교체(2026-11-24 대표 결정):** 회사 데이터는 이제 비공개 `Lupus-01/ai-office-company`에 계속 올린다. 로컬 폴더 `C:\Users\재영이\ai-office-workspace`는 이름 그대로 두고 origin만 새 저장소로 바꿨다(sync.mjs는 origin에 올리므로 그대로 동작). 옛 저장소 `Lupus-01/ai-office-workspace`는 대표가 삭제하라고 했다. 위에 적힌 `ai-office-workspace` 저장소 이름은 모두 `ai-office-company`로 읽는다. 집 PC는 `gh repo clone Lupus-01/ai-office-company`로 새로 받거나 기존 폴더에서 `git remote set-url origin https://github.com/Lupus-01/ai-office-company.git` 한다.
 - **AI-office 2.0 대비 저장소:** 비공개 `Lupus-01/ai-office-program`(대표 말: "AI-office 2.0 대비해서 만드는 저장소, 거기에도 같이 올린다"). 프로그램 폴더에 원격 `v2`로 넣었다. 코드를 포크 작업 브랜치에 올릴 때 `git push v2 <브랜치>`도 함께 한다([[push-updates-immediately]]). 포크 main(운영팀 배포)과는 별개다.
+
+**2.0 저장소에도 회사 설정 전체(11-24 대표 지시):** 대표가 "2.0 폴더에도 모든 지침 및 설정을 올려 달라"고 해서, 회사 데이터 저장소(ai-office-company)의 main을 비공개 ai-office-program의 `company-data` 브랜치로 그대로 올린다. 명령: 로컬 `ai-office-workspace` 폴더에서 `node sync.mjs` 뒤 `git push https://github.com/Lupus-01/ai-office-program.git main:refs/heads/company-data`.
+**Why:** 프로그램 코드 브랜치(main·feat/…)는 공개 포크에도 push되므로, 회사 설정(ERP 주소 포함)을 코드 브랜치에 섞으면 공개 저장소로 샐 수 있다. 브랜치를 따로 둔 것은 내 판단이다.
+**How to apply:** "두 저장소에 올려줘"는 코드(origin 작업 브랜치 + v2) push, sync.mjs, 그리고 위 company-data push까지 한다.
