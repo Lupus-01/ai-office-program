@@ -158,7 +158,8 @@
       "Glob",
       "Grep",
       "WebSearch",
-      "WebFetch"
+      "WebFetch",
+      "Bash"
     ]
   },
   {
