@@ -1,0 +1,155 @@
+{
+ "version": 1,
+ "recipes": [
+  {
+   "id": "care-mail-prepare",
+   "when": "상담사관리부의 월간 상담사 활동 리포트(분석) 메일을 준비만 하라는 지시. 발송·보내라는 말이 없어야 한다. 인원이나 예명을 정한 경우도 해당한다. 예: \"상담사 메일 준비해줘\", \"이번 달 상담사 메일 3명만 시험으로 준비해줘\"",
+   "preflight": [
+    {
+     "tool": "보관함/상담사관리/도구/erp-collect.cjs"
+    }
+   ],
+   "plan": {
+    "goal": "상담사 활동 리포트 메일 준비",
+    "stages": [
+     {
+      "parallelGroup": "",
+      "connection": "",
+      "target": "",
+      "dependsOn": [],
+      "inputs": [],
+      "id": "s1",
+      "title": "상담사 메일 자료 수집",
+      "dept": "care",
+      "agent": "care-2",
+      "output": "outputs/{{task}}/care/care-2-상담사메일-자료.json",
+      "done": "대표 지시: \"{{request}}\". Bash로 node 보관함/상담사관리/도구/erp-collect.cjs --out outputs/{{task}}/care/care-2-상담사메일-자료.json 를 한 번 실행한다(Bash timeout 300000). 대표 지시에 인원이 있으면 --limit <수>, 예명이 있으면 --names 예명,예명 을 붙이고, 없으면 전원이다. 도구가 쓴 JSON을 고치지 않는다. 보고에는 도구 출력 줄(대상 수, 메일 주소 없음, 기간, 걸린 시간)을 그대로 옮긴다. \"ERP 로그인이 필요합니다\"나 \"ERP 주소가 없습니다\"가 나오면 그 문장을 그대로 보고하고 멈추며, 다시 실행하거나 다른 방법으로 조회하지 않는다. Bash 실행이 권한 문제로 거부되면 거부 문장을 그대로 보고하고 멈춘다. 보고에서 상담사는 예명으로만 쓴다."
+     },
+     {
+      "parallelGroup": "",
+      "connection": "",
+      "target": "",
+      "dependsOn": [
+       "s1"
+      ],
+      "inputs": [
+       "s1"
+      ],
+      "id": "s2",
+      "title": "상담사 활동 리포트 메일 문안",
+      "dept": "care",
+      "agent": "care-3",
+      "output": "outputs/{{task}}/care/care-3-상담사메일-문안.json",
+      "done": "수집 파일의 대상 전원 문안을 JSON 파일 하나에 {\"messages\":[{\"recipients\":[\"메일 주소\"],\"subject\":\"제목\",\"body\":\"본문\"}],\"skipped\":[\"보내지 않는 대상과 사유\"]} 형식으로 쓴다. 대상 전원이 messages 또는 skipped에 정확히 한 번씩 있어야 한다. 한 상담사에 한 통이며 recipients는 수집 파일의 \"메일주소\"만 쓰고, 주소가 없으면 skipped에 예명과 사유를 적는다. 부서 지침 [상담사 분석 메일 작성 기준] 1)~13)을 그대로 따른다(값의 뜻은 수집 파일의 \"설명\"). 인사는 2줄, 단골 구획에는 단골·위험·주의 고객 수를 빠짐없이 적고, 지난달 비교는 \"같은기간비교\" 값과 \"기준\"의 기간만 쓴다. 발송하지 않는다. 보고에는 대상 수·문안 수·보내지 않는 대상과 사유를 적고 마지막에 \"미리보기를 확인한 뒤 '준비한 상담사 메일 보내줘'라고 하면 발송합니다. 뺄 분이 있으면 함께 말씀해 주세요.\"를 적는다."
+     },
+     {
+      "parallelGroup": "",
+      "connection": "",
+      "target": "",
+      "dependsOn": [
+       "s2"
+      ],
+      "inputs": [
+       "s1",
+       "s2"
+      ],
+      "id": "s3",
+      "title": "상담사 메일 문안 검수",
+      "dept": "quality",
+      "agent": "quality-2",
+      "output": "outputs/{{task}}/quality/quality-2-상담사메일-검수.md",
+      "done": "수집 파일의 대상 전원이 문안 JSON의 messages 또는 skipped에 한 번씩 있는지 세어 \"대상 n · 문안 n · 제외 n\"으로 적는다. 통마다 받는 주소·예명·\"한눈에 보기\" 수치와 지난달 같은 기간 비교 값·기간을 수집 파일과 대조하고, 금지 항목(고객 이름·닉네임·전화번호, 다른 상담사 정보, 단골 고객께 연락·안부 인사 권유, 후기가 없는데 답글 권유)을 점검해 FIX가 있는 통만 표로 쓴다. 문체·줄 수·표현 취향은 FIX로 하지 않고 \"참고\"로만 적는다. 원본 파일은 고치지 않고 상담사는 예명으로만 쓴다."
+     }
+    ],
+    "deliverables": [
+     "s2"
+    ],
+    "publications": [],
+    "review": {
+     "by": "chief",
+     "criteria": "다 등급(품질검수 1회, 독립검증 없음, 반려 최대 1회). 수집 대상 전원이 messages 또는 skipped에 한 번씩 있고, 받는 주소·예명·수치가 수집 파일과 일치하며 금지 항목이 없는지, 발송 없이 초안으로 끝났는지 확인한다. 문체·줄 수·표현 취향은 반려하지 않고 확인 필요에 적는다."
+    }
+   }
+  },
+  {
+   "id": "care-mail-collect",
+   "when": "상담사 메일에 쓸 ERP 자료만 수집하라는 지시(문안 작성·발송 없음). 예: \"상담사 메일 자료만 수집해줘\"",
+   "preflight": [
+    {
+     "tool": "보관함/상담사관리/도구/erp-collect.cjs"
+    }
+   ],
+   "plan": {
+    "goal": "상담사 메일 자료 수집",
+    "stages": [
+     {
+      "parallelGroup": "",
+      "connection": "",
+      "target": "",
+      "dependsOn": [],
+      "inputs": [],
+      "id": "s1",
+      "title": "상담사 메일 자료 수집",
+      "dept": "care",
+      "agent": "care-2",
+      "output": "outputs/{{task}}/care/care-2-상담사메일-자료.json",
+      "done": "대표 지시: \"{{request}}\". Bash로 node 보관함/상담사관리/도구/erp-collect.cjs --out outputs/{{task}}/care/care-2-상담사메일-자료.json 를 한 번 실행한다(Bash timeout 300000). 대표 지시에 인원이 있으면 --limit <수>, 예명이 있으면 --names 예명,예명 을 붙이고, 없으면 전원이다. 도구가 쓴 JSON을 고치지 않는다. 보고에는 도구 출력 줄(대상 수, 메일 주소 없음, 기간, 걸린 시간)을 그대로 옮긴다. \"ERP 로그인이 필요합니다\"나 \"ERP 주소가 없습니다\"가 나오면 그 문장을 그대로 보고하고 멈추며, 다시 실행하거나 다른 방법으로 조회하지 않는다. Bash 실행이 권한 문제로 거부되면 거부 문장을 그대로 보고하고 멈춘다. 보고에서 상담사는 예명으로만 쓴다."
+     }
+    ],
+    "deliverables": [
+     "s1"
+    ],
+    "publications": [],
+    "review": {
+     "by": "chief",
+     "criteria": "가 등급. 도구 출력과 수집 JSON 파일이 있는지만 확인한다."
+    }
+   }
+  },
+  {
+   "id": "care-mail-send",
+   "when": "이미 준비해 둔 상담사 활동 리포트 메일을 보내라는 지시. 전원 발송, 일부 제외, 대표 본인에게 먼저 한 통 시험 발송(주소 포함) 모두 해당한다. 새로 조회·작성하라는 말이 없어야 한다. 예: \"준비한 상담사 메일 보내줘\", \"준비한 상담사 메일 중 한 통만 나한테 먼저 보내줘. 주소는 …\"",
+   "plan": {
+    "goal": "준비한 상담사 메일 발송",
+    "stages": [
+     {
+      "parallelGroup": "",
+      "connection": "",
+      "target": "",
+      "dependsOn": [],
+      "inputs": [
+       "{{latest:outputs/**/care/care-3-상담사메일-문안.json}}"
+      ],
+      "id": "s1",
+      "title": "상담사 메일 발송 문안 확정",
+      "dept": "care",
+      "agent": "care-3",
+      "output": "outputs/{{task}}/care/care-3-상담사메일-발송문안.json",
+      "done": "대표 지시: \"{{request}}\". 입력 문안 JSON(가장 최근에 준비한 상담사 메일 문안)을 다시 쓰지 않고 그대로 옮겨 outputs/{{task}}/care/care-3-상담사메일-발송문안.json 에 같은 형식({\"messages\":[...],\"skipped\":[...]})으로 쓴다. 대표가 뺄 사람을 말했으면 그 사람만 messages에서 빼 skipped에 \"대표 지시로 제외\"로 적고, 고칠 점을 말했으면 그 부분만 고친다. 그 밖의 글자는 바꾸지 않는다. 대표가 본인에게 먼저 한 통 보내라고 하며 주소를 줬으면 messages는 첫 번째 통 하나만 두고 recipients에는 대표가 준 주소 하나만(철자 그대로) 넣으며 제목 앞에 \"[시험] \"을 붙이고, 나머지 상담사는 skipped에 \"시험 발송 대상 아님\"으로 적는다. 이때 상담사 메일 주소는 파일 어디에도 넣지 않는다. 시험 발송인데 주소가 없으면 주소를 묻는다. 보고에는 보낼 통 수, 제외한 사람과 사유를 적는다."
+     }
+    ],
+    "deliverables": [],
+    "publications": [
+     {
+      "id": "p1",
+      "action": "mail",
+      "service": "naverworks_mail",
+      "connection": "{{connection:naverworks}}",
+      "agent": "care-3",
+      "target": "https://mail.worksmobile.com/",
+      "recipients": [],
+      "subject": "상담사 활동 리포트",
+      "content": "s1",
+      "instructions": "",
+      "files": [],
+      "attachments": []
+     }
+    ],
+    "review": {
+     "by": "chief",
+     "criteria": "발송 문안이 준비한 문안과 같은지(대표가 말한 제외·수정·시험 발송만 반영), 시험 발송이면 받는 사람이 대표가 준 주소 하나뿐이고 상담사 주소가 없는지 확인한다. 문체는 반려하지 않는다."
+    }
+   }
+  }
+ ]
+}

@@ -3,6 +3,7 @@
 // Aside 브라우저의 ERP 로그인을 쓴다(읽기 전용, 저장·수정·발송 없음). AI를 쓰지 않아 59명도 1~2분이면 끝난다.
 //
 //   node 보관함/상담사관리/도구/erp-collect.cjs --out <정리.json> [--limit 3] [--names 예명1,예명2] [--erp https://…]
+//   node 보관함/상담사관리/도구/erp-collect.cjs --check        ERP 로그인만 확인(시작 전 점검용. 됐으면 종료 코드 0)
 //
 // ERP 주소는 --erp 또는 같은 폴더의 설정.json({"erp":"https://…"})에서 읽는다. 고객 이름·닉네임·전화번호는 읽은 자리에서 버리고 수만 남긴다.
 const fs = require('fs');
@@ -17,8 +18,9 @@ const configPath = path.join(__dirname, '설정.json');
 const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {};
 const origin = String(opt('erp') || config.erp || '').replace(/\/+$/, '');
 if (!/^https:\/\/[^/]+$/.test(origin)) fail('ERP 주소가 없습니다. --erp https://… 로 주거나 도구 폴더의 설정.json에 {"erp":"https://…"}를 넣어 주세요.');
+const checkOnly = args.includes('--check');
 const out = opt('out');
-if (!out) fail('--out <정리.json> 이 필요합니다.');
+if (!out && !checkOnly) fail('--out <정리.json> 이 필요합니다.');
 const limit = Number(opt('limit')) || 0;
 const names = opt('names') ? opt('names').split(',').map((s) => s.trim()).filter(Boolean) : [];
 
@@ -115,6 +117,20 @@ const aioData = await aioTab.evaluate(async (AIO) => {
 console.log('AIO_RESULT' + JSON.stringify(aioData) + 'AIO_END');
 await closeTab(aioTab);
 `;
+
+// --check: 업무를 시작하기 전에 ERP 로그인만 10초 안팎으로 확인한다(자료는 읽지 않는다)
+if (checkOnly) {
+  const state = repl(`
+const aioTab = await openTab(${JSON.stringify(origin + '/erp/counselor-performance')});
+await sleep(4000);
+const aioOk = /counselor-performance/.test(aioTab.url()) && !(await aioTab.locator('input[type="password"]').count().catch(() => 0));
+console.log('AIO_RESULT' + JSON.stringify({ ok: aioOk }) + 'AIO_END');
+await closeTab(aioTab);
+`);
+  if (!state.ok) fail('ERP 로그인이 필요합니다. Aside 브라우저에서 ERP에 로그인한 뒤 "로그인했어"라고 답해 주세요.');
+  console.log('ERP 로그인 확인됨');
+  process.exit(0);
+}
 
 const started = Date.now();
 const list = repl(listCode);
