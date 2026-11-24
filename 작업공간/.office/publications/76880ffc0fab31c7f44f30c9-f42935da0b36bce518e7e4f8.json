@@ -1,0 +1,12 @@
+{
+  "status": "confirmed",
+  "method": "api",
+  "action": "post",
+  "service": "naver_cafe",
+  "connection": "38b50fda70230a14504b796b",
+  "contentHash": "b1a9da088d2c42cb7c3adce23b458e988af1446be2bfaedb96feaa4852193ea3",
+  "instructionKey": "91ddf558d29738ace28ed67247ee6c630bb424fadacdcc4ed82fc21e70ab276d",
+  "target": "https://cafe.naver.com/f-e/cafes/31520563/menus/44",
+  "resultUrl": "https://cafe.naver.com/petdilab/11575",
+  "confirmedAt": "2026-11-24T04:26:43.068Z"
+}

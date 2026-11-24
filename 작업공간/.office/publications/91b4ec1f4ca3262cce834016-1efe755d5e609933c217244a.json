@@ -1,0 +1,19 @@
+{
+  "status": "confirmed",
+  "method": "aside",
+  "action": "mail",
+  "service": "naverworks_mail",
+  "connection": "aside",
+  "contentHash": "4cfea4bcfa5d9c68614f038f0ec33d762c8d8759b5d00129ea0023fd0c50303a",
+  "instructionKey": "39cd5c52476b623f824ca821def14bdc4d245b96435868350bc1bdb839fe4dca",
+  "target": "https://mail.worksmobile.com/",
+  "resultUrl": "https://mail.worksmobile.com/w/sent",
+  "confirmedAt": "2026-11-23T09:22:13.307Z",
+  "confirmedBy": "aside-readback",
+  "evidence": {
+    "messageId": "407231",
+    "recipientCount": 1,
+    "bodyHash": "b32bb07e0dc8c79b7bc526c6aa9fbd6327b3cb9a78f72dbfeaf20c1ed2dd0d74",
+    "source": "sent-message-detail"
+  }
+}

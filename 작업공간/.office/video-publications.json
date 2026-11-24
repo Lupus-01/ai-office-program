@@ -710,6 +710,78 @@
       "at": "2026-11-19T01:38:04.559Z",
       "resultUrl": "https://cafe.naver.com/petdilab?iframe_url_utf8=%2Fca-fe%2Fcafes%2F31520563%2Farticles%2F11330%253Fmenuid%3D44%2526boardtype%3DL%2526oldPath%3D%252FArticleRead.nhn%253Fclubid%253D31520563%2526articleid%253D11330%2526menuid%253D44%2526boardtype%253DL",
       "confirmedAt": "2026-11-19T01:38:09.005Z"
+    },
+    "4Thp_qTSm9c": {
+      "owner": "4278af2192025a8849f2277a-c97143b06cc7f983c7c9ebd8.json",
+      "scope": "mwoczrd4-874b6e",
+      "status": "confirmed",
+      "at": "2026-11-20T02:33:14.051Z",
+      "resultUrl": "https://cafe.naver.com/ca-fe/cafes/31520563/articles/11375?menuid=44&boardtype=L",
+      "confirmedAt": "2026-11-20T02:35:38.651Z"
+    },
+    "W-x6aHz0WQk": {
+      "owner": "8357437565d500fe301d6cbc-e2518b3f059db8367de850b6.json",
+      "scope": "mwu157es-8078ec",
+      "status": "confirmed",
+      "at": "2026-11-24T02:22:08.442Z",
+      "resultUrl": "https://cafe.naver.com/f-e/cafes/31520563/articles/11555?menuid=44",
+      "confirmedAt": "2026-11-24T02:25:54.488Z"
+    },
+    "zJecEvukraw": {
+      "owner": "8357437565d500fe301d6cbc-78d610845542a76faa59f2b2.json",
+      "scope": "mwu157es-8078ec",
+      "status": "confirmed",
+      "at": "2026-11-24T02:26:26.923Z",
+      "resultUrl": "https://cafe.naver.com/petdilab/11556",
+      "confirmedAt": "2026-11-24T02:28:07.655Z"
+    },
+    "BL-D0WxN844": {
+      "owner": "8357437565d500fe301d6cbc-571d59736e9eac7c3d41196d.json",
+      "scope": "mwu157es-8078ec",
+      "status": "confirmed",
+      "at": "2026-11-24T02:28:40.033Z",
+      "resultUrl": "https://cafe.naver.com/petdilab/11557",
+      "confirmedAt": "2026-11-24T02:30:57.598Z"
+    },
+    "a5SoYHPAPjI": {
+      "owner": "8357437565d500fe301d6cbc-303aacb54ed28af8e529b73b.json",
+      "scope": "mwu157es-8078ec",
+      "status": "confirmed",
+      "at": "2026-11-24T02:31:30.398Z",
+      "resultUrl": "https://cafe.naver.com/petdilab/11558",
+      "confirmedAt": "2026-11-24T02:35:04.111Z"
+    },
+    "5maa_x7hQPo": {
+      "owner": "8357437565d500fe301d6cbc-cb449a04efebab9b35084274.json",
+      "scope": "mwu157es-8078ec",
+      "status": "confirmed",
+      "at": "2026-11-24T02:35:36.835Z",
+      "resultUrl": "https://cafe.naver.com/petdilab/11559",
+      "confirmedAt": "2026-11-24T02:37:55.977Z"
+    },
+    "t_V9MsQ1Dk4": {
+      "owner": "8357437565d500fe301d6cbc-3f0f7c6c39352ff1dfa74adb.json",
+      "scope": "mwu157es-8078ec",
+      "status": "confirmed",
+      "at": "2026-11-24T02:38:28.589Z",
+      "resultUrl": "https://cafe.naver.com/petdilab?iframe_url_utf8=%2Fca-fe%2Fcafes%2F31520563%2Farticles%2F11560%253Fmenuid%3D44%2526menuid%3D44%2526boardtype%3DL%2526boardtype%3DL%2526oldPath%3D%252Fca-fe%252FArticleRead.nhn%253Fclubid%253D31520563%2526articleid%3D11560",
+      "confirmedAt": "2026-11-24T02:40:36.947Z"
+    },
+    "-S50lVInAI0": {
+      "owner": "8357437565d500fe301d6cbc-310c4f68fdbafc2d36e7e674.json",
+      "scope": "mwu157es-8078ec",
+      "status": "confirmed",
+      "at": "2026-11-24T02:41:09.413Z",
+      "resultUrl": "https://cafe.naver.com/ca-fe/cafes/31520563/articles/11563?menuid=44&boardtype=L",
+      "confirmedAt": "2026-11-24T02:43:49.483Z"
+    },
+    "YiBjJHAMnHk": {
+      "owner": "76880ffc0fab31c7f44f30c9-f42935da0b36bce518e7e4f8.json",
+      "scope": "mwu6qnnc-08f2e7",
+      "status": "confirmed",
+      "at": "2026-11-24T04:26:42.419Z",
+      "resultUrl": "https://cafe.naver.com/petdilab/11575",
+      "confirmedAt": "2026-11-24T04:26:43.072Z"
     }
   },
   "batches": {}

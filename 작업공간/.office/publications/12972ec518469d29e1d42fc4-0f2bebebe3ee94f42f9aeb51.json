@@ -1,0 +1,12 @@
+{
+  "status": "confirmed",
+  "action": "mail",
+  "service": "naverworks_mail",
+  "connection": "2a4750c2a96f43dbf708775e",
+  "contentHash": "541b687ead0297ca2541f746658f252aa0bd63429853b7af33a039b066582494",
+  "instructionKey": "d07fa0aeb900fef3bbf7c23161b01a9def9727e2f755de46c5bd0d02ef23426e",
+  "target": "https://mail.worksmobile.com/",
+  "updatedAt": "2026-11-24T05:53:06.062Z",
+  "resultUrl": "https://mail.worksmobile.com/w/sent",
+  "confirmedAt": "2026-11-24T05:53:06.062Z"
+}

@@ -1,0 +1,10 @@
+{
+  "status": "prepared",
+  "method": "aside",
+  "action": "mail",
+  "service": "naverworks_mail",
+  "connection": "aside",
+  "contentHash": "ed1a8c056e1743cf86709b533869a169a5563a2288b59bc9cbcccb094b89100d",
+  "instructionKey": "8ad84eda81912b88320d2e9143fdaf7ffb53e19830b4e634a563dd43de10ecee",
+  "target": "https://mail.worksmobile.com/"
+}

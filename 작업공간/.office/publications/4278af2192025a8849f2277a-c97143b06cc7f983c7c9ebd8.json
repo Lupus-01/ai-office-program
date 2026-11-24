@@ -1,0 +1,13 @@
+{
+  "status": "confirmed",
+  "method": "aside",
+  "action": "post",
+  "service": "naver_cafe",
+  "connection": "aside",
+  "contentHash": "350700d8957757778237a3298b88a6e2d37d58bb222dd2623d5dfaf9bc87f607",
+  "instructionKey": "bce8d1326a79eb8bc59fa9490a5f1921b8894a20a3f44c3919102a985431ff2a",
+  "target": "https://cafe.naver.com/f-e/cafes/31520563/menus/44",
+  "resultUrl": "https://cafe.naver.com/ca-fe/cafes/31520563/articles/11375?menuid=44&boardtype=L",
+  "confirmedAt": "2026-11-20T02:35:38.648Z",
+  "confirmedBy": "aside-readback"
+}
