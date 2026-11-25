@@ -170,7 +170,7 @@ export function createInbox(deps) {
   const $ = (id) => document.getElementById(id);
   // page: chat(대화 또는 새 대화) | guides(업무 예시 목록) | guide(예시 상세) | lead(팀장 방) | settings | reports | report | reconcile | guidecheck.  pane: 좁은 화면에서 지금 보이는 쪽(list | main)
   // guideCtx: 예시를 어디에 쓸지 — 'new'(새 대화), 예시를 연 대화의 id, 또는 'lead:<부서 id>'(팀장 방)
-  const ui = { page: 'chat', open: store('ai-office-open') || null, report: null, lead: null, guide: null, guideCtx: 'new', guideQ: store('ai-office-guide-q') || '', guides: { list: [], coverage: null, problems: [], exists: false, loaded: false, at: 0 },
+  const ui = { page: 'chat', open: store('ai-office-open') || null, report: null, lead: null, guide: null, guideCtx: 'new', guideQ: store('ai-office-guide-q') || '', guides: { list: [], teams: [], coverage: null, problems: [], exists: false, loaded: false, at: 0 }, teamGuide: null,
     pane: 'list', filter: store('ai-office-filter') === 'needs' ? 'needs' : 'all',
     details: new Map(), results: new Map(), reports: new Map(), files: new Map(), reconcile: { items: [], loaded: false, count: -1 },
     queue: [], attached: [], submitKey: newSubmitKey(), pending: [], notices: [], sending: false, stick: true, ctx: undefined, seen: null, listTop: 0 };
@@ -267,7 +267,7 @@ export function createInbox(deps) {
         ${team.length ? `<h2 class="sb-title"><button type="button" class="sb-fold" data-fold-leads data-key="sb-fold" aria-expanded="${!folded}">팀장 ${team.length}<span aria-hidden="true">${folded ? '▸' : '▾'}</span></button></h2>${leadRows}<h2 class="sb-title">대화</h2>` : ''}
         ${shown.map(row).join('') || `<p class="sb-empty">${ui.filter === 'needs' ? '답변을 기다리는 대화가 없습니다.' : '아직 대화가 없습니다. 맡길 일을 적어 보내면 여기에 쌓입니다.'}</p>`}
       </nav>
-      <div class="sb-foot"><button type="button" class="sb-item" data-page="guides" data-key="sb-guides" aria-current="${v === 'inbox' && ['guides', 'guide'].includes(ui.page) ? 'page' : 'false'}"><span class="sb-ic" aria-hidden="true">?</span><span class="sb-label">가이드</span></button>
+      <div class="sb-foot"><button type="button" class="sb-item" data-page="guides" data-key="sb-guides" aria-current="${v === 'inbox' && ['guides', 'guide', 'teamguide'].includes(ui.page) ? 'page' : 'false'}"><span class="sb-ic" aria-hidden="true">?</span><span class="sb-label">가이드</span></button>
         <button type="button" class="sb-item" data-page="settings" data-key="sb-settings" aria-current="${(v === 'inbox' && ['settings', 'reports', 'report', 'guidecheck'].includes(ui.page)) || v === 'team' ? 'page' : 'false'}"><span class="sb-ic" aria-hidden="true">⚙</span><span class="sb-label">설정</span></button></div>`);
   }
 
@@ -280,6 +280,7 @@ export function createInbox(deps) {
       : ui.page === 'lead' ? [room?.label || '팀장', '']
       : ui.page === 'guides' ? ['가이드', '어떻게 맡기고 어떻게 말하면 되는지, 업무별로 볼 수 있습니다']
         : ui.page === 'guide' ? [guide?.title || '가이드', '']
+        : ui.page === 'teamguide' ? [`${findLead(ui.teamGuide)?.name || '팀'} 사용법`, '']
           : ui.page === 'guidecheck' ? ['업무 예시 점검', '예시가 빠진 업무와 다시 볼 예시를 모았습니다. 여기서는 아무것도 실행하지 않습니다.']
       : ui.page === 'reports' ? ['처리 이력', '맡긴 업무의 건별 결과와 처리 이력']
         : ui.page === 'report' ? [`보고 · ${batch?.title || ''}`, '']
@@ -293,6 +294,7 @@ export function createInbox(deps) {
         + (latest && BUSY.includes(latest.status) ? `<button type="button" class="btn btn-sm" data-stop="${esc(latest.id)}" data-key="ch-stop">중지</button>` : '')
         + (entry.kind === 'item' && ['waiting', 'needs', 'failed', 'stopped'].includes(entry.status) ? `<button type="button" class="btn btn-sm btn-ghost" data-cancel="${esc(entry.id)}" data-key="ch-cancel">업무 취소</button>` : '');
     } else if (['reports', 'report', 'guidecheck'].includes(ui.page)) actions = `<button type="button" class="btn btn-sm btn-ghost" data-page="${ui.page === 'report' ? 'reports' : 'settings'}" data-key="ch-up">‹ ${ui.page === 'report' ? '처리 이력' : '설정'}</button>`;
+    else if (ui.page === 'teamguide') actions = `<button type="button" class="btn btn-sm btn-ghost" data-guides-back data-key="ch-up">‹ 가이드</button>`;
     else if (ui.page === 'guide') actions = `<button type="button" class="btn btn-sm btn-ghost" data-guides-back data-key="ch-up">‹ 목록</button>`;
     else if (ui.page === 'guides' && ui.guideCtx !== 'new' && !ui.guideCtx.startsWith('lead:')) actions = `<button type="button" class="btn btn-sm btn-ghost" data-open-entry="${esc(ui.guideCtx)}" data-key="ch-up">‹ 대화로</button>`;
     setHTML($('chActions'), actions);
@@ -380,10 +382,10 @@ export function createInbox(deps) {
   async function loadGuides(force = false) {
     if (ui.guidesBusy || (!force && ui.guides.loaded && Date.now() - ui.guides.at < 30000)) return;
     ui.guidesBusy = true;
-    try { const data = await api('GET', '/api/guides'); ui.guides = { list: data.guides || [], coverage: data.coverage || null, problems: data.problems || [], exists: data.exists === true, loaded: true, at: Date.now() }; }
+    try { const data = await api('GET', '/api/guides'); ui.guides = { list: data.guides || [], teams: data.teams || [], coverage: data.coverage || null, problems: data.problems || [], exists: data.exists === true, loaded: true, at: Date.now() }; }
     catch (error) { ui.guides = { ...ui.guides, loaded: true, at: Date.now(), error: error.message }; }
     ui.guidesBusy = false;
-    if (view() === 'inbox' && (['guides', 'guide', 'guidecheck'].includes(ui.page) || (ui.page === 'chat' && !current()))) renderMain();
+    if (view() === 'inbox' && (['guides', 'guide', 'guidecheck', 'teamguide', 'lead'].includes(ui.page) || (ui.page === 'chat' && !current()))) renderMain();
   }
   const guideCard = (g) => `<button type="button" class="gd-card" data-guide="${esc(g.id)}" data-key="guide-${esc(g.id)}"><strong>${esc(g.title)}</strong>${g.ready ? '' : '<span class="wm-tag">준비 중</span>'}${g.paused ? '<span class="wm-tag tag-warn">지금은 맡길 수 없음</span>' : ''}
         <span class="gd-sum">${esc(g.summary)}</span>${g.output ? `<span class="gd-out">받는 것: ${esc(g.output)}</span>` : ''}</button>`;
@@ -410,7 +412,52 @@ export function createInbox(deps) {
     ['여러 건 한 번에', '새 대화에서 "＋ 업무 추가"로 담아 한 번에 보내면 순서대로 한 건씩 처리합니다.'],
     ['메일·글 보내기', '보내기 직전에 받는 대상과 문안을 한 번 확인받습니다. 준비가 끝난 것과 실제로 보낸 것은 다릅니다.'],
     ['터미널에서 맡기기', '프로그램 폴더의 Claude·Codex에게 말해서 맡긴 업무도 이 목록에 "터미널에서 맡김"으로 생깁니다.']];
-  const guidesPageHTML = () => `<div class="cv"><details class="gd-usage" data-keep-open="usage"${ui.guides.list.length ? '' : ' open'}><summary data-key="gd-usage">기본 사용법</summary><dl class="gd-dl">${USAGE.map(([t, d]) => `<dt>${t}</dt><dd>${d}</dd>`).join('')}</dl></details>
+  // 팀별 사용법: 회사 파일에 적어 둔 것이 있으면 그것을, 없으면 팀 소개만으로 기본 안내를 보여 준다
+  const teamOf = (id) => ui.guides.teams.find((t) => t.dept === id) || null;
+  const BASIC_HOW = ['아래 입력창에 맡길 일을 평소 말하듯 적어 보냅니다.', '확인할 것이 있으면 팀장이 여기서 물어봅니다. 그대로 답하면 같은 업무로 이어집니다.', '끝나면 완료 보고와 파일이 이 방에 올라옵니다. 고칠 점은 이어서 말하면 됩니다.'];
+  const teamCardsHTML = () => { const team = leads(); return team.length ? `<section class="gd gd-teams" aria-label="팀별 사용법"><p class="gd-count">팀별 사용법 · ${team.length}팀</p><div class="gd-grid">${team.map((l) => { const t = teamOf(l.id);
+      return `<button type="button" class="gd-card" data-team-guide="${esc(l.id)}" data-key="team-${esc(l.id)}"><strong>${esc(l.name)}</strong><span class="gd-sum">${esc(t?.intro || l.summary || '이 팀에 맡길 일을 팀장에게 말하면 됩니다.')}</span>${t?.can?.length ? `<span class="gd-out">맡길 수 있는 일 ${t.can.length}가지</span>` : ''}</button>`; }).join('')}</div></section>` : ''; };
+  function teamGuideHTML() {
+    const lead = findLead(ui.teamGuide), t = teamOf(ui.teamGuide);
+    if (!lead) return `<div class="cv"><p class="cv-line">${state().departments ? '이 팀을 찾지 못했습니다.' : '불러오는 중…'}</p></div>`;
+    const section = (title, items) => (items?.length ? `<h2 class="gd-h">${title}</h2><ul class="gd-list">${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
+    const cards = ui.guides.list.filter((g) => g.dept?.id === lead.id);
+    return `<div class="cv gd-detail">
+      <p class="gd-lead">${esc(t?.intro || lead.summary || '이 팀에 맡길 일을 팀장에게 말하면 됩니다.')}</p>
+      <div class="row-actions"><button type="button" class="btn btn-primary" data-lead="${esc(lead.id)}" data-key="tg-open">${esc(lead.label)}에게 말하기</button></div>
+      ${section('맡길 수 있는 일', t?.can)}${section('이렇게 맡기면 됩니다', t?.how?.length ? t.how : BASIC_HOW)}${section('미리 준비할 것', t?.prepare)}
+      ${t?.examples?.length ? `<h2 class="gd-h">이렇게 말하면 됩니다</h2>${t.examples.map((ex, i) => `<article class="gd-ex"><header><strong>${esc(ex.label)}</strong></header><p class="gd-text">${esc(ex.text)}</p>
+        <div class="row-actions"><button type="button" class="btn btn-primary" data-team-use="${i}" data-key="tg-use-${i}">${esc(lead.label)}에게 맡기기</button><button type="button" class="btn" data-team-copy="${i}" data-key="tg-copy-${i}">예시 복사</button></div></article>`).join('')}` : ''}
+      ${section('알아 둘 것', t?.notes)}
+      ${cards.length ? `<h2 class="gd-h">이 팀의 업무별 가이드</h2><div class="gd-grid">${cards.map(guideCard).join('')}</div>` : ''}
+      <p class="cv-line gd-foot">예시의 [대괄호] 부분만 바꿔 쓰면 됩니다. 넣은 뒤 보내기를 눌러야 접수됩니다.${t?.reviewed ? ` · 마지막 검토 ${esc(t.reviewed)}` : ''}</p></div>`;
+  }
+  // 팀장 방 맨 위의 기본 가이드: 맡길 수 있는 일, 맡기는 방법, 바로 눌러 쓸 말 예시
+  function basicGuideHTML(lead, open) {
+    const t = teamOf(lead.id);
+    return `<details class="ld-basic" data-keep-open="basic-${esc(lead.id)}"${open ? ' open' : ''}><summary data-key="ld-basic">기본 가이드</summary>
+      ${t?.can?.length ? `<h3 class="ld-h">맡길 수 있는 일</h3><ul class="gd-list">${t.can.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      <h3 class="ld-h">이렇게 맡기면 됩니다</h3><ul class="gd-list">${(t?.how?.length ? t.how : BASIC_HOW).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+      ${t?.examples?.length ? `<h3 class="ld-h">눌러서 입력창에 넣기</h3><div class="ld-chips">${t.examples.map((ex, i) => `<button type="button" class="ld-chip" data-team-use="${i}" data-team-id="${esc(lead.id)}" data-key="ld-ex-${i}" title="${esc(ex.text)}">${esc(ex.label)}</button>`).join('')}</div>` : ''}
+      ${t?.notes?.length ? `<h3 class="ld-h">알아 둘 것</h3><ul class="gd-list">${t.notes.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      <button type="button" class="link ld-more" data-team-guide="${esc(lead.id)}" data-key="ld-more">이 팀 사용법 자세히 보기</button></details>`;
+  }
+  function useTeamExample(deptId, index, copy = false) {
+    const lead = findLead(deptId), ex = teamOf(deptId)?.examples?.[index];
+    if (!lead || !ex) return undefined;
+    if (copy) return navigator.clipboard.writeText(ex.text).then(() => toast('예시를 복사했어요.'), () => toast('복사하지 못했어요. 예시 글을 직접 골라 복사해 주세요.', { type: 'error' }));
+    if (ui.ctx !== undefined) store(`ai-office-draft-${ui.ctx}`, $('composerText').value);
+    store(`ai-office-draft-lead:${lead.id}`, appendDraft(store(`ai-office-draft-lead:${lead.id}`), ex.text));
+    ui.ctx = undefined;
+    if (ui.page === 'lead' && ui.lead === lead.id) render(); else go({ page: 'lead', lead: lead.id }, { replace: true });
+    const text = $('composerText');
+    autoGrow(text); text.focus();
+    const m = /\[[^\]\n]+\]/.exec(text.value);
+    if (m) text.setSelectionRange(m.index, m.index + m[0].length);
+    return undefined;
+  }
+  const guidesPageHTML = () => `<div class="cv"><details class="gd-usage" data-keep-open="usage"${ui.guides.list.length || ui.guides.teams.length ? '' : ' open'}><summary data-key="gd-usage">기본 사용법</summary><dl class="gd-dl">${USAGE.map(([t, d]) => `<dt>${t}</dt><dd>${d}</dd>`).join('')}</dl></details>
+      ${teamCardsHTML()}
       ${ui.guides.list.length ? guideListHTML() : `<p class="cv-line">${ui.guides.loaded ? '아직 등록한 업무 가이드가 없습니다. 업무별 가이드는 작업 공간의 org/guides.json 파일에 둡니다.' : '불러오는 중…'}</p>`}</div>`;
   function guideHTML() {
     const g = ui.guides.list.find((x) => x.id === ui.guide);
@@ -440,6 +487,7 @@ export function createInbox(deps) {
       <p class="gd-lead">예시 ${ui.guides.list.length}건${ui.guides.exists ? '' : ' — 아직 예시 파일이 없습니다'}</p>
       <p class="cv-line">예시 문구는 작업 공간의 <code>org/guides.json</code> 파일에 둡니다(회사 자료라 프로그램에 넣지 않습니다). 파일을 고치면 다음에 열 때 반영됩니다.</p>
       ${ui.guides.problems.length ? `<h2 class="gd-h">파일에서 고칠 곳 ${ui.guides.problems.length}건</h2><ul class="gd-list">${ui.guides.problems.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+      ${block('사용법이 없는 팀', c.teamsWithout || [])}
       ${block('예시가 없는 직원', c.agentsWithout)}
       ${block('예시가 없는 고정 절차', c.recipesWithout)}
       <h2 class="gd-h">연결이 끊긴 예시 ${c.broken.length}건</h2>${c.broken.length ? `<ul class="gd-list">${c.broken.map((r) => `<li>${esc(r.title)} — ${esc(r.reason)}</li>`).join('')}</ul>` : '<p class="gd-p">없음</p>'}
@@ -488,7 +536,8 @@ export function createInbox(deps) {
     return `<div class="cv">
       <div class="ld-intro"><span class="ld-av" aria-hidden="true">${esc(initial(lead))}</span><div><strong>${esc(lead.label)}</strong>${lead.boss ? `<span class="ld-boss">${esc(lead.boss)}</span>` : ''}
         <p>${esc(lead.summary || '이 팀에 맡길 일을 말해 주세요.')}</p><p class="ld-hint">오늘 할 일을 아래에 적어 보내면 이 팀이 맡아 진행하고, 여기로 보고합니다.</p></div></div>
-      ${cards.length ? `<section class="gd ld-guides" aria-label="이 팀에 맡길 수 있는 일"><p class="gd-count">이 팀에 맡길 수 있는 일 · ${cards.length}건</p><div class="gd-grid">${cards.map(guideCard).join('')}</div></section>` : ''}
+      ${basicGuideHTML(lead, !mine.length)}
+      ${cards.length ? `<section class="gd ld-guides" aria-label="업무별 가이드"><p class="gd-count">업무별 가이드 · ${cards.length}건</p><div class="gd-grid">${cards.map(guideCard).join('')}</div></section>` : ''}
       ${mine.map((e) => { const full = ui.details.get(e.batch?.id)?.data?.items?.find((i) => i.id === e.id) || null;
         return `<section class="ld-task" aria-label="${esc(e.title)}"><p class="ld-line">${chip(e.status)}<time>${esc(time(e.at))}</time><button type="button" class="link" data-open-entry="${esc(e.id)}" data-key="ld-open-${esc(e.id)}">이 업무만 보기</button></p>
           ${threadMessages({ entry: e, prompt: full?.prompt || null, runs: state().runs, feed: state().feed, results }).map((m) => bubble(m, e, lead)).join('')}</section>`; }).join('')}
@@ -595,7 +644,7 @@ export function createInbox(deps) {
     const nearBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 120;
     const paint = (html, follow) => { if (setHTML(body, html) && follow && (ui.stick || nearBottom)) body.scrollTop = body.scrollHeight; };
     syncComposer();
-    if (['guides', 'guide', 'guidecheck'].includes(ui.page) || (ui.page === 'chat' && !entry)) loadGuides();
+    if (['guides', 'guide', 'guidecheck', 'teamguide'].includes(ui.page) || (ui.page === 'chat' && !entry)) loadGuides();
     if (ui.page === 'guides') return paint(guidesPageHTML());
     if (ui.page === 'lead') {
       const lead = findLead(ui.lead);
@@ -610,6 +659,7 @@ export function createInbox(deps) {
       return undefined;
     }
     if (ui.page === 'guide') return paint(guideHTML());
+    if (ui.page === 'teamguide') return paint(teamGuideHTML());
     if (ui.page === 'guidecheck') return paint(guideCheckHTML());
     if (ui.page === 'settings') return paint(settingsHTML());
     if (ui.page === 'reports') return paint(reportsHTML());
@@ -747,7 +797,7 @@ export function createInbox(deps) {
 
   // ── 이동 ──
   // 좁은 화면에서는 목록 → 대화를 한 화면씩 보여 주고, 브라우저 뒤로 가기로 목록에 돌아온다
-  const snapshot = () => ({ aiOffice: true, page: ui.page, open: ui.open, report: ui.report, lead: ui.lead, guide: ui.guide, guideCtx: ui.guideCtx, pane: ui.pane, depth: ui.depth || 0 });
+  const snapshot = () => ({ aiOffice: true, page: ui.page, open: ui.open, report: ui.report, lead: ui.lead, guide: ui.guide, guideCtx: ui.guideCtx, teamGuide: ui.teamGuide, pane: ui.pane, depth: ui.depth || 0 });
   function go(next, { replace = false, focus = false, push = false } = {}) {
     if (ui.pane === 'list') ui.listTop = $('sidebar').querySelector('[data-scroll="list"]')?.scrollTop || 0;
     const wasMain = ui.pane === 'main' && history.state?.pane === 'main';
@@ -759,6 +809,8 @@ export function createInbox(deps) {
     ui.depth = wasMain ? (ui.depth || 1) + (pushing ? 1 : 0) : 1;
     try { if (pushing) history.pushState(snapshot(), ''); else history.replaceState(snapshot(), ''); } catch { /* 기록을 쓸 수 없는 환경 */ }
     if (view() !== 'inbox') setView('inbox'); else render();
+    // 대화가 아닌 화면(가이드·설정 등)은 맨 위부터 보여 준다(앞 화면의 스크롤 위치를 물려받지 않는다)
+    if (!['chat', 'lead'].includes(ui.page)) $('chBody').scrollTop = 0;
     if (ui.page === 'reconcile') loadReconcile(true);
     if (focus) { if (((ui.page === 'chat' && !ui.open) || ui.page === 'lead') && !narrow()) $('composerText').focus(); else $('chTitle').focus({ preventScroll: true }); }
   }
@@ -773,8 +825,8 @@ export function createInbox(deps) {
   }
   function onPop(ev) {
     // 목록으로 돌아갈 때는 고른 대화를 그대로 둔다(목록에서 어디를 보고 있었는지 알 수 있게)
-    const st = ev.state?.aiOffice && ev.state.pane === 'main' ? ev.state : { page: ui.page, open: ui.open, report: ui.report, lead: ui.lead, guide: ui.guide, guideCtx: ui.guideCtx, pane: 'list' };
-    Object.assign(ui, { page: st.page, open: st.open, report: st.report, lead: st.lead || null, guide: st.guide || null, guideCtx: st.guideCtx || 'new', pane: st.pane, depth: st.pane === 'main' ? st.depth || 1 : 0 });
+    const st = ev.state?.aiOffice && ev.state.pane === 'main' ? ev.state : { page: ui.page, open: ui.open, report: ui.report, lead: ui.lead, guide: ui.guide, guideCtx: ui.guideCtx, teamGuide: ui.teamGuide, pane: 'list' };
+    Object.assign(ui, { page: st.page, open: st.open, report: st.report, lead: st.lead || null, teamGuide: st.teamGuide || null, guide: st.guide || null, guideCtx: st.guideCtx || 'new', pane: st.pane, depth: st.pane === 'main' ? st.depth || 1 : 0 });
     if (view() !== 'inbox') setView('inbox'); else render();
     if (ui.pane === 'list') restoreList();
   }
@@ -802,10 +854,13 @@ export function createInbox(deps) {
     if (t.dataset.filter) { ui.filter = t.dataset.filter; store('ai-office-filter', ui.filter); return renderSidebar(); }
     if (t.dataset.page) return go({ page: t.dataset.page, ...(t.dataset.page === 'guides' ? { guideCtx: 'new' } : {}) }, { focus: true });
     if (t.dataset.lead) return go({ page: 'lead', lead: t.dataset.lead }, { focus: true });
+    if (t.dataset.teamGuide) return go({ page: 'teamguide', teamGuide: t.dataset.teamGuide }, { focus: true, push: true });
+    if (t.dataset.teamUse !== undefined) return useTeamExample(t.dataset.teamId || ui.teamGuide, Number(t.dataset.teamUse));
+    if (t.dataset.teamCopy !== undefined) return useTeamExample(ui.teamGuide, Number(t.dataset.teamCopy), true);
     if (t.dataset.foldLeads !== undefined) { ui.leadsFolded = !ui.leadsFolded; store('ai-office-leads-folded', ui.leadsFolded ? '1' : ''); return renderSidebar(); }
     if (t.dataset.guidesBack !== undefined) return (history.state?.depth || 0) > 1 ? history.back() : go({ page: 'guides' }, { focus: true });
     // 예시 상세는 기록에 한 칸 더 쌓는다(뒤로 가면 찾던 목록·검색어로 돌아온다)
-    if (t.dataset.guide) return go({ page: 'guide', guide: t.dataset.guide, guideCtx: ui.page === 'chat' ? 'new' : ui.page === 'lead' ? `lead:${ui.lead}` : ui.guideCtx }, { focus: true, push: true });
+    if (t.dataset.guide) return go({ page: 'guide', guide: t.dataset.guide, guideCtx: ui.page === 'chat' ? 'new' : ui.page === 'lead' ? `lead:${ui.lead}` : ui.page === 'teamguide' ? `lead:${ui.teamGuide}` : ui.guideCtx }, { focus: true, push: true });
     if (t.dataset.guides !== undefined) return go({ page: 'guides', guideCtx: current()?.id || 'new' }, { focus: true });
     if (t.dataset.use !== undefined) return useExample(Number(t.dataset.use), t.dataset.to, t.dataset.leadId);
     if (t.dataset.copy !== undefined) return copyExample(Number(t.dataset.copy));

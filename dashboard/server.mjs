@@ -42,7 +42,7 @@ import { historyClearIntent, taskCloseIntent } from '../lib/pause.mjs';
 import { quickCandidates } from '../lib/quick.mjs';
 import { createJudge } from '../lib/ai-judge.mjs';
 import { recipeChoices } from '../lib/recipes.mjs';
-import { guideCoverage, loadGuides, publicGuides } from '../lib/guides.mjs';
+import { guideCoverage, loadGuides, publicGuides, publicTeams, teamCoverage } from '../lib/guides.mjs';
 import { ensureVault } from '../lib/vault.mjs';
 import { UPLOAD_MAX_BYTES, saveUpload } from '../lib/uploads.mjs';
 import { BATCH_ID, SUBMIT_KEY, batchSummary, createBatches, itemPrompt } from '../lib/batches.mjs';
@@ -1638,8 +1638,8 @@ export async function startServer({
         const loaded = loadGuides(root);
         let roster = [], departments = [];
         try { const org = loadOrg(root); roster = org.roster || []; departments = org.departments || []; } catch { /* 조직을 읽지 못하면 연결 점검만 빠진다 */ }
-        return sendJson(res, 200, { guides: publicGuides(loaded.guides, { roster, departments }), exists: loaded.exists, problems: loaded.problems,
-          coverage: guideCoverage(loaded.guides, { roster, recipes: recipeChoices(root) }) });
+        return sendJson(res, 200, { guides: publicGuides(loaded.guides, { roster, departments }), teams: publicTeams(loaded.teams, { departments }), exists: loaded.exists, problems: loaded.problems,
+          coverage: { ...guideCoverage(loaded.guides, { roster, recipes: recipeChoices(root) }), ...teamCoverage(loaded.teams, { departments }) } });
       }
       // 발송 결과 대조함: 결과가 불확실한 발송과 그 업무. 기록만 읽는다(외부 발송 0회, AI 호출 0회). ?all=1이면 결정 이력이 있는 지난 건도 준다
       if (parts.length === 2 && parts[1] === 'reconcile') {

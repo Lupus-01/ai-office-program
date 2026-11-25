@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { guideCoverage, guidesFile, loadGuides, normalizeGuide, publicGuides } from '../lib/guides.mjs';
+import { guideCoverage, guidesFile, loadGuides, normalizeGuide, normalizeTeam, publicGuides, publicTeams, teamCoverage } from '../lib/guides.mjs';
 import { appendDraft, searchGuides } from '../dashboard/public/inbox.js';
 import { startServer } from '../dashboard/server.mjs';
 
@@ -26,7 +26,7 @@ function workspace(data) {
 
 test('가이드 파일: 없으면 빈 목록, 깨졌으면 사유, 잘못된 항목은 빼고 무엇이 문제인지 알려 준다', () => {
   const none = workspace();
-  assert.deepEqual(loadGuides(none), { guides: [], problems: [], exists: false });
+  assert.deepEqual(loadGuides(none), { guides: [], teams: [], problems: [], exists: false });
   const broken = workspace('{ 깨진');
   assert.equal(loadGuides(broken).guides.length, 0);
   assert.match(loadGuides(broken).problems[0], /읽지 못했습니다/);
@@ -62,6 +62,23 @@ test('누락 점검: 근무 중인 직원·고정 절차 가운데 가이드가 
   // 어느 팀 일인지는 싣는다(가이드 페이지의 팀별 묶음, 팀장 방의 "맡길 수 있는 일")
   const withDept = publicGuides(guides, { roster: [{ id: 'writer-1', department: 'writing' }], departments: [{ id: 'writing', name: '시험문서부' }] });
   assert.deepEqual(withDept.map((g) => g.dept || null), [{ id: 'writing', name: '시험문서부' }, null, null]);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('팀별 사용법: 팀 소개·맡길 수 있는 일·말 예시를 읽고, 지금 있는 팀의 것만 팀 이름과 함께 내보낸다', () => {
+  const root = workspace({ version: 1, guides: [], teams: [
+    { dept: 'writing', intro: '문서를 쓰는 팀', can: ['보고서 초안', '목록 정리'], how: ['주제와 분량을 말한다'], examples: [{ label: '초안', text: '[주제]로 초안을 써줘' }, { text: '' }], notes: ['올리지는 않는다'], reviewed: '2026-11-25' },
+    { dept: 'gone', intro: '없어진 팀' }, { dept: 'writing', intro: '중복' }, { dept: 'empty' }, { dept: 'Bad Id', intro: 'x' }] });
+  const { teams, problems } = loadGuides(root);
+  assert.deepEqual(teams.map((t) => t.dept), ['writing', 'gone', 'empty']);
+  assert.deepEqual([teams[0].can.length, teams[0].examples.length, teams[0].examples[0].label, teams[0].reviewed], [2, 1, '초안', '2026-11-25']);
+  assert.ok(problems.some((p) => /empty: 팀별 사용법에 소개/.test(p)) && problems.some((p) => /dept가 올바르지 않습니다/.test(p)));
+  const departments = [{ id: 'writing', name: '시험문서부' }, { id: 'research', name: '시험조사부' }, { id: 'check', name: '검증실', codexRole: 'review' }, { id: 'empty', name: '쉬는부', active: false }];
+  assert.deepEqual(publicTeams(teams, { departments }).map((t) => [t.dept, t.name]), [['writing', '시험문서부']], '없는 팀·쉬는 팀의 사용법은 내보내지 않는다');
+  const c = teamCoverage(teams, { departments });
+  assert.deepEqual(c.teamsWithout, [{ id: 'research', name: '시험조사부' }], '검토 전용 팀과 쉬는 팀은 누락으로 세지 않는다');
+  assert.deepEqual(c.teamsBroken.map((t) => t.id), ['gone']);
+  assert.equal(normalizeTeam(null).team, null);
   rmSync(root, { recursive: true, force: true });
 });
 

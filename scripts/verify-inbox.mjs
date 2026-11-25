@@ -56,12 +56,14 @@ writeFileSync(join(root, 'org/roster.json'), JSON.stringify([{ id: 'research-1',
 const bin = join(root, 'fake.mjs'); writeFileSync(bin, FAKE);
 // 업무 예시(가이드) 가상 자료: 예시가 있는 것 하나, 예시가 없어 "준비 중"이고 없는 절차를 가리키는 것 하나
 const EXAMPLE_NEW = '[기간]에 해당하는 [대상]의 안내 메일 초안을 준비해 줘. 대상별 문안과 미리보기를 보여 줘.';
+const TEAM_EXAMPLE = '[기간]의 [대상] 현황을 표로 집계해 줘.';
 const EXAMPLE_REPLY = '대상 명단을 첨부했어. 이 명단을 기준으로 이어서 준비해 줘.';
 writeFileSync(join(root, 'org/guides.json'), JSON.stringify({ version: 1, guides: [
   { id: 'mail-prepare', title: '안내 메일 문안 준비', summary: '대상별 안내 메일 문안과 미리보기를 만듭니다. 보내지는 않습니다.', keywords: ['상담사 메일'], output: '대상별 문안과 미리보기', agent: 'research-1', reviewed: '2026-11-25',
     prepare: ['필수: 대상 명단', '선택: 조회 기간'], steps: ['대상과 기간 확인', '문안과 미리보기 작성'], done: '대화에서 문안과 미리보기를 확인합니다. 준비 완료와 실제 발송은 다릅니다.',
     examples: [{ label: '새 업무 맡기기', text: EXAMPLE_NEW }, { label: '자료를 보완할 때', kind: 'reply', text: EXAMPLE_REPLY }] },
-  { id: 'weekly-count', title: '주간 회신 집계', summary: '금~목 회신 현황을 표로 정리합니다.', recipe: 'gone-recipe' }] }));
+  { id: 'weekly-count', title: '주간 회신 집계', summary: '금~목 회신 현황을 표로 정리합니다.', recipe: 'gone-recipe' }],
+  teams: [{ dept: 'research', intro: '가상 자료를 조사하고 집계하는 팀입니다.', can: ['자료 조사', '집계표 만들기'], how: ['기간과 대상을 말하면 됩니다.'], examples: [{ label: '집계 맡기기', text: TEAM_EXAMPLE }], notes: ['밖으로 보내는 일은 하지 않습니다.'] }] }));
 // 결과가 불확실한 가상 발송 기록 하나(발송 결과 대조 화면용). 모의 기록일 뿐 아무것도 보내지 않는다
 writePrivate(join(root, '.office', 'publications', `${scopeKey('run-gone')}-${'a'.repeat(24)}.json`), { status: 'uncertain', method: 'api', action: 'post', service: 'naver_cafe', connection: 'c1', contentHash: 'f'.repeat(64), target: 'https://cafe.example.com/board/2' });
 const logFile = join(root, 'calls.jsonl');
@@ -250,7 +252,7 @@ try {
   // 진행하던 대화에서 예시를 열면 답글로 넣을 수 있고, 새 업무는 생기지 않는다
   await conv('명단이 필요한 일').click();
   await page.locator('#composerGuide').click();
-  await page.locator('#chBody .gd-card').click();
+  await page.locator('#gdResults .gd-card').click();
   await page.locator('#chBody [data-use][data-to="chat"]').click();
   check('대화에서 연 예시는 "이 대화에 답글로 넣기"로 그 대화의 입력창에 들어간다', (await page.locator('#chTitle').textContent()).includes('명단이 필요한 일') && await text.inputValue() === EXAMPLE_REPLY);
   await text.fill('');
@@ -285,6 +287,12 @@ try {
   await page.locator('#sidebar [data-lead="research"]').click();
   check('팀장을 누르면 그 팀장과의 대화가 열리고 입력창이 그 팀장을 향한다', (await page.locator('#chTitle').textContent()) === '시험조사부 팀장' && (await text.getAttribute('placeholder')).includes('시험조사부 팀장에게') && await page.locator('#sidebar [data-lead="research"]').getAttribute('aria-current') === 'page');
   check('팀장 방에 그 팀에 맡길 수 있는 일(가이드)이 보인다', await page.locator('#chBody .ld-guides .gd-card').count() === 1);
+  const basic = page.locator('#chBody .ld-basic');
+  check('팀장 방에 기본 가이드가 펼쳐져 있다(아직 맡긴 업무가 없을 때)', await basic.evaluate((el) => el.open));
+  const basicText = await basic.textContent();
+  check('기본 가이드 내용이 회사 파일에서 온다', ['맡길 수 있는 일', '집계표 만들기', '이렇게 맡기면 됩니다', '기간과 대상을 말하면 됩니다.', '알아 둘 것', '밖으로 보내는 일은 하지 않습니다.'].every((t) => basicText.includes(t)));
+  await basic.locator('.ld-chip').click();
+  check('기본 가이드의 말 예시를 누르면 입력창에 들어가고 첫 [바꿀 자리]가 골라진다(보내지는 않는다)', await text.inputValue() === TEAM_EXAMPLE && await page.evaluate(() => { const t = document.getElementById('composerText'); return t.value.slice(t.selectionStart, t.selectionEnd) === '[기간]'; }) && await page.locator('#chBody .ld-task').count() === 0);
   await text.fill('오늘은 문의 건수부터 정리해 줘.');
   await page.keyboard.press('Enter');
   await page.locator('#chBody .wm-me', { hasText: '오늘은 문의 건수부터' }).first().waitFor({ timeout: 1500 });
@@ -307,8 +315,16 @@ try {
   // ── 가이드 페이지: 기본 사용법 + 팀별 업무 가이드 ──
   await page.locator('#sidebar [data-page="guides"]').click();
   await page.locator('#chBody [data-guide-q]').fill('');
-  check('사이드바의 가이드를 누르면 기본 사용법과 팀별 업무 가이드가 보인다', (await page.locator('#chTitle').textContent()) === '가이드' && (await page.locator('#chBody .gd-usage').textContent()).includes('일 맡기기') && await page.locator('#chBody .gd-card').count() === 2);
-  await page.locator('#chBody .gd-card', { hasText: '안내 메일 문안 준비' }).click();
+  check('가이드 페이지에 팀별 사용법 카드가 있다', await page.locator('#chBody .gd-teams .gd-card').count() === 1 && (await page.locator('#chBody .gd-teams').textContent()).includes('가상 자료를 조사하고 집계하는 팀입니다.'));
+  await page.locator('#chBody .gd-teams .gd-card').click();
+  await page.locator('#chBody .gd-ex').first().waitFor();
+  const teamPage = await page.locator('#chBody').textContent();
+  check('팀 사용법 페이지에 소개·맡길 수 있는 일·맡기는 방법·말 예시·알아 둘 것·그 팀의 업무별 가이드가 있다', (await page.locator('#chTitle').textContent()) === '시험조사부 사용법' && ['맡길 수 있는 일', '이렇게 맡기면 됩니다', '집계 맡기기', '알아 둘 것', '이 팀의 업무별 가이드', '안내 메일 문안 준비'].every((t) => teamPage.includes(t)));
+  await shot('08e-team-guide.png');
+  await page.goBack();
+  await page.locator('#chBody .gd-teams').waitFor();
+  check('사이드바의 가이드를 누르면 기본 사용법과 팀별 업무 가이드가 보인다', (await page.locator('#chTitle').textContent()) === '가이드' && (await page.locator('#chBody .gd-usage').textContent()).includes('일 맡기기') && await page.locator('#gdResults .gd-card').count() === 2);
+  await page.locator('#gdResults .gd-card', { hasText: '안내 메일 문안 준비' }).click();
   await page.locator('#chBody [data-use][data-to="lead"]').click();
   check('가이드의 "○○ 팀장에게 맡기기"는 그 팀장 방의 입력창에 예시를 넣는다(보내지는 않는다)', (await page.locator('#chTitle').textContent()) === '시험조사부 팀장' && await text.inputValue() === EXAMPLE_NEW && await page.locator('#chBody .ld-task').count() === 2);
   await text.fill('');

@@ -1276,6 +1276,15 @@ button.badge-reply:hover { background: color-mix(in srgb, var(--warn) 24%, trans
 .ld-task { margin-top: 8px; padding-top: 16px; border-top: var(--border); }
 .ld-line { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; color: var(--faint); font-size: 13px; }
 .ld-line .link { display: inline-flex; align-items: center; min-height: 44px; margin-left: auto; color: var(--accent); font-weight: 700; }
+.gd-teams { margin-top: 24px; }
+.ld-basic { margin: -8px 0 24px; padding: 4px 20px 6px; border: var(--border); border-radius: 14px; }
+.ld-basic summary { display: flex; align-items: center; min-height: 48px; cursor: pointer; font-size: 15.5px; font-weight: 800; }
+.ld-h { margin: 12px 0 6px; color: var(--muted); font-size: 14px; font-weight: 800; }
+.ld-basic .gd-list { font-size: 15.5px; }
+.ld-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ld-chip { min-height: 44px; padding: 8px 16px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--panel); color: var(--text); font: inherit; font-size: 14.5px; cursor: pointer; }
+.ld-chip:hover { background: var(--panel-2); border-color: var(--accent); }
+.ld-more { display: inline-flex; align-items: center; min-height: 44px; margin-top: 6px; color: var(--accent); font-size: 14px; font-weight: 700; }
 .gd-group { margin: 22px 4px 10px; font-size: 15px; font-weight: 800; }
 .gd-usage { margin-bottom: 8px; padding: 6px 18px; border: var(--border); border-radius: 12px; background: var(--panel-2); }
 .gd-usage summary { display: flex; align-items: center; min-height: 48px; cursor: pointer; font-size: 16px; font-weight: 800; }
