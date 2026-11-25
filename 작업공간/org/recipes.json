@@ -172,9 +172,9 @@
       "id": "s1",
       "title": "꼬리별 게시 장부와 댓글 대상",
       "dept": "community",
-      "agent": "community-3",
-      "output": "outputs/{{task}}/community/community-3-ledger.json",
-      "done": "대표 지시: \"{{request}}\". Bash로 node 보관함/꼬리별/도구/cafe-ledger.cjs --out outputs/{{task}}/community/community-3-ledger.json --targets <대표가 말한 댓글 수> --style 아이스베어 를 한 번 실행한다(Bash timeout 300000). 도구가 쓴 JSON을 고치지 않는다. 보고에는 도구 출력 줄을 그대로 옮긴다. \"네이버 카페 로그인이 필요합니다\"가 나오면 그 문장을 그대로 보고하고 멈추며 다른 방법으로 조회하지 않는다. 화면을 직접 열어 조회하지 않는다."
+      "agent": "community-2",
+      "output": "outputs/{{task}}/community/community-2-ledger.json",
+      "done": "대표 지시: \"{{request}}\". Bash로 node 보관함/꼬리별/도구/cafe-ledger.cjs --out outputs/{{task}}/community/community-2-ledger.json --targets <대표가 말한 댓글 수> --style 아이스베어 를 한 번 실행한다(Bash timeout 300000). 도구가 쓴 JSON을 고치지 않는다. 보고에는 도구 출력 줄을 그대로 옮긴다. \"네이버 카페 로그인이 필요합니다\"가 나오면 그 문장을 그대로 보고하고 멈추며 다른 방법으로 조회하지 않는다. 화면을 직접 열어 조회하지 않는다."
      },
      {
       "parallelGroup": "write",
@@ -190,8 +190,8 @@
       "id": "s2",
       "title": "수다방 반려동물 숏츠 소개글",
       "dept": "community",
-      "agent": "community-3",
-      "output": "outputs/{{task}}/community/community-3-shorts-posts.json",
+      "agent": "community-2",
+      "output": "outputs/{{task}}/community/community-2-shorts-posts.json",
       "done": "개수는 대표 지시(\"{{request}}\")를 따른다. 글 수가 4개 이상이면 10개 중 3개 비율(반올림)로 핫플 글, 나머지는 숏츠 글로 나누고, 글 수가 3개 이하면 전부 숏츠 글이다. 공개 웹에서 반려동물 유튜브 숏츠 영상을 숏츠 글 수만큼 찾아 글을 쓰고, 채우면 바로 끝낸다. 형식은 {posts:[{subject,body,target,sourceTitle,sourceChannel,verification}],skipped:[]} JSON이고 target은 모두 https://cafe.naver.com/f-e/cafes/31520563/menus/44 이다. 영상 ID가 장부(s1)의 \"영상ID\"와 겹치지 않고 서로도 다르다(주소 형식이 달라도 같은 영상은 1건). 영상 페이지를 직접 열어 삭제·비공개가 아닌지와 제목·채널명을 확인하고 sourceTitle은 영상 제목 원문 그대로 쓴다. subject는 아이스베어 제목 말투로 짧게 쓰고 오타가 없게 쓴다(의도한 구어체 표기는 허용). 말투는 장부(s1)의 \"말투참고\"에서 \"자동게시\"가 false인 것(아이스베어가 직접 쓴 글·댓글)을 가장 먼저 따른다. 제목·문장 길이, 끝맺음(예: ~네용, ~네욬ㅋㅋ, ~아시나영?), 자주 쓰는 말을 닮게 쓰되 문장을 그대로 베끼지 않는다. \"자동게시\"가 true인 것은 말투 기준으로 삼지 않고 겹치는 표현을 피하는 데만 쓴다. 직접 쓴 수다방 글은 제목이 짧은 한마디 반응이므로 제목을 길게 설명하지 않는다. body는 유튜브 링크 한 줄만 쓴다(대표 결정 2026-11-25: 아이스베어가 직접 쓴 글처럼 본문은 링크만). 소개 문장·확인 메모·조회수를 body에 넣지 않는다. 영상에 대한 반응은 subject 한마디로만 쓰고, 영상 제목·설명에서 확인한 것만 쓰며 장면을 직접 본 것처럼 묘사하지 않는다. 같은 끝맺음을 이번 제목끼리 되풀이하지 않는다. 못 채우면 실제 건수와 부족 사유를 skipped에 적는다."
      },
      {
@@ -209,8 +209,8 @@
       "id": "s3",
       "title": "핫플레이스 강아지 동반 장소 소개글",
       "dept": "community",
-      "agent": "community-3",
-      "output": "outputs/{{task}}/community/community-3-hotplace-posts.json",
+      "agent": "community-2",
+      "output": "outputs/{{task}}/community/community-2-hotplace-posts.json",
       "done": "개수는 대표 지시(\"{{request}}\")를 따른다. 글 수가 4개 이상이면 10개 중 3개 비율(반올림)로 핫플 글, 나머지는 숏츠 글로 나누고, 글 수가 3개 이하면 전부 숏츠 글이다. 핫플 글 수가 0이면 조회하지 않고 {\"posts\":[],\"skipped\":[\"핫플 글 없음(글 수 3개 이하)\"]}만 쓰고 끝낸다. 핫플 글이 있으면 강아지와 같이 가기 좋은 장소를 그 수만큼 고른다. 종류는 강아지와 같이 가면 좋은 카페(반려견 동반이 되는 일반 카페·브런치 카페·베이커리 카페), 애견카페, 글램핑·펜션, 반려견 놀이터, 산책 장소이고 수도권과 전국을 섞는다. 핫플 글이 2건 이상이면 그중 1건은 \"같이 가면 좋은 카페\"로 한다(대표 지시 2026-11-24). 같이 가면 좋은 카페는 플레이스 편의 항목·소개·방문자 리뷰에서 반려동물 동반이 확인되는 곳만 쓰고, 동반 조건(실내 동반·테라스만·소형견만 등)이 플레이스에 적혀 있으면 reviewCheck에 적는다. 후보는 장소당 한 번만 네이버 지도 플레이스를 열어 확인하고, 조건에 안 맞으면 다음 후보로 넘어가되 확인하는 후보는 핫플 글 수의 3배까지다. 쓸 수 있는 조건: 최근 2개월 안의 방문자 리뷰가 있고(방문자 리뷰 탭이 없을 때만 블로그 리뷰 작성일로 대신하고 reviewCheck에 \"대체 기준: 블로그 리뷰\"), 반려견 동반이 플레이스에서 확인되고, 검색 결과에 \"광고\" 표기가 없고, 장부(s1)의 \"쓴장소\"와 \"핫플최근글\" 제목에 나온 장소가 아니다. 형식은 {posts:[{subject,body,target,kind:\"info\",placeName,placeUrl,reviewCheck}],skipped:[]}이고 target은 모두 https://cafe.naver.com/f-e/cafes/31520563/menus/24?viewType=L 이다. 제목은 입력 notice61-format.md의 공지 61번 형식([말머리] [지역/장소종류] 제목)이며 [광고]를 붙이지 않는다. 본문은 아이스베어 말투로, 말투는 장부(s1)의 \"말투참고\"에서 \"자동게시\"가 false인 것(아이스베어가 직접 쓴 글·댓글)을 가장 먼저 따른다. 제목·문장 길이, 끝맺음(예: ~네용, ~네욬ㅋㅋ, ~아시나영?), 자주 쓰는 말을 닮게 쓰되 문장을 그대로 베끼지 않는다. \"자동게시\"가 true인 것은 말투 기준으로 삼지 않고 겹치는 표현을 피하는 데만 쓴다. \"말투참고\"의 게시판이 핫플레이스인 직접 쓴 글을 먼저 본다(없으면 입력 board-and-tone.md). 다녀오지 않은 사람이 가볍게 소개하는 한두 문장이고 플레이스 등록명을 넣는다. 본문 뒤 빈 줄 하나를 띄운 뒤 맨 아래에 네이버 플레이스 링크(https://map.naver.com/p/entry/place/숫자)만 있는 줄을 둔다. 날짜가 지나면 틀리는 문구, 블로그 후기에만 있는 운영 조건, 다녀온 후기체, 출처·확인일 줄, 유튜브 링크, 업체 사진은 넣지 않는다. reviewCheck에는 직접 본 가장 최근 방문일(연도까지), 반려견 동반 확인 위치, 광고 표기 여부를 적는다. 못 채우면 실제 건수로 끝내고 부족 사유와 뺀 장소·사유를 skipped에 적는다."
      },
      {
@@ -227,8 +227,8 @@
       "id": "s4",
       "title": "수다방 댓글",
       "dept": "community",
-      "agent": "community-3",
-      "output": "outputs/{{task}}/community/community-3-comments.json",
+      "agent": "community-2",
+      "output": "outputs/{{task}}/community/community-2-comments.json",
       "done": "장부(s1)의 \"댓글대상\" 글마다 댓글 1건을 쓴다(대표가 말한 댓글 수만큼. 대상이 모자라면 있는 만큼). 형식은 {comments:[{target,body,subject,author}],skipped:[]} JSON이다. target은 장부의 \"주소\", subject는 \"제목\" 원문, author는 \"작성자\"(댓글을 달 대상 글의 작성자 닉네임)를 그대로 옮긴다. 브라우저 조회는 하지 않고 장부만 쓴다. body는 \"본문요약\"·제목에서 확인한 내용에 반응하는 짧은 한 문장(길어도 두 문장)이다. 말투는 장부(s1)의 \"말투참고\"에서 \"자동게시\"가 false인 것(아이스베어가 직접 쓴 글·댓글)을 가장 먼저 따른다. 제목·문장 길이, 끝맺음(예: ~네용, ~네욬ㅋㅋ, ~아시나영?), 자주 쓰는 말을 닮게 쓰되 문장을 그대로 베끼지 않는다. \"자동게시\"가 true인 것은 말투 기준으로 삼지 않고 겹치는 표현을 피하는 데만 쓴다. 직접 쓴 댓글처럼 짧게 쓰고 설명을 덧붙이지 않는다. 본문 글자가 없는 글은 제목에 있는 말에만 반응하고 제목에 없는 장면·행동·성별·관계를 짐작하지 않는다. \"달린댓글\"과 같은 말을 되풀이하지 않는다. ㅎㅎ·ㅋㅋ·ㅠ로 끝나는 댓글은 전체의 60% 이하로 한다. 영상을 본 것처럼 쓰거나 직접 겪은 것처럼 쓰지 않고 링크·홍보·수치를 넣지 않는다. 같은 글이 두 번 나오면 안 된다. 못 채우면 실제 건수와 부족 사유를 skipped에 적는다."
      },
      {
