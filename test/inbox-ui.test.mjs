@@ -89,9 +89,10 @@ test('입력창: 새 대화·답글·진행 중 덧붙이기·보낼 수 없음�
   assert.equal(composeMode(null).mode, 'new');
   assert.equal(composeMode(entry('needs'), { status: 'done', needsReply: true, canReply: true }).mode, 'reply');
   assert.equal(composeMode(entry('needs'), { status: 'done', canReply: true }).placeholder, '답변을 적어 보내세요');
-  assert.equal(composeMode(entry('done'), { status: 'done', canReply: true }).mode, 'reply', '끝난 대화에도 이어서 말할 수 있다');
+  assert.equal(composeMode(entry('done'), { status: 'done', canReply: true }).mode, 'follow', '끝난 업무에는 답글이 아니라 결과를 이어받는 새 업무로 보낸다(서버가 끝난 업무의 답글을 거부한다)');
+  assert.equal(composeMode(entry('done'), { status: 'done', canReply: false }).mode, 'follow');
+
   assert.equal(composeMode(entry('running'), { status: 'running' }).mode, 'note');
-  assert.equal(composeMode(entry('done'), { status: 'done', canReply: false }).mode, 'off');
   assert.match(composeMode(entry('waiting'), undefined).hint, /차례를 기다리고/);
   assert.equal(composeMode(entry('canceled'), { status: 'done', canReply: true }).mode, 'off');
 });

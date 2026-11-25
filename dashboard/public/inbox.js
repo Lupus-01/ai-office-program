@@ -122,16 +122,19 @@ export function threadMessages({ entry, prompt = null, runs = [], feed = [], res
 }
 
 // 이 대화에서 지금 입력창으로 할 수 있는 일
-// reply: 같은 업무로 이어서 답한다 / note: 진행 중인 업무에 덧붙인다 / off: 보낼 수 없다(사유를 보여 준다)
+// reply: 같은 업무로 이어서 답한다 / note: 진행 중인 업무에 덧붙인다 / follow: 끝난 업무의 결과를 이어받는 새 업무로 보낸다 / off: 보낼 수 없다(사유를 보여 준다)
+// 끝난 업무에는 답글을 보낼 수 없다(서버가 "이미 완료된 업무는 새 작업으로 지시해 주세요"로 거부한다). 그래서 새 업무로 보내되 앞 업무의 산출물을 입력으로 알려 준다
 export function composeMode(entry, latest) {
   if (!entry) return { mode: 'new', hint: 'Enter로 보내기 · Shift+Enter로 줄바꿈', placeholder: '맡길 일을 적어 보내세요 — 예: 이번 주 회신 현황을 표로 정리해 줘' };
   if (entry.status === 'canceled') return { mode: 'off', hint: '취소한 업무입니다. 새 대화로 다시 맡겨 주세요.' };
   if (!latest) return { mode: 'off', hint: entry.status === 'waiting' ? '차례를 기다리고 있습니다. 시작되면 이어서 말할 수 있어요.' : '이 대화는 이어서 보낼 수 없습니다. 새 대화로 맡겨 주세요.' };
   if (BUSY.includes(latest.status)) return { mode: 'note', hint: '진행 중입니다. 덧붙일 말이 있으면 보내세요.', placeholder: '덧붙일 말…' };
+  if (entry.status === 'done') return { mode: 'follow', hint: '끝난 업무입니다. 보내면 이 결과를 이어받는 새 대화로 진행합니다', placeholder: '이 결과를 이어서 고치거나 더 맡길 일을 적어 보내세요' };
   if (latest.canReply === false) return { mode: 'off', hint: '이 대화는 이어서 보낼 수 없습니다. 새 대화로 맡겨 주세요.' };
   return { mode: 'reply', hint: entry.status === 'needs' ? '답하면 같은 업무로 이어서 진행합니다' : 'Enter로 보내기 · Shift+Enter로 줄바꿈',
-    placeholder: entry.status === 'needs' ? '답변을 적어 보내세요' : entry.status === 'done' ? '고칠 점이나 더 맡길 일을 이어서 적어 보내세요' : '이어서 진행하려면 답글을 보내세요(예: 이어서 진행)' };
+    placeholder: entry.status === 'needs' ? '답변을 적어 보내세요' : '이어서 진행하려면 답글을 보내세요(예: 이어서 진행)' };
 }
+
 
 // 사이드바에 세울 팀장: 근무 중인 직원이 있는 부서(검토 전용 부서 제외). 팀장이 없으면 부서 이름만으로 방을 만든다
 // lead: { id(부서 id), name(부서 이름), label('○○부 팀장'), boss(팀장 이름), summary }
@@ -686,7 +689,7 @@ export function createInbox(deps) {
   async function send(ev) {
     ev?.preventDefault();
     if (ui.sending) return;
-    const { ctx, lead, latest, mode } = where(), fresh = ['new', 'lead'].includes(mode);
+    const { ctx, lead, entry, latest, mode } = where(), fresh = ['new', 'lead'].includes(mode);
     const text = $('composerText').value.trim();
     if (mode === 'off') return;
     if (!text && !(mode === 'new' && ui.queue.length)) { $('composerText').focus(); return; }
@@ -723,7 +726,11 @@ export function createInbox(deps) {
         await refresh();
       } else {
         // to: 팀장 방에서 보낸 업무는 그 팀에 맡긴다(서버가 팀을 확인하고 건에 남긴다)
-        const result = await api('POST', '/api/runs', { prompt: withUploads(text, fresh ? sentFiles.map((f) => f.path) : []), ...(lead ? { to: lead.id } : {}) });
+        // 끝난 업무에서 보낸 말은 그 결과를 이어받는 새 업무다. 팀장에게 맡겼던 업무면 같은 팀에 맡긴다
+        // after: 이어받을 앞 업무. 서버가 건에 남기고 실행 지시문 뒤에 그 산출물 위치를 덧붙인다(대화에는 대표가 적은 말만 보인다)
+        const body = mode === 'follow' ? { prompt: text, ...(latest?.task || entry?.task ? { after: latest?.task || entry.task } : {}), ...(leadOf(entry) ? { to: entry.item.to } : {}) }
+          : { prompt: withUploads(text, fresh ? sentFiles.map((f) => f.path) : []), ...(lead ? { to: lead.id } : {}) };
+        const result = await api('POST', '/api/runs', body);
         ui.pending = ui.pending.filter((p) => p !== pending);
         await refresh();
         if (!lead) landRun(result, ctx);

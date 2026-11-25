@@ -28,6 +28,10 @@ test('접수 경로: 터미널 AI가 넣은 건은 terminal로 남고, 화면에
   assert.equal(led.items[0].title, '오늘은 문의 건수부터 정리해 줘');
   assert.match(itemPrompt(led.items[0], led), /^오늘은 문의 건수부터 정리해 줘\n\n\[담당 지정\]\n이 업무는 시험조사부에 맡긴다\. 팀장 가나팀장/);
   assert.doesNotMatch(itemPrompt(terminal.items[0], terminal), /담당 지정/);
+  // 끝난 대화에서 이어 보낸 업무: 대표가 적은 말은 그대로 두고 앞 업무의 산출물 위치를 지시문 뒤에 붙인다
+  const next = batches.submit({ submitKey: key('e'), items: [{ prompt: '평균도 넣어 줘' }] }, { source: 'command', via: 'screen', after: '2026-11-25/run-a' }).batch;
+  assert.equal(next.items[0].prompt, '평균도 넣어 줘');
+  assert.match(itemPrompt(next.items[0], next), /^평균도 넣어 줘\n\n\[이전 업무 결과\]\n[^\n]+\n- 업무 id: 2026-11-25\/run-a, 폴더: outputs\/2026-11-25\/run-a\/$/);
   // 다시 읽어도 경로가 남는다
   assert.equal(batchSummary(createBatches({ root }).get(terminal.id)).items[0].via, 'terminal');
 });

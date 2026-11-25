@@ -977,6 +977,11 @@ export async function startServer({
       if (!staff.length) throw new HttpError(400, '그 팀을 찾을 수 없거나 근무 중인 직원이 없습니다. 새 대화로 맡겨 주세요.');
       to = { to: dept.id, toName: dept.name, toLead: staff.find((a) => a.lead)?.name || '' };
     }
+    // after: 끝난 대화에서 이어 보낸 업무가 이어받을 앞 업무 id(끝난 업무에는 답글을 넣을 수 없어 새 업무로 접수한다)
+    if (body.after !== undefined && body.after !== null) {
+      if (typeof body.after !== 'string' || !/^\d{4}-\d{2}-\d{2}\/[A-Za-z0-9._-]{1,120}$/.test(body.after) || !tasks.some((t) => t.id === body.after)) throw new HttpError(400, '이어받을 앞 업무를 찾을 수 없습니다. 새 대화로 맡겨 주세요.');
+      to = { ...(to || {}), after: body.after };
+    }
     // 의도는 비서실장(AI)이 판별하고, 권한이 되는 판단은 대표 원문 근거가 있을 때만 쓴다(실패하면 규칙 판별)
     await toolProbe;
     // 접수 전 판별 호출도 원장에 남기고, 업무로 접수되면 그 건에 귀속한다
@@ -1020,7 +1025,7 @@ export async function startServer({
     // 상시 감시(업무 자리를 차지하지 않는다)와 빠른 조회·간단한 수정은 예전처럼 즉시 실행한다
     let monitor;
     try { monitor = Boolean(continuousRequest(prompt, continuous)); } catch { monitor = true; /* 형식 오류는 실행기가 예전 문구로 알린다 */ }
-    // 팀을 지정한 업무는 빠른 경로(직원 한 명이 바로 답함)를 쓰지 않고 그 팀에 맡긴다
+    // 팀을 지정했거나 앞 업무를 이어받는 업무는 빠른 경로(직원 한 명이 바로 답함)를 쓰지 않는다
     if (to) Object.assign(runIntent, { quick: false, quickEdit: false, quickEditFile: '', quickAgent: '' });
     if (!monitor && !runIntent.quick && !runIntent.quickEdit) {
       const { batch } = await callRunner(() => batches.submit({ submitKey: randomBytes(24).toString('hex'), items: [{ prompt }] },

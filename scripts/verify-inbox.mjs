@@ -117,7 +117,7 @@ try {
     await page.locator('#chBody .fc-more').waitFor({ timeout: 10000 });
     check('최종 파일이 없는 업무는 완료 보고와 "자세히 보기"만 보인다');
   }
-  check('끝난 대화에서도 이어서 말할 수 있다(입력창이 켜져 있다)', await page.locator('#composerText').isEnabled() && (await page.locator('#composerText').getAttribute('placeholder')).includes('이어서'));
+  check('끝난 대화에서도 입력창이 켜져 있다(보내면 결과를 이어받는 새 대화가 된다)', await page.locator('#composerText').isEnabled() && (await page.locator('#composerText').getAttribute('placeholder')).includes('이어서'));
   await shot('02-chat-done.png');
 
   // ── 여러 건: 새 대화에서 ＋ 업무 추가로 담아 한 번에 보낸다 ──
@@ -270,6 +270,15 @@ try {
   await conv('터미널에서 맡긴 일').click();
   await page.locator('#chBody .tone-done').waitFor();
   check('터미널에서 맡긴 업무의 대화에서도 완료 보고를 받고 이어서 답할 수 있다', (await page.locator('#chBody').textContent()).includes('터미널의 Claude·Codex에게 말해서 맡긴 업무') && await text.isEnabled());
+
+  // ── 끝난 대화에서 이어 말하기: 답글이 아니라 그 결과를 이어받는 새 대화로 접수된다(서버는 끝난 업무의 답글을 거부한다) ──
+  const beforeFollow = await page.locator('#sidebar .sb-conv[data-open-entry]').count();
+  await text.fill('평균도 한 줄 추가해 줘.');
+  await page.keyboard.press('Enter');
+  await conv('평균도 한 줄 추가해 줘').waitFor({ timeout: 30000 });
+  await waitMark('평균도 한 줄 추가해 줘', '완료');
+  check('끝난 대화에서 보낸 말은 오류 없이 새 대화로 접수되고 그 대화가 열린다', await page.locator('#sidebar .sb-conv[data-open-entry]').count() === beforeFollow + 1 && (await page.locator('#chTitle').textContent()).includes('평균도 한 줄 추가해 줘')
+    && await page.locator('#chBody .wm-sending.is-error').count() === 0 && (await page.locator('#chBody .wm-me .wm-text').first().textContent()).includes('[이전 업무 결과]') === false);
 
   // ── 팀장 방: 사이드바의 팀장에게 말을 걸어 그 팀에 일을 맡긴다 ──
   const generalBefore = await page.locator('#sidebar .sb-conv[data-open-entry]').count();
