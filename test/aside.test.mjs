@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -138,6 +138,11 @@ test('권장 안내: 지난 업무에서 브라우저 일을 맡은 직원을 �
   const missing = asideAdvice({ org, root, installed: false });
   assert.equal(missing.installed, false);
   assert.match(missing.message, /설치돼 있지 않아 기존 브라우저\(Playwright\)로 실행합니다/);
+  // 고정 절차에서 도구·문서 단계를 맡는 직원은 권하지 않는다
+  mkdirSync(join(root, 'org'), { recursive: true });
+  writeFileSync(join(root, 'org', 'recipes.json'), JSON.stringify({ recipes: [{ id: 'collect', when: '수집', plan: { stages: [{ id: 's1', title: '수집', dept: 'biz', agent: 'biz-1', inputs: [], dependsOn: [], output: 'outputs/{{task}}/biz/biz-1-data.json', done: '수집' }] } }] }));
+  assert.deepEqual(asideAdvice({ org, root, installed: true }).candidates, [], '절차 담당은 Aside 권장에서 뺀다');
+  rmSync(join(root, 'org'), { recursive: true, force: true });
   org.roster[0].engine = 'aside';
   assert.equal(asideAdvice({ org, root, installed: true }).level, 'ok');
   assert.deepEqual(asideBanners({ level: 'ok', message: 'x' }), []);
