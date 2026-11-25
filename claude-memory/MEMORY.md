@@ -3,7 +3,7 @@
 - [personal-ai-workflow 스킬](personal-ai-workflow-skills.md) — execute·pr-lifecycle·handoff·grip-it 출처·업데이트 방법, 회사 PC는 11-20에 4d64f05로 Claude(~/.claude/skills)·Codex(~/.codex/skills) 설치, 훅·CORE는 설치하지 않음
 - [프로필제작부 업무](profile-production.md) — 상담사 워드→소개서 워드+PPT, 기준서·도구 위치, 대표 결정, 함정(Bash 권한·끝난 단계 파일 수정 금지·단계 output은 파일)
 - [상담사 분석 메일 업무](counselor-analysis-mail.md) — 홍카페 ERP 화면·대상(파트너 1~6단계만)·메일 주소 출처·수치 해석·호칭, 매달 10일 목표, 아직 안 된 것
-- [업데이트는 바로 Git에](push-updates-immediately.md) — 코드는 포크 작업 브랜치와 v2(ai-office-program)로 바로 push, 설정·메모는 sync.mjs로 바로 올림(원본·머지·PR은 따로 지시)
+- [업데이트는 바로 Git에](push-updates-immediately.md) — 코드는 v2(ai-office-program)로 바로 push, 설정·메모는 sync.mjs로 바로 올림(11-25부터 옛 포크에는 올리지 않음)
 - [PR·머지 요청 범위](pr-request-scope.md) — "PR해줘"는 CI 확인까지, 머지는 "머지해줘"로 따로 지시. 원본은 웬만한 작업 main 직접 push(검증·fast-forward·CI 확인)
 - [홍카페 정책 지식창고](policy-knowledge-base.md) — 상담사모집부→홍카페정책부(11-16), Notion 정책서 DB를 policy-sync.cjs(haiku로 Notion 읽기·첨부 변환)로 보관함/지식/홍카페정책에 저장, 현행판만·매일 13시 갱신·자료는 저장소에 안 올림
 - [상담사 데이터 자산화](counselor-data-asset.md) — 상담사등록부→상담사데이터자산화부(11-16), 홍카페 전체 상담사 수집(collect.cjs)·드라이브 엑셀(export.cjs)·숏폼 시안(make-short.cjs), 후기 7일만·금 13시 갱신, 요일 예약은 포크 feat/weekly-schedule, 11-20 블로그 소재 폼 셋(blog.cjs·블로그-폼.md, 소개 리포트·고민별 큐레이션, 후기 누적, 초안까지만)
@@ -11,3 +11,4 @@
 - [공유 회사 구성·배포](shared-company-org.md) — 대표 구성을 공개 포크 shared/company-org.json에(실명은 자리 표시). "배포해줘"는 npm run office:release(갱신·커밋·push·파트장 안내 문구), 파트장은 링크+"업데이트해줘"→office:update. 올리기 전 예시 속 상담사 실명 점검(11-18 대표 결정). 파트장 윈도우 설치 올인원 파일·파트장 네이버 보호조치 조사(11-19, 답 대기)
 - [대표에게는 항상 한국어](reply-in-korean.md) — 진행 안내 한 줄까지 모든 전달은 한국어(11-17 대표 지시, 영어 답을 두 번 되물음)
 - [업무 속도 규칙](work-speed-rules.md) — 사람보다 느리면 안 됨(11-24 대표 지시). 지연 원인 실측, 반려 1회 규칙, Aside 게시 가볍게, 기다릴 때 10분마다 기록 확인, 실행 중 서버 재시작 금지
+- [올리는 저장소는 두 곳만](push-targets-only-program-and-company.md) — 11-25 대표 지시: ai-office-program·ai-office-company에만, 옛 포크 Lupus-01/ai-office에는 올리지 않음(origin push 막아 둠, "배포해줘"는 대상부터 확인)
