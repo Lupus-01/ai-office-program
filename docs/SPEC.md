@@ -402,8 +402,18 @@ test/                     node:test
 - 항목: `title`(없으면 요청 첫 줄, 80자), `prompt`(줄바꿈 보존, 20,000자), `attachments`(`보관함/업로드/` 아래 실제 파일만, 10개), `done`(완료 기준, 2,000자), `dependsOn`(같은 묶음의 **앞선** 항목 번호만 — 순환이 생길 수 없다). 한 묶음 20건, 요청 합계 100,000자.
 - 한 묶음은 파일 하나로 임시 파일에 쓴 뒤 이름을 바꿔 저장한다. 저장이 끝난 뒤에만 번호를 돌려주므로 일부만 접수되는 일이 없다. 저장에 실패하면 접수 0건이다.
 - 제출 키 `submitKey`(16~128자 영숫자·`_`·`-`)는 작성창이 한 번 만든다. 같은 키로 다시 오면(응답 유실·더블클릭·재접속) 저장된 묶음을 그대로 돌려준다. 재전송 대조는 내용 해시로 하고 첨부 파일 존재는 다시 보지 않는다. 같은 키에 다른 내용은 409다. 제목이 같아도 키가 다르면 별도 묶음이다.
-- 접수와 조회는 실행·업무(`runs`·`tasks`)를 만들지 않고 AI를 부르지 않는다. 건의 처음 상태는 `waiting`, 사건 기록은 `accepted` 하나다.
+- 접수 응답·재전송·조회는 AI를 부르지 않는다. 건의 처음 상태는 `waiting`, 사건 기록은 `accepted` 하나다. 실행은 접수 응답과 별개로 순번 실행기가 시작한다.
 - 목록 응답에는 요청 원문·첨부 경로·완료 기준·제출 키를 넣지 않는다.
+### 순번 실행(2.0, `dashboard/sequencer.mjs`)
+
+- **업무 자리 1개.** 접수된 건 가운데 "실행 가능한 가장 먼저 접수된 건"(제출 순번 → 항목 번호) 하나만 기존 단건 실행(`runner.start` → `orchestrate`)에 넘긴다. 업무 안의 직원 실행은 기존 직원 자리(`maxConcurrent` 4)를 그대로 쓰고 여기서 세지 않는다. 진행 중인 건을 밀어내지 않는다.
+- **건 상태:** `waiting`(차례·선행 업무·재개 대기) → `running`(자리 사용) → `done` / `needs`(답변·자료·승인·예산 확인 필요, 또는 끝났지만 전달되지 않음, 서버 종료로 끊김) / `failed` / `stopped` / `canceled`. `running`이 아닌 상태는 모두 자리를 반납한다. 완료는 업무가 전달까지 끝나 `tasks`의 상태가 `done`일 때만 센다. 전이는 순번 실행기만 하고, 전이마다 건의 사건 기록에 번호·시각·종류를 남긴다.
+- **선행 업무:** `dependsOn`의 건이 모두 `done`이어야 시작한다. 아니면 `waiting`으로 남고(새 조사·재질문 없음), 뒤의 독립 건이 먼저 진행한다. 시작할 때 지시문에 선행 업무의 업무 id와 산출물 폴더만 덧붙인다(`itemPrompt`). 다른 건의 원문·대화는 넣지 않는다.
+- **의도 판별은 실행 차례에 한 번.** 결과를 건(`intent`)에 저장하고 다시 묻지 않는다. 묶음의 건은 항상 유한한 새 업무로 실행한다(`continuous: false`). 예약·상시 감시·일시정지 지시는 지시창에서 한다.
+- **답장·재개(`POST /api/runs/:id/reply`):** 접수된 건의 대화면 순번 실행기를 거친다. 자리가 비어 있으면 바로 같은 대화를 이어 가고, 다른 건이 진행 중이면 끼어들지 않고 재개를 예약한다(응답 `{resumeQueued, item, ahead}`, 건은 `waiting`으로 돌아가 원래 접수 순번을 따른다). 같은 답장을 여러 번 보내도 재개는 한 번이다. 중지·실패한 건은 답장 전까지 스스로 다시 움직이지 않는다.
+- **취소(`POST /api/batches/:id/items/:no/cancel`):** 대기·확인 필요·실패·중지 건을 `canceled`로 바꾼다. 진행 중이면 409(먼저 중지), 완료면 409. 대화에서 "이 업무 끝내"로 닫은 건도 취소로 적는다. 취소한 건은 다시 깨우지 않는다.
+- **시작 계기:** 접수, 실행 상태 변화(실행기 `onChange`), 서버 시작(`recover`). 여러 번 불려도 건마다 시작은 한 번이다. 서버가 꺼지는 동안에는 다음 건을 시작하지 않는다. 다시 켜면 끊긴 건은 `needs`로 두고 다음 건을 이어 간다.
+- **아직 순번 밖인 것:** 지시창 단건 지시, 예약 회차, 감시가 만든 후속 업무는 지금처럼 바로 시작한다(뒤 단계에서 같은 순번으로 넣는다). "이어서 해줘" 일괄 재개로 다시 움직인 건은 있는 그대로 `running`으로 적는다.
 ## 5. 외부 작업
 
 ### 계정 연결
@@ -777,7 +787,8 @@ node scripts/codex-review.mjs --target outputs/<날짜>/<slug> [--reviewers <id�
 - `dashboard/runner.mjs` `createRunner({root, onChange, maxConcurrent = 4, spawnImpl})`: `start`, `stop`, `stopAll`, `pause`, `resumeAll`, `list`, `startReview`, `reply`, `result`, `latestForTask`, `clearNeedsReply`, `restoreContinuous`, `clearHistory`. 명령 인자는 배열이고 프롬프트는 stdin이다. 오류는 `err.status`(400/404/409)와 한국어 메시지.
 - `dashboard/orchestrator.mjs`: `orchestrate({root, run, prompt, execute, signal, maxParallel, resume, onDecision, outbound, intent, judge})`, `checkpointFile`.
 - `lib/final-outputs.mjs`: `finalOutputSettings`, `customOutputDirectory`, `collectFinalOutputs`, `resolveFinalOutput`.
-- `lib/batches.mjs`: `createBatches({root, now, write})` → `submit(body)`, `get(id)`, `findByKey(key)`, `list()`. `normalizeSubmission`, `batchSummary`, `BATCH_LIMITS`.
+- `lib/batches.mjs`: `createBatches({root, now, write})` → `submit(body)`, `get(id)`, `findByKey(key)`, `list()`. `items()`, `patch(itemId, fn, event)`. `normalizeSubmission`, `batchSummary`, `itemPrompt`, `BATCH_LIMITS`, `ITEM_STATUS`.
+- `dashboard/sequencer.mjs`: `createSequencer({batches, startRun, replyRun, latestRun, taskStatus, onChange})` → `pump()`, `reply(rootId, runId, body)`, `cancel(itemId)`, `recover()`, `waitingOn(itemId)`, `itemOfRun(rootId)`.
 
 ### HTTP API (`dashboard/server.mjs`, 기본 127.0.0.1:4777)
 
@@ -792,6 +803,7 @@ node scripts/codex-review.mjs --target outputs/<날짜>/<slug> [--reviewers <id�
 | PUT /api/settings | mode·chief·budget 저장 |
 | POST /api/runs | 비서실장 지시. `agentId`가 있으면 400 |
 | POST /api/batches | 묶음 접수(2.0) `{submitKey, title?, items:[{title?, prompt, attachments?, done?, dependsOn?}]}`. 저장만 하고 실행하지 않는다(AI 호출 0회). 새 접수 201, 같은 `submitKey` 재전송은 원래 번호로 200 `{duplicate, batch}`, 같은 키에 다른 내용 409, 저장 실패 500(접수 0건) |
+| POST /api/batches/:id/items/:no/cancel | 접수된 건 취소(진행 중·완료는 409) |
 | GET /api/batches[?key=], /api/batches/:id | 묶음 요약 목록(원문 없음, `?key=`는 제출 키로 접수 여부 확인), 묶음 상세(요청 원문 포함)(토큰) |
 | POST /api/uploads | 지시창 파일 올리기 `{name, data(base64)}` → `보관함/업로드/<날짜>/`, 201 `{path, name, size}`(25MB, 허용 형식 밖 415, 너무 큼 413) |
 | POST /api/runs/:id/stop, /reply | 중지, 이어서 답하기 |

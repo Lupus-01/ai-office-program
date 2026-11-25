@@ -175,7 +175,10 @@ before(async () => {
   mkdirSync(publicDir);
   writeFileSync(join(publicDir, 'index.html'), '<!doctype html><title>t</title>');
   const { startServer } = await import('../dashboard/server.mjs');
-  handle = await startServer({ root, port: 0, publicDir, quiet: true, scheduleNow: () => NOW,
+  // 접수하면 순번 실행기가 첫 건을 시작하려 한다. 실제 Claude·Codex를 부르지 않도록 없는 실행 파일을 가리킨다
+  // (시작은 실패로 기록되고, 이 파일은 접수·조회 계약만 본다. 순번 실행은 sequencer 테스트가 본다)
+  const none = join(root, 'no-such-cli.mjs');
+  handle = await startServer({ root, port: 0, publicDir, quiet: true, scheduleNow: () => NOW, env: { ...process.env, CLAUDE_BIN: none, CODEX_BIN: none },
     batchWrite: (file, value) => { if (failWrites) throw Object.assign(new Error('disk full'), { code: 'ENOSPC' }); writePrivate(file, value); } });
   base = `http://127.0.0.1:${handle.port}`;
   token = handle.token;
@@ -222,14 +225,11 @@ test('API: 저장 실패는 성공 표시 0건, 접수는 201, 재전송·동시
   assert.equal((await get('/api/batches/..%2Fruns')).status, 404);
 });
 
-test('API: 토큰 없이는 접수·조회할 수 없고, 접수·조회는 실행(AI 호출)을 만들지 않는다', async () => {
+test('API: 토큰 없이는 접수·조회할 수 없고, 거부된 제출은 접수되지 않는다', async () => {
   assert.equal((await request('GET', '/api/batches')).status, 403);
   assert.equal((await request('POST', '/api/batches', { body: { submitKey: KEY(11), items: four() }, headers: { Origin: base, 'Content-Type': 'application/json' } })).status, 403);
   assert.equal((await post('/api/batches', { submitKey: KEY(12), items: [{ prompt: '' }] })).status, 400);
-  await post('/api/batches', { submitKey: KEY(13), items: four() });
-  await get('/api/batches');
-  const state = (await request('GET', '/api/state')).json;
-  assert.equal(state.runs.length, 0);
-  assert.equal(state.tasks.length, 0);
-  assert.ok(!existsSync(join(root, '.office', 'runs.json')) || JSON.parse(readFileSync(join(root, '.office', 'runs.json'), 'utf8')).length === 0);
+  // 거부된 요청은 아무것도 남기지 않는다(재전송·조회가 AI를 부르지 않는 것은 sequencer-api 테스트가 호출 수로 확인한다)
+  assert.deepEqual((await get(`/api/batches?key=${KEY(11)}`)).json, { batches: [] });
+  assert.deepEqual((await get(`/api/batches?key=${KEY(12)}`)).json, { batches: [] });
 });

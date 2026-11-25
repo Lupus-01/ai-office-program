@@ -41,7 +41,8 @@ import { createJudge } from '../lib/ai-judge.mjs';
 import { recipeChoices } from '../lib/recipes.mjs';
 import { ensureVault } from '../lib/vault.mjs';
 import { UPLOAD_MAX_BYTES, saveUpload } from '../lib/uploads.mjs';
-import { BATCH_ID, SUBMIT_KEY, batchSummary, createBatches } from '../lib/batches.mjs';
+import { BATCH_ID, SUBMIT_KEY, batchSummary, createBatches, itemPrompt } from '../lib/batches.mjs';
+import { createSequencer } from './sequencer.mjs';
 import { buildState } from './state.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -524,12 +525,27 @@ export async function startServer({
   const browserWork = createBrowserWork({ root, store: connections, sessions: browserSessions, cafeApi, aside });
   // 지시·답장 의도 판별(짧은 AI 호출). 로그인된 도구가 없으면 규칙 판별로 대신한다
   const judge = demo ? null : createJudge({ env, engine: () => tools.claude?.loggedIn === true ? 'claude' : tools.codex?.loggedIn === true ? 'codex' : null });
-  const runner = demo ? null : createRunner({ root, env, judge, toolStatus: async () => { await toolProbe; return tools; }, onChange: () => scheduleBroadcast(), outbound: browserWork, keepAwake: createKeepAwake(), aside });
+  let sequenceSoon = () => {};
+  const runner = demo ? null : createRunner({ root, env, judge, toolStatus: async () => { await toolProbe; return tools; }, onChange: () => { scheduleBroadcast(); sequenceSoon(); }, outbound: browserWork, keepAwake: createKeepAwake(), aside });
   const schedules = demo ? null : createSchedules({ root, now: scheduleNow, runs: () => runner.list(),
     start: (request) => runner.start(request), onChange: () => scheduleBroadcast() });
 
   // 묶음 접수 저장소(2.0): 저장·조회만 한다
   const batches = demo ? null : createBatches({ root, now: scheduleNow, ...(batchWrite ? { write: batchWrite } : {}) });
+  // 순번 실행기(2.0): 접수된 건을 한 번에 한 건씩 기존 단건 실행에 넘긴다. 건 상태는 여기서만 바뀐다
+  const sequencer = demo ? null : createSequencer({ batches,
+    startRun: (item, batch) => startBatchItem(item, batch),
+    replyRun: (runId, body) => runner.reply(runId, body),
+    latestRun: (rootId) => runner.list().filter((r) => !r.phase && (r.rootId || r.id) === rootId).at(-1) || null,
+    taskStatus: (id) => loadTaskList(root).find((t) => t.id === id)?.status ?? null,
+    onChange: () => scheduleBroadcast(), warn: (message, error) => warn(message, error) });
+  // 실행 상태가 바뀔 때마다 한 번씩만 다음 건을 살핀다(실행기 안에서 바로 부르지 않고 한 박자 늦춘다)
+  let sequencePending = false;
+  sequenceSoon = () => {
+    if (!sequencer || sequencePending) return;
+    sequencePending = true;
+    setImmediate(() => { sequencePending = false; try { sequencer.pump(); } catch (error) { warn('다음 업무를 시작하지 못했습니다', error); } });
+  };
 
   const allRuns = () => (runner ? runner.list() : []);
 
@@ -907,9 +923,31 @@ export async function startServer({
     // 대화 창에서 말해도 바로 처리한다. 이 대화에서 내역을 지우라는 말은 이 업무도 끝내라는 뜻이다
     if (historyClearIntent(prompt)) { closeTaskOf(id); return { historyCleared: true, ...clearHistory() }; }
     if (taskCloseIntent(prompt)) return closeTaskOf(id);
-    const run = await callRunner(() => runner.reply(id, { prompt, model, engine: body.engine || null, effort: body.effort || null }), '답장을 보내지 못했습니다.');
+    const reply = { prompt, model, engine: body.engine || null, effort: body.effort || null };
+    // 묶음으로 접수된 건의 답장·재개는 순번 실행기를 거친다. 다른 건이 진행 중이면 원래 순번으로 재개를 예약한다
+    const origin = runner.list().find((r) => r.id === id);
+    const sequenced = origin ? await callRunner(() => sequencer.reply(origin.rootId || origin.id, id, reply), '답장을 보내지 못했습니다.') : null;
+    if (sequenced?.queued) { scheduleBroadcast(); return { resumeQueued: true, item: sequenced.item, ahead: sequenced.ahead || null }; }
+    const run = sequenced?.run || await callRunner(() => runner.reply(id, reply), '답장을 보내지 못했습니다.');
     scheduleBroadcast();
     return run;
+  }
+
+  // 순번 실행기가 차례가 온 건을 시작할 때 부른다. 의도 판별은 여기서 한 번만 하고 결과를 건에 남긴다(재시도·재시작 때 다시 묻지 않는다).
+  // 묶음의 건은 항상 유한한 새 업무다. 예약·상시 감시·일시정지 같은 지시는 지시창에서 한다
+  async function startBatchItem(item, batch) {
+    const prompt = itemPrompt(item, batch);
+    await toolProbe;
+    let intent = item.intent || null;
+    if (!intent) {
+      const judged = await judgeCommand(prompt, { judge, now: scheduleNow(), staff: quickCandidates(loadOrg(root)), active: [], recipes: recipeChoices(root) });
+      intent = { actions: judged.actions || [], delegated: judged.delegated === true, outputDir: judged.outputDir || null, source: judged.source, quick: judged.quick === true,
+        quickEdit: judged.quickEdit === true, quickEditFile: judged.quickEditFile || '', quickAgent: judged.quickAgent || '', recipe: judged.recipe || '' };
+    }
+    if (intent.outputDir) { try { customOutputDirectory(root, intent.outputDir); } catch (err) { throw new Error(`저장 위치를 쓸 수 없습니다: ${err.message}`); } }
+    const run = runner.start({ prompt, continuous: false, intent, display: item.title });
+    scheduleBroadcast();
+    return { run, intent };
   }
 
   // 답을 기다리는 업무를 결과 없이 끝낸다. 내역 초기화로 지울 수 있게 되고, 이미 쓴 산출물은 그대로 둔다
@@ -921,6 +959,9 @@ export async function startServer({
       runner.clearNeedsReply(run.task);
       updateTask(root, run.task, (task) => { if (task.status === 'done') return false; task.status = 'closed'; task.updated = new Date().toISOString(); return true; });
     }
+    // 묶음으로 접수된 건이면 취소로 적는다(끝낸 업무를 순번 실행기가 다시 깨우지 않게)
+    const batchItem = sequencer.itemOfRun(run.rootId || run.id);
+    if (batchItem) { try { sequencer.cancel(batchItem); } catch { /* 이미 완료된 건은 그대로 둔다 */ } }
     loadTasks(); scheduleBroadcast();
     return { taskClosed: true, task: run.task || null };
   }
@@ -1497,8 +1538,18 @@ export async function startServer({
       let result;
       try { result = batches.submit(body); }
       catch (error) { if (error.status) throw new HttpError(error.status, error.message); throw error; }
-      if (!result.duplicate) scheduleBroadcast();
-      return sendJson(res, result.duplicate ? 200 : 201, { duplicate: result.duplicate, batch: batchSummary(result.batch) });
+      // 응답은 접수 직후의 상태다. 시작은 응답과 별개로 순번 실행기가 한다(재전송은 아무것도 다시 시작시키지 않는다)
+      const summary = batchSummary(result.batch);
+      if (!result.duplicate) { scheduleBroadcast(); sequenceSoon(); }
+      return sendJson(res, result.duplicate ? 200 : 201, { duplicate: result.duplicate, batch: summary });
+    }
+    // 건 취소: POST /api/batches/<묶음>/items/<항목 번호>/cancel
+    if (resource === 'batches' && method === 'POST' && parts.length === 6 && parts[3] === 'items' && parts[5] === 'cancel') {
+      if (!sequencer) throw new HttpError(409, '데모 모드에서는 업무를 취소할 수 없습니다.');
+      if (!BATCH_ID.test(id) || !/^\d+$/.test(parts[4])) throw new HttpError(404, '접수된 업무를 찾을 수 없습니다.');
+      const item = await callRunner(() => sequencer.cancel(`${id}-${Number(parts[4])}`), '업무를 취소하지 못했습니다.');
+      scheduleBroadcast();
+      return sendJson(res, 200, { id: item.id, status: item.status });
     }
 
     if (resource === 'history' && method === 'DELETE' && parts.length === 2) return sendJson(res, 200, clearHistory());
@@ -1660,6 +1711,8 @@ export async function startServer({
   for (const t of timers) t.unref();
   if (!demo) setImmediate(() => {
     try { runner.restoreContinuous(); } catch (error) { warn('저장된 지속 감시를 재개하지 못했습니다', error); }
+    // 접수돼 있던 대기 순번을 저장된 정보로 이어 간다
+    try { sequencer.recover(); } catch (error) { warn('접수된 업무의 순번을 이어 가지 못했습니다', error); }
   });
 
   // fs.watch는 즉시 반응용이고, 놓친 변경은 1초 폴링이 잡는다.
@@ -1688,6 +1741,8 @@ export async function startServer({
     toolProbeController.abort();
     await toolProbe.catch(() => {});
     for (const t of timers) clearInterval(t);
+    // 종료 중에는 다음 건을 시작하지 않는다(진행 중이던 건은 다음에 켤 때 저장된 상태로 이어 본다)
+    sequenceSoon = () => {};
     // 서버가 꺼진 뒤 에이전트가 고아 프로세스로 남지 않게 실행 중인 그룹을 끝낸다
     try {
       await runner?.stopAll();
