@@ -11,42 +11,32 @@
 </head>
 <body>
   <a class="skip-link" href="#main">본문으로 건너뛰기</a>
-  <!-- 2.0 화면 뼈대: 왼쪽 사이드바 / 오른쪽에 업무 화면(슬랙형) 또는 보조 화면(예전 관제·사무실·조직·산출물) -->
+  <!-- 2.0 화면 뼈대(대화형): 왼쪽 대화 목록 / 오른쪽에 고른 대화 하나. 직원 구성 편집(#app의 조직 화면)은 설정에서만 연다 -->
   <div class="shell" id="shell">
-    <aside class="sb" id="sidebar" aria-label="작업 공간 메뉴"></aside>
+    <aside class="sb" id="sidebar" aria-label="대화 목록과 설정"></aside>
     <div class="shell-main">
-      <div class="shell-bar"><button type="button" class="icon-btn sb-toggle" data-sb-toggle aria-label="메뉴 열기">☰</button><span>메뉴</span></div>
-      <section class="work" id="work" hidden aria-label="업무">
-        <div class="ch">
-          <header class="ch-head">
-            <button type="button" class="icon-btn sb-toggle" id="sbToggle" data-sb-toggle aria-label="메뉴 열기">☰</button>
-            <div class="ch-titles"><h1 id="chTitle"># 업무함</h1><p id="chSub"></p></div>
-          </header>
-          <p class="ch-notice" id="chNotice" role="status" hidden></p>
-          <div class="ch-body" id="chBody" tabindex="0" aria-label="업무 흐름"></div>
-          <form class="composer" id="composer" autocomplete="off">
-            <ol class="cq" id="composerQueue" aria-label="한 번에 보낼 업무" hidden></ol>
-            <ul class="chief-files" id="composerFiles" aria-label="붙인 파일" hidden></ul>
-            <label class="sr-only" for="composerText">비서실장에게 맡길 업무</label>
-            <textarea id="composerText" rows="1" maxlength="20000" placeholder="비서실장에게 맡길 일을 적어 보내세요 — 예: 이번 주 회신 현황을 표로 정리해 줘"></textarea>
-            <div class="composer-bar">
-              <button type="button" class="btn btn-sm btn-ghost" id="composerAdd" title="지금 적은 업무를 담고 다음 업무를 이어서 적습니다. 여러 건을 한 번에 맡길 때 씁니다">＋ 업무 추가</button>
-              <button type="button" class="btn btn-sm btn-ghost" id="composerAttach" aria-label="파일 붙이기" title="파일 붙이기">📎</button>
-              <input type="file" id="composerFile" multiple hidden accept=".docx,.doc,.xlsx,.xls,.csv,.pptx,.ppt,.pdf,.txt,.md,.hwp,.hwpx,.png,.jpg,.jpeg,.gif,.webp">
-              <span class="composer-hint" id="composerHint"></span>
-              <button type="submit" class="btn btn-send" id="composerSend">보내기</button>
-            </div>
-          </form>
-        </div>
-        <aside class="th" id="threadPane" hidden aria-labelledby="thTitle">
-          <header class="th-head"><h2 id="thTitle" tabindex="-1">스레드</h2><button type="button" class="icon-btn" id="thClose" aria-label="스레드 닫기">✕</button></header>
-          <div class="th-body" id="thBody"></div>
-          <form class="composer th-composer" id="thReply" hidden autocomplete="off">
-            <label class="sr-only" for="thReplyText">이 업무에 답글</label>
-            <textarea id="thReplyText" rows="1" maxlength="20000" placeholder="답글…"></textarea>
-            <div class="composer-bar"><span class="composer-hint">같은 업무 번호로 이어서 진행합니다</span><button type="submit" class="btn btn-send" id="thReplySend">답글 보내기</button></div>
-          </form>
-        </aside>
+      <div class="shell-bar" id="shellBar"><button type="button" class="btn btn-sm btn-ghost" data-back aria-label="설정으로 돌아가기">‹ 설정</button><strong>직원 구성</strong></div>
+      <section class="work" id="work" hidden aria-label="대화">
+        <header class="ch-head">
+          <button type="button" class="icon-btn ch-back" id="chBack" data-back aria-label="대화 목록으로">‹</button>
+          <div class="ch-titles"><h1 id="chTitle" tabindex="-1">새 대화</h1><p id="chSub" hidden></p></div>
+          <div class="ch-actions" id="chActions"></div>
+        </header>
+        <p class="ch-notice" id="chNotice" role="status" hidden></p>
+        <div class="ch-body" id="chBody" tabindex="0" aria-label="대화 내용"></div>
+        <form class="composer" id="composer" autocomplete="off">
+          <ol class="cq" id="composerQueue" aria-label="한 번에 보낼 업무" hidden></ol>
+          <ul class="chief-files" id="composerFiles" aria-label="붙인 파일" hidden></ul>
+          <label class="sr-only" for="composerText">AI 비서에게 보낼 말</label>
+          <textarea id="composerText" rows="1" maxlength="20000" placeholder="맡길 일을 적어 보내세요"></textarea>
+          <div class="composer-bar">
+            <button type="button" class="btn btn-sm btn-ghost" id="composerAttach" aria-label="파일 붙이기" title="파일 붙이기">📎</button>
+            <button type="button" class="btn btn-sm btn-ghost" id="composerAdd" title="지금 적은 업무를 담고 다음 업무를 이어서 적습니다. 여러 건을 한 번에 맡길 때 씁니다">＋ 업무 추가</button>
+            <input type="file" id="composerFile" multiple hidden accept=".docx,.doc,.xlsx,.xls,.csv,.pptx,.ppt,.pdf,.txt,.md,.hwp,.hwpx,.png,.jpg,.jpeg,.gif,.webp">
+            <span class="composer-hint" id="composerHint"></span>
+            <button type="submit" class="btn btn-send" id="composerSend">보내기</button>
+          </div>
+        </form>
       </section>
   <div id="app" class="app">
     <header class="topbar">

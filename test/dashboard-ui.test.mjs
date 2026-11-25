@@ -495,7 +495,8 @@ test('fileKind·parseTags·safeColor', () => {
 
 test('index.html: 뷰 탭 5개(업무함·관제·사무실·조직·산출물)와 패널·사용자 확인·역량 공백 대화상자', async () => {
   const html = await readFile(path.join(PUBLIC, 'index.html'), 'utf8');
-  assert.deepEqual(VIEWS, ['inbox', 'control', 'office', 'org', 'outputs']);
+  // team은 2.0 설정의 직원 구성 화면이다(탭 없이 설정에서만 연다)
+  assert.deepEqual(VIEWS, ['inbox', 'team', 'control', 'office', 'org', 'outputs']);
   const tabs = [...html.matchAll(/role="tab"[^>]*data-view="([a-z]+)"[^>]*>([^<]+)</g)].map((m) => [m[1], m[2]]);
   assert.deepEqual(tabs, [['inbox', '업무함'], ['control', '관제'], ['office', '사무실'], ['org', '조직'], ['outputs', '산출물']]);
   assert.match(html, /id="tabInbox" aria-controls="work"/, '업무함 탭은 슬랙형 업무 화면을 연다');

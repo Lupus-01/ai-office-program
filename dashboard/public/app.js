@@ -30,7 +30,9 @@ const KIND_LABEL = {
   'meeting.start': '회의 시작', 'meeting.end': '회의 종료', 'plan.set': '계획 확정',
 };
 // inbox(업무함)가 기본 화면이다(2.0). 관제·사무실·조직·산출물은 보조 화면으로 그대로 둔다
-export const VIEWS = ['inbox', 'control', 'office', 'org', 'outputs'];
+// team은 설정에서 여는 직원 구성 편집 화면이다(조직 화면만 보이고 예전 관제 틀은 감춘다).
+// control·office·org·outputs는 2.0 화면의 메뉴에서 뺐고, 예전 화면 검사 스크립트만 직접 연다
+export const VIEWS = ['inbox', 'team', 'control', 'office', 'org', 'outputs'];
 export const THEMES = ['calm', 'neon', 'pastel'];
 const THEME_LABEL = { calm: '차분함', neon: 'NEON', pastel: 'PASTEL' };
 const BASE_TITLE = 'AGENT HQ · AI Office';
@@ -993,21 +995,22 @@ function render() {
   const empty = S.departments.length === 0;
   const v = ui.view;
   // 부서가 없으면 관제·사무실 자리에 온보딩을 보여준다. 조직·산출물 탭은 그대로 쓸 수 있다
-  const onboarding = empty && (v === 'control' || v === 'office' || v === 'inbox');
+  const onboarding = empty && (v === 'control' || v === 'office');
   $('viewOnboarding').hidden = !onboarding;
   $('viewControl').hidden = onboarding || v !== 'control';
   $('viewOffice').hidden = onboarding || v !== 'office';
-  $('viewOrg').hidden = v !== 'org';
+  $('viewOrg').hidden = v !== 'org' && v !== 'team';
   $('viewOutputs').hidden = v !== 'outputs';
-  // 업무 화면(슬랙형)과 보조 화면(예전 관제·사무실·조직·산출물)은 한 번에 하나만 보인다. 사이드바는 늘 보인다
-  const workOn = v === 'inbox' && !onboarding;
+  // 대화 화면과 그 밖의 화면(설정의 직원 구성, 예전 화면)은 한 번에 하나만 보인다. 대화 목록은 늘 보인다
+  const workOn = v === 'inbox';
+  $('shell').dataset.view = v;
   $('work').hidden = !workOn;
   $('app').hidden = workOn;
   inbox?.render();
   if (onboarding) renderOnboarding();
   renderOrg();
   if (v === 'control') renderControl();
-  if (v === 'org') renderOrgView();
+  if (v === 'org' || v === 'team') renderOrgView();
   if (v === 'outputs') renderOutputs();
   renderFeed();
   renderTasks();
@@ -3356,7 +3359,7 @@ function openNextCompletion() {
   if (document.querySelector('dialog[open]') || ui.completion) return;
   // 업무함에서는 완료 창을 자동으로 띄우지 않는다(여러 건이 차례로 끝날 때마다 창이 조작을 가린다).
   // 결과는 업무 스레드와 최종 보고에서 열고, 관제 탭의 확인 목록에서도 그대로 열 수 있다
-  if (ui.view === 'inbox') { completionQueue.length = 0; return; }
+  if (ui.view === 'inbox' || ui.view === 'team') { completionQueue.length = 0; return; }
   while (completionQueue.length) {
     const id = completionQueue.shift();
     if (S.attention.some((item) => item.kind === 'complete' && item.task === id)) { openCompletion(id); break; }
@@ -3431,7 +3434,7 @@ function openGap(a) {
 }
 
 function goOrg() {
-  setView('org');
+  setView(ui.view === 'inbox' || ui.view === 'team' ? 'team' : 'org');
   requestAnimationFrame(() => {
     const target = $('orgGaps') || $('orgPresets');
     target?.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -3577,7 +3580,7 @@ function init() {
   token = document.querySelector('meta[name="office-token"]')?.content || '';
   setTheme(store('ai-office-theme-v2') || 'calm');
   ui.view = VIEWS.includes(store('ai-office-view')) ? store('ai-office-view') : 'inbox';
-  inbox = createInbox({ api, authedGet, toast, esc, refresh, openThread, openCompletion, store, state: () => S, view: () => ui.view, setView, resultMessage: chiefResultMessage,
+  inbox = createInbox({ api, authedGet, toast, esc, refresh, openThread, openCompletion, download: downloadFile, store, state: () => S, view: () => ui.view, setView, resultMessage: chiefResultMessage,
     themeLabel: () => THEME_LABEL[ui.theme], notifyOn: () => ui.notify, connState: () => $('conn').dataset.state,
     open: { schedules: () => $('schedulesBtn').click(), company: () => $('companyBtn').click(), connections: () => $('connectionsBtn').click(), notify: () => $('notifyBtn').click(), theme: () => $('themeToggle').click() },
     upload: async (file) => (await api('POST', '/api/uploads', { name: file.name, data: await fileBase64(file) })).path });
