@@ -91,3 +91,12 @@ test('시작 전 점검: 보관함 도구만 --check로 실행하고, 실패하�
   assert.match((await recipePreflight(root, 'not-tool')).message, /실행할 수 없습니다/);
   assert.deepEqual(await recipePreflight(root, 'none'), { ok: true, checked: 0 });
 });
+
+test('절차 단계의 담당이 Aside 직원이면 절차를 쓰지 않는다(도구를 못 돌리고 권한 대기로 멈춘다)', (t) => {
+  const root = workspace(t, [{ id: 'collect', when: '수집', plan: { stages: [stage()] } }]);
+  const agent = stage().agent;
+  const blocked = recipePlan(root, { id: 'collect', task: 't', asideAgents: [agent] });
+  assert.equal(blocked.plan, null);
+  assert.match(blocked.reason, /Aside 직원입니다/);
+  assert.ok(recipePlan(root, { id: 'collect', task: 't', asideAgents: ['other-9'] }).plan, '다른 직원이 Aside면 그대로 쓴다');
+});

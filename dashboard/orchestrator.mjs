@@ -459,7 +459,7 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
   let recipeReady = null;
   const recipeId = typeof intent?.recipe === 'string' && intent.recipe ? intent.recipe : typeof recipeHint === 'string' ? recipeHint : '';
   if (!fastPlan && !saved.originalRequest && recipeId) {
-    const made = recipePlan(root, { id: recipeId, task, request: state.originalRequest, connections: outbound?.connections?.() || [], allowedActions: allowedActions() });
+    const made = recipePlan(root, { id: recipeId, task, request: state.originalRequest, connections: outbound?.connections?.() || [], allowedActions: allowedActions(), asideAgents: asideStaff().map((a) => a.id) });
     const check = made.plan ? validatePlan(made.plan, { root, org, taskId: task, fileExists: existsSync }) : null;
     if (check?.ok) { try { for (const stage of made.plan.stages) safeOutput(stage.output, true); recipeReady = made.plan; } catch { recipeReady = null; } }
     emit('flow.notice', { summary: recipeReady ? `고정 절차(${recipeId})로 계획 없이 바로 시작합니다.` : `고정 절차(${recipeId})를 쓸 수 없어 계획을 세웁니다: ${redact(made.reason || check?.errors?.join(' ') || '계획 검사 실패').slice(0, 200)}` });
