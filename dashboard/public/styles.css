@@ -1231,6 +1231,29 @@ button.badge-reply:hover { background: color-mix(in srgb, var(--warn) 24%, trans
 .cq-dep { flex: none; color: var(--muted); font-size: 13.5px; }
 .cq-item .icon-btn { width: 44px; height: 44px; }
 
+/* 업무 예시(가이드) */
+.cv > .ch-empty { margin-top: 6vh; }
+.gd { margin-top: 36px; }
+.gd-search input { width: 100%; min-height: 48px; padding: 8px 16px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--panel); color: var(--text); font: inherit; font-size: 16px; }
+.gd-count { margin: 14px 4px 10px; color: var(--muted); font-size: 14px; font-weight: 700; }
+.gd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.gd-card { display: flex; flex-wrap: wrap; align-content: flex-start; align-items: center; gap: 6px 8px; min-height: 96px; padding: 14px 16px; border: var(--border); border-radius: 12px; background: var(--panel); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.gd-card:hover { background: var(--panel-2); border-color: var(--line-strong); }
+.gd-card strong { font-size: 16px; overflow-wrap: anywhere; }
+.gd-sum, .gd-out { flex-basis: 100%; color: var(--muted); font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+.gd-out { color: var(--faint); font-size: 13px; }
+.gd-lead { margin-bottom: 8px; font-size: 17px; line-height: 1.7; overflow-wrap: anywhere; }
+.gd-h { margin: 26px 0 8px; font-size: 15px; font-weight: 800; color: var(--muted); }
+.gd-p, .gd-list { font-size: 16px; line-height: 1.75; overflow-wrap: anywhere; }
+.gd-list { margin: 0; padding-left: 22px; list-style: disc; }
+.gd-note { margin: 12px 0; border: 0; border-radius: 10px; }
+.gd-ex { margin-bottom: 12px; padding: 16px 18px; border: 1px solid var(--line-strong); border-radius: 12px; }
+.gd-ex header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 15px; }
+.gd-text { padding: 12px 14px; border-radius: 8px; background: var(--panel-2); font-size: 16px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.gd-ex .row-actions { margin-bottom: 0; }
+.gd-foot { margin-top: 18px; }
+.gd-detail code { padding: 1px 6px; border-radius: 4px; background: var(--panel-3); font-size: .92em; }
+
 /* 설정·처리 이력 */
 .set-title { margin: 26px 4px 8px; color: var(--muted); font-size: 13.5px; font-weight: 800; }
 .set-title:first-child { margin-top: 0; }

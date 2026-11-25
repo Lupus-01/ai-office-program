@@ -54,6 +54,14 @@ mkdirSync(join(root, 'org'));
 writeFileSync(join(root, 'org/departments.json'), JSON.stringify([{ id: 'research', name: '시험조사부', engine: 'codex', codexRole: 'exec', color: '#38bdf8' }]));
 writeFileSync(join(root, 'org/roster.json'), JSON.stringify([{ id: 'research-1', name: '가나대리', department: 'research' }]));
 const bin = join(root, 'fake.mjs'); writeFileSync(bin, FAKE);
+// 업무 예시(가이드) 가상 자료: 예시가 있는 것 하나, 예시가 없어 "준비 중"이고 없는 절차를 가리키는 것 하나
+const EXAMPLE_NEW = '[기간]에 해당하는 [대상]의 안내 메일 초안을 준비해 줘. 대상별 문안과 미리보기를 보여 줘.';
+const EXAMPLE_REPLY = '대상 명단을 첨부했어. 이 명단을 기준으로 이어서 준비해 줘.';
+writeFileSync(join(root, 'org/guides.json'), JSON.stringify({ version: 1, guides: [
+  { id: 'mail-prepare', title: '안내 메일 문안 준비', summary: '대상별 안내 메일 문안과 미리보기를 만듭니다. 보내지는 않습니다.', keywords: ['상담사 메일'], output: '대상별 문안과 미리보기', agent: 'research-1', reviewed: '2026-11-25',
+    prepare: ['필수: 대상 명단', '선택: 조회 기간'], steps: ['대상과 기간 확인', '문안과 미리보기 작성'], done: '대화에서 문안과 미리보기를 확인합니다. 준비 완료와 실제 발송은 다릅니다.',
+    examples: [{ label: '새 업무 맡기기', text: EXAMPLE_NEW }, { label: '자료를 보완할 때', kind: 'reply', text: EXAMPLE_REPLY }] },
+  { id: 'weekly-count', title: '주간 회신 집계', summary: '금~목 회신 현황을 표로 정리합니다.', recipe: 'gone-recipe' }] }));
 // 결과가 불확실한 가상 발송 기록 하나(발송 결과 대조 화면용). 모의 기록일 뿐 아무것도 보내지 않는다
 writePrivate(join(root, '.office', 'publications', `${scopeKey('run-gone')}-${'a'.repeat(24)}.json`), { status: 'uncertain', method: 'api', action: 'post', service: 'naver_cafe', connection: 'c1', contentHash: 'f'.repeat(64), target: 'https://cafe.example.com/board/2' });
 const logFile = join(root, 'calls.jsonl');
@@ -69,7 +77,7 @@ try {
   server = await startServer({ root, port: 0, quiet: true, env: { ...process.env, CLAUDE_BIN: join(root, 'no-claude.mjs'), CODEX_BIN: bin, FIXTURE_LOG: logFile } });
   browser = await chromium.launch();
   const [w, h] = sizes[0];
-  const context = await browser.newContext({ viewport: { width: w, height: h }, acceptDownloads: true });
+  const context = await browser.newContext({ viewport: { width: w, height: h }, acceptDownloads: true, permissions: ['clipboard-read', 'clipboard-write'] });
   const page = await context.newPage();
   page.on('pageerror', (error) => report.consoleErrors.push(error.message));
   page.on('console', (message) => { if (message.type() === 'error' && !message.location().url?.endsWith('/favicon.ico')) report.consoleErrors.push(message.text()); });
@@ -207,9 +215,50 @@ try {
   await page.locator('#chBody .tone-done').waitFor();
   check('보고에서 업무 이름을 누르면 그 대화로 간다', (await page.locator('#chTitle').textContent()).includes('금~목 회신'));
 
+  // ── 업무 예시(가이드): 찾기 → 상세 → 입력창에 넣기. 보내기 전에는 업무가 생기지 않고 AI 호출도 없다 ──
+  const callsBeforeGuide = calls(), convsBeforeGuide = await page.locator('#sidebar .sb-conv[data-open-entry]').count();
+  await page.locator('#sidebar [data-new]').click();
+  await page.locator('#chBody .gd-card').first().waitFor();
+  check('새 대화에 "어떤 일을 맡기시겠어요?"와 업무 예시 카드가 보이고, 예시가 없는 것은 준비 중으로 표시된다', (await page.locator('#chBody .ch-empty-title').textContent()) === '어떤 일을 맡기시겠어요?' && await page.locator('#chBody .gd-card').count() === 2 && (await page.locator('#chBody .gd-card', { hasText: '주간 회신 집계' }).textContent()).includes('준비 중'));
+  check('예시 카드에는 직원·부서 이름이 나오지 않는다', !/가나대리|시험조사부|research/.test(await page.locator('#chBody .gd').textContent()));
+  await page.locator('#chBody [data-guide-q]').fill('상담사 메일');
+  check('업무 이름(다른 이름 포함)으로 찾으면 맞는 예시만 남고 검색창 초점이 유지된다', await page.locator('#chBody .gd-card').count() === 1 && await page.evaluate(() => document.activeElement?.dataset.guideQ !== undefined));
+  await shot('08a-guides.png');
+  await page.locator('#chBody .gd-card').click();
+  await page.locator('#chBody .gd-ex').first().waitFor();
+  const detail = await page.locator('#chBody').textContent();
+  check('상세에 받는 것·준비할 것·진행 순서·완료 확인·예시가 있고, 준비와 실제 발송을 구분해 알려 준다', (await page.locator('#chTitle').textContent()) === '안내 메일 문안 준비' && ['받는 것', '시작 전에 준비할 것', '필수: 대상 명단', '이렇게 진행됩니다', '완료 확인과 다음 행동', '실제 발송은 다릅니다', '새 업무 맡기기'].every((t) => detail.includes(t)));
+  check('새 대화에서 연 예시에는 "새 대화에 넣기"만 있고 답글용 예시는 복사만 된다', await page.locator('#chBody [data-use][data-to="new"]').count() === 1 && await page.locator('#chBody [data-use][data-to="chat"]').count() === 0 && await page.locator('#chBody [data-copy]').count() === 2);
+  await shot('08b-guide-detail.png');
+  await page.locator('#chBody [data-copy]').first().click();
+  await page.locator('.toast').filter({ hasText: '예시를 복사했어요' }).waitFor();
+  check('예시 복사는 글만 복사한다', await page.evaluate(() => navigator.clipboard.readText()) === EXAMPLE_NEW);
+  await page.goBack();
+  await page.locator('#chBody [data-guide-q]').waitFor();
+  check('뒤로 가면 찾던 검색어와 목록으로 돌아온다', await page.locator('#chBody [data-guide-q]').inputValue() === '상담사 메일' && await page.locator('#chBody .gd-card').count() === 1);
+  await page.locator('#chBody .gd-card').click();
+  await page.locator('#chBody [data-use][data-to="new"]').click();
+  check('"새 대화에 넣기"는 입력창에 예시를 채우고 첫 [바꿀 자리]를 골라 둔다(보내지는 않는다)', (await page.locator('#chTitle').textContent()) === '새 대화' && await text.inputValue() === EXAMPLE_NEW
+    && await page.evaluate(() => { const t = document.getElementById('composerText'); return document.activeElement === t && t.value.slice(t.selectionStart, t.selectionEnd) === '[기간]'; }));
+  await text.fill('');
+  // 진행하던 대화에서 예시를 열면 답글로 넣을 수 있고, 새 업무는 생기지 않는다
+  await conv('명단이 필요한 일').click();
+  await page.locator('#composerGuide').click();
+  await page.locator('#chBody .gd-card').click();
+  await page.locator('#chBody [data-use][data-to="chat"]').click();
+  check('대화에서 연 예시는 "이 대화에 답글로 넣기"로 그 대화의 입력창에 들어간다', (await page.locator('#chTitle').textContent()).includes('명단이 필요한 일') && await text.inputValue() === EXAMPLE_REPLY);
+  await text.fill('');
+  await page.waitForTimeout(400);
+  check('예시 열람·검색·복사·입력창 채우기로 생긴 업무 0건, AI 호출 0회', calls() === callsBeforeGuide && await page.locator('#sidebar .sb-conv[data-open-entry]').count() === convsBeforeGuide);
+  await page.locator('#sidebar [data-page="settings"]').click();
+  await page.locator('#chBody [data-page="guidecheck"]').click();
+  await page.locator('#chBody .gd-detail').waitFor();
+  const audit = await page.locator('#chBody').textContent();
+  check('업무 예시 점검이 빠진 것·끊긴 연결·준비 중·검토일 없음을 알려 준다', audit.includes('예시가 없는 직원 0건') && audit.includes('연결이 끊긴 예시 1건') && audit.includes('연결한 고정 절차가 없습니다') && audit.includes('준비 중인 예시 1건') && audit.includes('검토일이 없는 예시 1건') && audit.includes('예시(examples)가 없어'));
+
   // ── 설정: 직원 구성은 여기서만 연다 ──
   await page.locator('#sidebar [data-page="settings"]').click();
-  check('설정에 예약·처리 이력·계정 연결·직원 구성·회사 설정·알림·테마가 있다', (await page.locator('#chBody .set-row strong').allTextContents()).join(',').startsWith('예약 업무,처리 이력,계정 연결,직원 구성,회사 설정,알림'));
+  check('설정에 예약·처리 이력·업무 예시 점검·계정 연결·직원 구성·회사 설정·알림·테마가 있다', (await page.locator('#chBody .set-row strong').allTextContents()).join(',').startsWith('예약 업무,처리 이력,업무 예시 점검,계정 연결,직원 구성,회사 설정,알림'));
   await shot('08-settings.png');
   await page.locator('#chBody [data-view="team"]').click();
   await page.locator('#orgView').waitFor();
@@ -256,6 +305,24 @@ try {
       await page.locator('#chBack').click();
       await page.locator('#sidebar').waitFor();
       check(`${tag}: ‹ 버튼으로도 목록에 돌아온다`, await visible('#sidebar') && !(await visible('#work')));
+      await page.locator('#sidebar [data-new]').click();
+      await page.locator('#chBody [data-guide-q]').fill('메일');
+      await page.locator('#chBody .gd-card').click();
+      await page.locator('#chBody .gd-ex').first().waitFor();
+      check(`${tag}: 예시 상세 가로 넘침 없음`, await fits());
+      const tinyGuide = await small('#chBody .gd-ex button, #chActions button, #chBack');
+      check(`${tag}: 예시 상세의 누르는 곳이 모두 44px 이상 (${tinyGuide.join(', ') || '없음'})`, tinyGuide.length === 0);
+      await shot(`10b-guide-${tag}.png`);
+      await page.goBack();
+      await page.locator('#chBody [data-guide-q]').waitFor();
+      check(`${tag}: 예시에서 뒤로 가면 검색어가 남은 목록으로 돌아온다`, await page.locator('#chBody [data-guide-q]').inputValue() === '메일');
+      await page.locator('#chBody .gd-card').click();
+      await page.locator('#chBody [data-use][data-to="new"]').click();
+      check(`${tag}: 휴대폰에서도 예시로 새 대화 초안까지 채운다`, await page.locator('#composerText').inputValue() === EXAMPLE_NEW && await visible('#composerSend'));
+      await page.locator('#composerText').fill('');
+      await page.locator('#chBody [data-guide-q]').fill('');
+      await page.locator('#chBack').click();
+      await page.locator('#sidebar').waitFor();
       const tinyList = await small(TOUCH);
       check(`${tag}: 목록 화면의 누르는 곳이 모두 44px 이상 (${tinyList.join(', ') || '없음'})`, tinyList.length === 0);
       await conv('명단이 필요한 일').click();
