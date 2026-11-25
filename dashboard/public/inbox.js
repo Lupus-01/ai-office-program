@@ -221,7 +221,7 @@ export function createInbox(deps) {
       const unread = e.id !== here && isUnread(e, sigOf(e), ui.seen);
       return `<button type="button" class="sb-conv${unread ? ' is-unread' : ''}" data-open-entry="${esc(e.id)}" data-key="conv-${esc(e.id)}" aria-current="${e.id === here ? 'page' : 'false'}">
         <span class="sb-conv-title">${esc(e.title)}</span>
-        <span class="sb-conv-sub"><span class="mark mark-${esc(e.status)}">${esc(ITEM_LABEL[e.status] || e.status)}</span><time>${esc(time(e.at))}</time>${unread ? '<span class="sb-new-dot">새 소식</span>' : ''}</span></button>`;
+        <span class="sb-conv-sub"><span class="mark mark-${esc(e.status)}">${esc(ITEM_LABEL[e.status] || e.status)}</span><time>${esc(time(e.at))}</time>${e.item?.via === 'terminal' ? '<span class="sb-via" title="터미널의 Claude·Codex에게 말해서 맡긴 업무">터미널에서 맡김</span>' : ''}${unread ? '<span class="sb-new-dot">새 소식</span>' : ''}</span></button>`;
     };
     setHTML($('sidebar'), `<div class="sb-head"><strong class="sb-name">AI Office</strong><span class="sb-conn" data-state="${esc(conn)}" title="${{ live: '실시간 연결', connecting: '연결 중', retry: '연결 끊김 · 재연결 중' }[conn] || ''}"><i aria-hidden="true"></i>${conn === 'live' ? '연결됨' : conn === 'retry' ? '연결 끊김' : '연결 중'}</span></div>
       <div class="sb-top"><button type="button" class="btn sb-newbtn" data-new data-key="sb-new">＋ 새 대화</button>
@@ -323,6 +323,7 @@ export function createInbox(deps) {
     const before = entry.kind === 'item' ? (entry.item.dependsOn || []).map((no) => entry.batch.items.find((i) => i.no === no)).filter(Boolean) : [];
     const multi = entry.kind === 'item' && entry.batch.total > 1;
     return `<div class="cv">
+      ${entry.item?.via === 'terminal' ? '<p class="cv-line">터미널의 Claude·Codex에게 말해서 맡긴 업무입니다. 여기서 이어서 답해도 됩니다.</p>' : ''}
       ${multi ? `<p class="cv-line">한 번에 맡긴 ${entry.batch.total}건 중 ${entry.item.no}번째 · <button type="button" class="link" data-report="${esc(entry.batch.id)}" data-key="cv-report">전체 결과 보기</button></p>` : ''}
       ${before.length ? `<p class="cv-line">앞 업무: ${before.map((d) => `<button type="button" class="link" data-open-entry="${esc(d.id)}" data-key="dep-${esc(d.id)}">${esc(d.title)}</button> (${esc(ITEM_LABEL[d.status])})`).join(', ')}</p>` : ''}
       ${messages.map((m, i) => bubble(m, entry) + (i === 0 && full?.attachments?.length ? `<p class="cv-attach">${full.attachments.map((p) => `<span title="${esc(p)}">📎 ${esc(p.split('/').at(-1))}</span>`).join(' ')}</p>` : '')).join('')}

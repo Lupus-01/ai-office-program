@@ -256,6 +256,15 @@ try {
   const audit = await page.locator('#chBody').textContent();
   check('업무 예시 점검이 빠진 것·끊긴 연결·준비 중·검토일 없음을 알려 준다', audit.includes('예시가 없는 직원 0건') && audit.includes('연결이 끊긴 예시 1건') && audit.includes('연결한 고정 절차가 없습니다') && audit.includes('준비 중인 예시 1건') && audit.includes('검토일이 없는 예시 1건') && audit.includes('예시(examples)가 없어'));
 
+  // ── 접수 경로 두 가지: 화면에서 보낸 업무와 터미널 AI(office-ask)가 넣은 업무가 같은 대화 목록에 보인다 ──
+  const token = await page.locator('meta[name="office-token"]').getAttribute('content');
+  const viaTerminal = await page.evaluate(async ([t]) => (await fetch('/api/runs', { method: 'POST', headers: { 'X-Office-Token': t, 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: '터미널에서 맡긴 일: 지난주 문의 건수를 세어 줘.', via: 'terminal' }) })).status, [token]);
+  await waitMark('터미널에서 맡긴 일', '완료');
+  check('터미널 AI가 넣은 업무도 대화 목록에 생기고 "터미널에서 맡김"으로 구분된다(화면에서 보낸 업무에는 표시가 없다)', viaTerminal < 300 && (await conv('터미널에서 맡긴 일').textContent()).includes('터미널에서 맡김') && !(await conv('금~목 회신').textContent()).includes('터미널에서 맡김'));
+  await conv('터미널에서 맡긴 일').click();
+  await page.locator('#chBody .tone-done').waitFor();
+  check('터미널에서 맡긴 업무의 대화에서도 완료 보고를 받고 이어서 답할 수 있다', (await page.locator('#chBody').textContent()).includes('터미널의 Claude·Codex에게 말해서 맡긴 업무') && await text.isEnabled());
+
   // ── 설정: 직원 구성은 여기서만 연다 ──
   await page.locator('#sidebar [data-page="settings"]').click();
   check('설정에 예약·처리 이력·업무 예시 점검·계정 연결·직원 구성·회사 설정·알림·테마가 있다', (await page.locator('#chBody .set-row strong').allTextContents()).join(',').startsWith('예약 업무,처리 이력,업무 예시 점검,계정 연결,직원 구성,회사 설정,알림'));

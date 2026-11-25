@@ -768,6 +768,8 @@ node scripts/codex-review.mjs --target outputs/<날짜>/<slug> [--reviewers <id�
   - 진행 중: 덧붙일 말을 `POST /api/runs`로 보낸다(판별이 진행 중 업무의 추가 지시로 보면 그 업무에 전달, 아니면 새 대화).
   - 아직 시작 전·취소·세션 없음: 입력창이 꺼지고 사유를 알려 준다.
   - 쓰던 글은 대화별로 기억한다. 보내는 즉시 내 말이 대화에 보인다.
+- **접수 경로 두 가지.** 업무는 (가) 대화 화면에서 직접 보내거나 (나) 프로그램 폴더의 Claude·Codex에게 말해서 `scripts/office-ask.mjs`로 넣는다. 둘 다 같은 API(`POST /api/runs`)·같은 판별·같은 순번을 따른다. office-ask는 본문에 `via: 'terminal'`을 붙이고, 서버는 그 값을 건에 남긴다(그 밖의 값은 `screen`). 권한과는 무관한 표시다. 터미널에서 맡긴 업무도 대화 목록에 생기고 "터미널에서 맡김"이 붙으며, 화면에서 이어서 답할 수 있다. 묶음 보고의 건별 줄에 `via`(screen·terminal·schedule·monitor)가 실린다.
+- **실측 표.** `npm run measure`가 켜져 있는 서버의 묶음 보고를 읽어 건별 작업 시간·대기 시간·AI 호출·토큰과 접수 경로별 평균을 낸다(조회만, AI 호출 0회, 요청 원문 없음).
 - **머리말.** 대화 제목, 상태 칩, 진행 중이면 `중지`, 접수 건이면 `업무 취소`(두 번 눌러 확인). 대화 맨 아래 "자세히"에 접수 번호·사용량·처리 이력·실행 기록이 접혀 있다. 한 번에 맡긴 여러 건이면 "N건 중 몇 번째 · 전체 결과 보기"가 보인다.
 - **업무 예시(가이드, S9).** 문구는 회사 데이터라 작업 공간 `org/guides.json`에 둔다(`lib/guides.mjs`: `{version:1, guides:[{id, title, summary, keywords?, output?, prepare?, steps?, done?, examples:[{label, text, kind?: 'new'|'reply'}], agent?, recipe?, reviewed?, ready?}]}`). `GET /api/guides`가 화면용 목록(직원·절차 연결은 싣지 않는다)과 점검 결과를 준다. 파일만 읽는다.
   - 새 대화 화면에 "어떤 일을 맡기시겠어요?"와 예시 카드, 업무 이름으로 찾는 검색창이 보인다. 카드를 누르면 받는 것 / 시작 전에 준비할 것 / 이렇게 진행됩니다 / 완료 확인과 다음 행동 / 말 예시가 열린다. 뒤로 가면 찾던 검색어와 목록으로 돌아온다.

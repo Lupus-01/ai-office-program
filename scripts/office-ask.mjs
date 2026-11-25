@@ -42,7 +42,9 @@ export function createClient({ url, token, fetchImpl = fetch }) {
     return res.headers.get('content-type')?.includes('application/json') ? JSON.parse(text) : text;
   };
   return {
-    ask: (prompt) => call('POST', '/api/runs', { prompt }),
+    // via: 접수 경로 표시. 대화 화면과 측정(scripts/measure.mjs)이 화면에서 보낸 업무와 터미널 AI가 넣은 업무를 구분해 보여 준다(권한과는 무관하다)
+    ask: (prompt) => call('POST', '/api/runs', { prompt, via: 'terminal' }),
+    report: (id) => call('GET', `/api/batches/${encodeURIComponent(id)}/report`),
     reply: (id, prompt) => call('POST', `/api/runs/${encodeURIComponent(id)}/reply`, { prompt }),
     state: () => call('GET', '/api/state'),
     batches: () => call('GET', '/api/batches'),

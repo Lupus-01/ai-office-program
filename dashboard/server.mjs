@@ -1013,7 +1013,7 @@ export async function startServer({
     try { monitor = Boolean(continuousRequest(prompt, continuous)); } catch { monitor = true; /* 형식 오류는 실행기가 예전 문구로 알린다 */ }
     if (!monitor && !runIntent.quick && !runIntent.quickEdit) {
       const { batch } = await callRunner(() => batches.submit({ submitKey: randomBytes(24).toString('hex'), items: [{ prompt }] },
-        { source: 'command', intent: runIntent, options: { model, engine: body.engine || null, effort: body.effort || null } }), '작업을 접수하지 못했습니다.');
+        { source: 'command', via: body.via === 'terminal' ? 'terminal' : 'screen', intent: runIntent, options: { model, engine: body.engine || null, effort: body.effort || null } }), '작업을 접수하지 못했습니다.');
       ledger.attach(judgeTag.calls, batch.items[0].id);
       const result = await callRunner(() => sequencer.started(batch.items[0].id), '작업을 시작하지 못했습니다.');
       scheduleBroadcast();

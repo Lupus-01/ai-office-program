@@ -19,6 +19,7 @@
     "verify:ui": "node scripts/verify-ui.mjs",
     "verify:inbox": "node scripts/verify-inbox.mjs",
     "rehearsal": "node scripts/rehearsal.mjs",
+    "measure": "node scripts/measure.mjs",
     "verify:browser": "node --test test/browser.integration.mjs",
     "verify:aside": "node scripts/aside-fixture-checks.mjs",
     "doctor": "node scripts/doctor.mjs",
