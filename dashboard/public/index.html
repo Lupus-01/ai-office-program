@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko" data-theme="neon">
+<html lang="ko" data-theme="calm">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,6 +11,43 @@
 </head>
 <body>
   <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+  <!-- 2.0 화면 뼈대: 왼쪽 사이드바 / 오른쪽에 업무 화면(슬랙형) 또는 보조 화면(예전 관제·사무실·조직·산출물) -->
+  <div class="shell" id="shell">
+    <aside class="sb" id="sidebar" aria-label="작업 공간 메뉴"></aside>
+    <div class="shell-main">
+      <div class="shell-bar"><button type="button" class="icon-btn sb-toggle" data-sb-toggle aria-label="메뉴 열기">☰</button><span>메뉴</span></div>
+      <section class="work" id="work" hidden aria-label="업무">
+        <div class="ch">
+          <header class="ch-head">
+            <button type="button" class="icon-btn sb-toggle" id="sbToggle" data-sb-toggle aria-label="메뉴 열기">☰</button>
+            <div class="ch-titles"><h1 id="chTitle"># 업무함</h1><p id="chSub"></p></div>
+          </header>
+          <p class="ch-notice" id="chNotice" role="status" hidden></p>
+          <div class="ch-body" id="chBody" tabindex="0" aria-label="업무 흐름"></div>
+          <form class="composer" id="composer" autocomplete="off">
+            <ol class="cq" id="composerQueue" aria-label="한 번에 보낼 업무" hidden></ol>
+            <ul class="chief-files" id="composerFiles" aria-label="붙인 파일" hidden></ul>
+            <label class="sr-only" for="composerText">비서실장에게 맡길 업무</label>
+            <textarea id="composerText" rows="1" maxlength="20000" placeholder="비서실장에게 맡길 일을 적어 보내세요 — 예: 이번 주 회신 현황을 표로 정리해 줘"></textarea>
+            <div class="composer-bar">
+              <button type="button" class="btn btn-sm btn-ghost" id="composerAdd" title="지금 적은 업무를 담고 다음 업무를 이어서 적습니다. 여러 건을 한 번에 맡길 때 씁니다">＋ 업무 추가</button>
+              <button type="button" class="btn btn-sm btn-ghost" id="composerAttach" aria-label="파일 붙이기" title="파일 붙이기">📎</button>
+              <input type="file" id="composerFile" multiple hidden accept=".docx,.doc,.xlsx,.xls,.csv,.pptx,.ppt,.pdf,.txt,.md,.hwp,.hwpx,.png,.jpg,.jpeg,.gif,.webp">
+              <span class="composer-hint" id="composerHint"></span>
+              <button type="submit" class="btn btn-send" id="composerSend">보내기</button>
+            </div>
+          </form>
+        </div>
+        <aside class="th" id="threadPane" hidden aria-labelledby="thTitle">
+          <header class="th-head"><h2 id="thTitle" tabindex="-1">스레드</h2><button type="button" class="icon-btn" id="thClose" aria-label="스레드 닫기">✕</button></header>
+          <div class="th-body" id="thBody"></div>
+          <form class="composer th-composer" id="thReply" hidden autocomplete="off">
+            <label class="sr-only" for="thReplyText">이 업무에 답글</label>
+            <textarea id="thReplyText" rows="1" maxlength="20000" placeholder="답글…"></textarea>
+            <div class="composer-bar"><span class="composer-hint">같은 업무 번호로 이어서 진행합니다</span><button type="submit" class="btn btn-send" id="thReplySend">답글 보내기</button></div>
+          </form>
+        </aside>
+      </section>
   <div id="app" class="app">
     <header class="topbar">
       <div class="brand">
@@ -31,7 +68,7 @@
         <button type="button" class="btn btn-sm" id="companyBtn">회사 설정</button>
         <button type="button" class="btn btn-sm" id="connectionsBtn">계정 연결</button>
         <button type="button" class="btn btn-sm theme-toggle" id="themeToggle" aria-label="화면 테마 전환">
-          <span aria-hidden="true" class="theme-icon"></span><span id="themeLabel">NEON</span>
+          <span aria-hidden="true" class="theme-icon"></span><span id="themeLabel">차분함</span>
         </button>
       </div>
     </header>
@@ -59,7 +96,7 @@
       <div class="command-actions">
       <span id="modeBadge" class="tag" aria-label="사용 가능한 AI 도구"></span>
       <div class="view-tabs" role="tablist" aria-label="화면 보기">
-        <button type="button" role="tab" id="tabInbox" aria-controls="viewInbox" aria-selected="false" data-view="inbox">업무함</button>
+        <button type="button" role="tab" id="tabInbox" aria-controls="work" aria-selected="false" data-view="inbox">업무함</button>
         <button type="button" role="tab" id="tabControl" aria-controls="viewControl" aria-selected="true" data-view="control">관제</button>
         <button type="button" role="tab" id="tabOffice" aria-controls="viewOffice" aria-selected="false" data-view="office">사무실</button>
         <button type="button" role="tab" id="tabOrg" aria-controls="viewOrg" aria-selected="false" data-view="org">조직</button>
@@ -78,23 +115,6 @@
 
       <main class="col col-main" id="main" tabindex="-1">
         <section class="view" id="viewOnboarding" hidden aria-labelledby="onbTitle"></section>
-
-        <!-- 업무함(2.0): 왼쪽 메뉴 / 가운데 목록 / 오른쪽 업무 스레드 -->
-        <section class="view inbox" id="viewInbox" role="tabpanel" aria-labelledby="tabInbox" hidden>
-          <nav class="inbox-nav win" id="inboxNav" aria-label="업무함 메뉴"></nav>
-          <div class="inbox-list win">
-            <div class="win-bar"><h2 id="inboxListTitle">업무함</h2><span class="win-ctl" aria-hidden="true"></span></div>
-            <div class="win-body" id="inboxList" aria-live="off"></div>
-          </div>
-          <div class="inbox-thread win" aria-label="업무 상세">
-            <div class="win-body" id="inboxThread"></div>
-            <form class="inbox-reply" id="inboxReply" hidden autocomplete="off">
-              <label for="inboxReplyText" id="inboxReplyLabel">이 업무에 답변</label>
-              <textarea id="inboxReplyText" rows="3" maxlength="20000" placeholder="필요한 답이나 자료 위치를 적어 주세요. 같은 업무 번호로 이어서 진행합니다."></textarea>
-              <button type="submit" class="btn btn-primary" id="inboxReplySend">답장 보내기</button>
-            </form>
-          </div>
-        </section>
 
         <section class="view win" id="viewControl" role="tabpanel" aria-labelledby="tabControl">
           <div class="win-bar">
@@ -193,25 +213,8 @@
     </div>
   </div>
 
-  <!-- 새 업무(2.0): 여러 건을 항목별로 적어 한 번에 접수한다 -->
-  <dialog id="composeDialog" class="modal modal-wide win" aria-labelledby="composeTitle">
-    <form method="dialog" id="composeForm" class="modal-form" novalidate>
-      <div class="win-bar"><h2 id="composeTitle">새 업무 맡기기</h2><span class="win-ctl" aria-hidden="true"></span></div>
-      <div class="win-body compose-body">
-        <p class="help">업무를 하나씩 따로 적어 주세요. 접수한 순서대로 한 건씩 처리하고, 앞 업무가 답변을 기다리면 다음 업무로 넘어갑니다. 다음 업무를 시작시키려고 다시 지시하지 않아도 됩니다.</p>
-        <div id="composeItems"></div>
-        <button type="button" class="btn" id="composeAdd">＋ 업무 추가</button>
-        <input type="file" id="composeFile" multiple hidden accept=".docx,.doc,.xlsx,.xls,.csv,.pptx,.ppt,.pdf,.txt,.md,.hwp,.hwpx,.png,.jpg,.jpeg,.gif,.webp">
-        <div class="compose-preview" id="composePreview" aria-live="polite"></div>
-        <p class="form-error" id="composeError" role="alert" hidden></p>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-ghost" id="composeReset">모두 지우기</button>
-        <button type="button" class="btn" id="composeCancel">닫기(작성 내용 보관)</button>
-        <button type="submit" class="btn btn-primary" id="composeSubmit">접수하기</button>
-      </div>
-    </form>
-  </dialog>
+    </div>
+  </div>
 
   <!-- 부서 생성·수정 -->
   <dialog id="deptDialog" class="modal win" aria-labelledby="deptDialogTitle">

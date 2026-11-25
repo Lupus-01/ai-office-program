@@ -498,7 +498,8 @@ test('index.html: 뷰 탭 5개(업무함·관제·사무실·조직·산출물)�
   assert.deepEqual(VIEWS, ['inbox', 'control', 'office', 'org', 'outputs']);
   const tabs = [...html.matchAll(/role="tab"[^>]*data-view="([a-z]+)"[^>]*>([^<]+)</g)].map((m) => [m[1], m[2]]);
   assert.deepEqual(tabs, [['inbox', '업무함'], ['control', '관제'], ['office', '사무실'], ['org', '조직'], ['outputs', '산출물']]);
-  for (const v of ['viewInbox', 'viewControl', 'viewOffice', 'viewOrg', 'viewOutputs']) assert.match(html, new RegExp(`id="${v}" role="tabpanel"`));
+  assert.match(html, /id="tabInbox" aria-controls="work"/, '업무함 탭은 슬랙형 업무 화면을 연다');
+  for (const v of ['viewControl', 'viewOffice', 'viewOrg', 'viewOutputs']) assert.match(html, new RegExp(`id="${v}" role="tabpanel"`));
   for (const id of ['completionDialog', 'completionReport', 'completionFiles', 'clearHistoryBtn', 'gapDialog', 'gapGoOrg', 'feedDetailBtn', 'notifyBtn', 'attnStrip', 'outQ', 'outDate', 'outDept', 'outStatus', 'handoffChecks']) {
     assert.match(html, new RegExp(`id="${id}"`), id);
   }

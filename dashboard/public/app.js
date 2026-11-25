@@ -31,6 +31,8 @@ const KIND_LABEL = {
 };
 // inbox(업무함)가 기본 화면이다(2.0). 관제·사무실·조직·산출물은 보조 화면으로 그대로 둔다
 export const VIEWS = ['inbox', 'control', 'office', 'org', 'outputs'];
+export const THEMES = ['calm', 'neon', 'pastel'];
+const THEME_LABEL = { calm: '차분함', neon: 'NEON', pastel: 'PASTEL' };
 const BASE_TITLE = 'AGENT HQ · AI Office';
 const ID_RE = /^[a-z][a-z0-9-]{1,47}$/;
 const NO_DESC_WARNING = '비서실장이 배정 기준으로 쓸 설명이 없습니다. 담당 업무나 호출 설명을 채워 주세요.';
@@ -905,6 +907,7 @@ function setConn(state) {
   const text = { live: '실시간 연결', connecting: '연결 중…', retry: '연결 끊김 · 재연결 중' }[state];
   el.dataset.state = state;
   if (el.lastChild.textContent !== text) el.lastChild.textContent = text;
+  inbox?.sidebar();
 }
 
 function setHTML(el, html) {
@@ -996,11 +999,11 @@ function render() {
   $('viewOffice').hidden = onboarding || v !== 'office';
   $('viewOrg').hidden = v !== 'org';
   $('viewOutputs').hidden = v !== 'outputs';
-  // 업무함은 화면 전체를 쓴다(조직도·실시간 피드 칸을 접는다). 다른 탭으로 가면 원래 3단으로 돌아온다
-  const inboxOn = v === 'inbox' && !onboarding;
-  $('viewInbox').hidden = !inboxOn;
-  document.querySelector('.layout').classList.toggle('is-inbox', inboxOn);
-  if (inboxOn) inbox?.render();
+  // 업무 화면(슬랙형)과 보조 화면(예전 관제·사무실·조직·산출물)은 한 번에 하나만 보인다. 사이드바는 늘 보인다
+  const workOn = v === 'inbox' && !onboarding;
+  $('work').hidden = !workOn;
+  $('app').hidden = workOn;
+  inbox?.render();
   if (onboarding) renderOnboarding();
   renderOrg();
   if (v === 'control') renderControl();
@@ -1147,6 +1150,7 @@ function setNotify(on) {
   const btn = $('notifyBtn');
   btn.setAttribute('aria-pressed', String(ui.notify));
   btn.textContent = ui.notify ? '알림 켜짐' : '알림 꺼짐';
+  inbox?.sidebar();
 }
 
 async function toggleNotify() {
@@ -3545,12 +3549,15 @@ function setView(view) {
 }
 
 function setTheme(theme) {
-  ui.theme = theme === 'pastel' ? 'pastel' : 'neon';
+  // calm(차분함, 기본)은 업무 도구용 밝은 화면이다. neon·pastel은 예전 관제판 분위기로 남겨 둔다
+  ui.theme = THEMES.includes(theme) ? theme : 'calm';
   document.documentElement.dataset.theme = ui.theme;
-  $('themeLabel').textContent = ui.theme === 'neon' ? 'NEON' : 'PASTEL';
-  $('themeToggle').setAttribute('aria-label', `화면 테마 전환 (현재 ${ui.theme === 'neon' ? '네온' : '파스텔'})`);
-  office?.setTheme(ui.theme);
-  store('ai-office-theme', ui.theme);
+  $('themeLabel').textContent = THEME_LABEL[ui.theme];
+  $('themeToggle').setAttribute('aria-label', `화면 테마 전환 (현재 ${THEME_LABEL[ui.theme]})`);
+  // 픽셀 사무실은 네온·파스텔 두 가지 그림만 있다
+  office?.setTheme(ui.theme === 'neon' ? 'neon' : 'pastel');
+  inbox?.render();
+  store('ai-office-theme-v2', ui.theme);
 }
 
 function setPatrol(on) {
@@ -3568,9 +3575,11 @@ function tick() {
 
 function init() {
   token = document.querySelector('meta[name="office-token"]')?.content || '';
-  setTheme(store('ai-office-theme') || 'neon');
+  setTheme(store('ai-office-theme-v2') || 'calm');
   ui.view = VIEWS.includes(store('ai-office-view')) ? store('ai-office-view') : 'inbox';
-  inbox = createInbox({ api, authedGet, toast, esc, refresh, openThread, openCompletion, store, state: () => S,
+  inbox = createInbox({ api, authedGet, toast, esc, refresh, openThread, openCompletion, store, state: () => S, view: () => ui.view, setView, resultMessage: chiefResultMessage,
+    themeLabel: () => THEME_LABEL[ui.theme], notifyOn: () => ui.notify, connState: () => $('conn').dataset.state,
+    open: { schedules: () => $('schedulesBtn').click(), company: () => $('companyBtn').click(), connections: () => $('connectionsBtn').click(), notify: () => $('notifyBtn').click(), theme: () => $('themeToggle').click() },
     upload: async (file) => (await api('POST', '/api/uploads', { name: file.name, data: await fileBase64(file) })).path });
   ui.feedDetail = store('ai-office-feed-detail') === '1';
   setNotify(store('ai-office-notify') === '1' && typeof Notification !== 'undefined' && Notification.permission === 'granted');
@@ -3585,7 +3594,7 @@ function init() {
     onAddAgent: (id) => (S.demo ? toast(DEMO_HINT) : openAgentDialog({ deptId: id })),
     onPatrolChange: (on) => { ui.patrol = on; $('patrolBtn').setAttribute('aria-pressed', String(on)); },
   });
-  office.setTheme(ui.theme);
+  office.setTheme(ui.theme === 'neon' ? 'neon' : 'pastel');
 
   document.addEventListener('click', (ev) => {
     const btn = ev.target.closest('[data-act]');
@@ -3602,7 +3611,7 @@ function init() {
     if (ev.key === 'Escape' && ui.drawer && !document.querySelector('dialog[open]')) closeDrawer();
   });
   $('drawerClose').addEventListener('click', () => closeDrawer());
-  $('themeToggle').addEventListener('click', () => setTheme(ui.theme === 'neon' ? 'pastel' : 'neon'));
+  $('themeToggle').addEventListener('click', () => setTheme(THEMES[(THEMES.indexOf(ui.theme) + 1) % THEMES.length]));
   $('addDeptBtn').addEventListener('click', () => openDeptDialog());
   $('companyBtn').addEventListener('click', openCompany);
   $('connectionsBtn').addEventListener('click', openConnections);
