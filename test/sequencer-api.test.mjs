@@ -121,7 +121,29 @@ test('HTTP: 3건 접수 → 1번 질문으로 보류 → 독립인 3번 진행 �
   assert.equal(done.items[0].task, task(1), '보완한 건은 새 업무가 아니라 같은 업무다');
   assert.equal(readFileSync(join(root, 'outputs', ...done.items[1].task.split('/'), 'research', 'research-1-a.txt'), 'utf8'), '선행 결과를 받아 작성');
   assert.deepEqual(done.items[0].events.map((e) => e.type), ['accepted', 'started', 'needs', 'resumed', 'done']);
-  // 업무는 정확히 3개(누락·중복 0)
+  // 묶음 보고와 처리 이력: 저장된 정보로만 만든다(조회 전후로 AI 호출 수가 같다)
+  const callsBefore = calls().length;
+  const report = await get(`/api/batches/${id}/report`);
+  assert.equal(report.total, 3);
+  assert.deepEqual({ done: report.counts.done, sum: Object.values(report.counts).reduce((a, n) => a + n, 0) }, { done: 3, sum: 3 });
+  assert.equal(report.complete, true);
+  assert.equal(report.rows[0].outputs.folder, `outputs/${task(1)}/`);
+  assert.deepEqual(report.rows[0].outputs.files, [`outputs/${task(1)}/report.md`]);
+  assert.ok(report.rows[1].times.depWaitMs > 0 && report.rows[0].times.humanWaitMs > 0, '선행 결과 대기와 사람 답변 대기를 따로 잰다');
+  assert.equal(report.usage.calls, calls().filter((c) => c.task).length);
+  const csvResponse = await fetch(`${base}/api/batches/${id}/history.csv`, { headers });
+  assert.match(csvResponse.headers.get('content-type'), /text\/csv/);
+  const csv = await csvResponse.text();
+  for (const n of [1, 2, 3]) assert.ok(csv.includes(`${id}-${n}`));
+  assert.ok(!csv.includes('명단이 필요한 일') && !csv.includes('주간보고'), 'CSV에는 요청 원문·제목이 없다');
+  assert.equal((await fetch(`${base}/api/batches/${id}/report`)).status, 403, '토큰 없이는 볼 수 없다');
+  assert.equal(calls().length, callsBefore, '보고·이력 조회로 생긴 AI 호출 0회');
+  // 묶음 완료 알림은 1개. 보고 카드는 처음 정리됐을 때(1번 확인 필요)와 모두 끝났을 때 이력이 남는다
+  let card;
+  for (let i = 0; i < 100 && !(card?.revisions.length >= 2); i++) { card = (await get(`/api/batches/${id}/report`)).card; await new Promise((resolve) => setTimeout(resolve, 20)); }
+  assert.ok(card.revisions.length >= 2);
+  assert.deepEqual(card.revisions.at(-1).counts.done, 3);
+  assert.equal(readFileSync(join(root, '.office', 'events.jsonl'), 'utf8').split('\n').filter((line) => line.includes(`묶음 보고(${id})`)).length, 1);  // 업무는 정확히 3개(누락·중복 0)
   assert.equal((await get('/api/state')).tasks.length, 3);
 });
 

@@ -12,6 +12,7 @@ import { quickToolCheck, checkToolLogins, detectedMode } from '../lib/doctor.mjs
 import { loadSettings, saveSettings } from '../lib/settings.mjs';
 import { BUDGET_WARN_RATIO, TASK_BUDGET_RANGE, validatePostGap, validateTaskBudget } from '../lib/guardrails.mjs';
 import { createLedger } from '../lib/ledger.mjs';
+import { batchReport, createReportCards, historyCsv, waitAlerts } from '../lib/batch-report.mjs';
 import { modelCatalog } from '../lib/models.mjs';
 import { createConnectionStore, CONNECTION_PROVIDERS, CUSTOM_PROVIDER, CUSTOM_PROVIDER_INFO, validateLoginValues } from '../lib/connections.mjs';
 import { createBrowserSessions } from '../lib/browser-session.mjs';
@@ -317,6 +318,7 @@ export async function startServer({
   connectionBase = undefined, browserOptions = {},
   scheduleNow = Date.now,
   batchWrite = undefined, // 묶음 접수 저장 함수(테스트에서 저장 실패를 재현하려고 바꿔 넣는다)
+  waitAlertMinutes = null, // 대기시간 누적 알림 기준(분). null이면 시간만 기록하고 알리지 않는다(운영 표본으로 값을 승인한 뒤 켠다)
   openFolder = defaultOpenFolder, // "폴더 열기" 실행 함수(테스트에서 실제 탐색기를 띄우지 않도록 바꿔 넣는다)
 } = {}) {
   if (!root) ({ path: root, source: workspaceSource } = resolveWorkspace({ env, program }));
@@ -590,7 +592,38 @@ export async function startServer({
     latestRun: (rootId) => runner.list().filter((r) => !r.phase && (r.rootId || r.id) === rootId).at(-1) || null,
     taskStatus: (id) => loadTaskList(root).find((t) => t.id === id)?.status ?? null,
     canStart: (batch) => batchBudgetLeft(batch) > 0,
-    onChange: () => scheduleBroadcast(), warn: (message, error) => warn(message, error) });
+    onChange: () => { scheduleBroadcast(); reportSoon(); }, warn: (message, error) => warn(message, error) });
+  // 사용량: 확인된 토큰과 미보고 호출 수를 따로 준다(미보고를 0으로 치지 않는다). 건마다 판별 호출과 그 업무의 호출을 한 번씩 센다
+  const usageOfItems = (items) => ledger.summarize({ roots: items.map((i) => i.run), items: items.map((i) => i.id) });
+  // 묶음 보고: 건의 결과 한 줄은 그 대화의 마지막 실행 요약, 산출물은 업무 폴더(보고서가 있으면 함께)
+  const resultOfItem = (item) => {
+    const latest = item.run ? runner.list().filter((r) => !r.phase && (r.rootId || r.id) === item.run).at(-1) : null;
+    const folder = item.task && isTaskId(item.task) ? `outputs/${item.task}/` : null;
+    const reportFile = folder && existsSync(join(root, 'outputs', ...item.task.split('/'), 'report.md')) ? `${folder}report.md` : null;
+    return { summary: latest?.summary ? redact(String(latest.summary).split('\n').find((line) => line.trim() && !line.startsWith('#')) || latest.summary, 160) : '', folder, files: reportFile ? [reportFile] : [] };
+  };
+  const reportOf = (batch) => batchReport(batch, { waitingOn: (id) => sequencer.waitingOn(id), usageOf: usageOfItems, resultOf: resultOfItem, now: scheduleNow() });
+  const reportCards = demo ? null : createReportCards({ root, write: writePrivate, read: readPrivate, now: scheduleNow });
+  // 묶음이 정리될 때마다 보고 카드를 갱신한다. 완료 알림은 묶음마다 처음 정리됐을 때 한 번만 낸다
+  const closedReports = new Set();
+  let reportPending = false;
+  const reportSoon = () => {
+    if (!reportCards || reportPending) return;
+    reportPending = true;
+    setImmediate(() => {
+      reportPending = false;
+      for (const batch of batches.list()) {
+        if (closedReports.has(batch.id)) continue;
+        try {
+          const report = reportOf(batch);
+          const result = reportCards.update(report);
+          if (result.first) appendEvent(root, { engine: 'claude', session: 'office-server', instance: 'office-server', kind: 'flow.notice', summary: redact(`묶음 보고(${batch.id}): ${report.summary}`) });
+          if (result.failed) warn(`묶음 보고를 저장하지 못했습니다(${batch.id}). 업무 결과는 그대로이고 보고만 다시 반영하면 됩니다.`);
+          if (report.complete && !result.failed) closedReports.add(batch.id);
+        } catch (error) { warn(`묶음 보고를 갱신하지 못했습니다(${batch.id})`, error); }
+      }
+    });
+  };
   // 실행 상태가 바뀔 때마다 한 번씩만 다음 건을 살핀다(실행기 안에서 바로 부르지 않고 한 박자 늦춘다)
   let sequencePending = false;
   sequenceSoon = () => {
@@ -1001,6 +1034,21 @@ export async function startServer({
     const run = sequenced?.run || await callRunner(() => runner.reply(id, reply), '답장을 보내지 못했습니다.');
     scheduleBroadcast();
     return run;
+  }
+
+  // 대기시간 누적 알림: "실행 자리 대기" 구간이 기준을 넘긴 건을 구간마다 한 번만 알린다(건의 wait-alert 사건으로 중복을 막는다).
+  // 알림은 순번·실행 상태를 바꾸지 않는다. 기준이 없으면 아무것도 하지 않는다(시간은 사건 기록으로 계산된다)
+  function checkWaitAlerts() {
+    if (!batches || !(waitAlertMinutes > 0)) return [];
+    const due = waitAlerts(batches.list(), waitAlertMinutes * 60000, scheduleNow());
+    for (const alert of due) {
+      batches.patch(alert.item, () => {}, { type: 'wait-alert', since: alert.since });
+      const ahead = sequencer.waitingOn(alert.item);
+      appendEvent(root, { engine: 'claude', session: 'office-server', instance: 'office-server', kind: 'flow.notice',
+        summary: redact(`오래 대기 중: ${alert.title} · 실행 자리 대기 ${Math.round(alert.waitedMs / 60000)}분${ahead?.title ? ` · 앞선 업무는 ${ahead.title}` : ''}`) });
+    }
+    if (due.length) scheduleBroadcast();
+    return due;
   }
 
   // 실행이 생기자마자 건에 연결한다. 업무의 첫 AI 호출이 묶음 예산 문을 지날 때 어느 묶음인지 알아야 한다
@@ -1539,6 +1587,18 @@ export async function startServer({
         checkToken(req);
         return sendJson(res, 200, { schedules: schedules?.list({ full: true }) || [] });
       }
+      // 묶음 보고(건별 상태·결과 한 줄·산출물 또는 미처리 사유·다음 행동)와 처리 이력 CSV. 저장된 정보로만 만든다(AI 호출 0회)
+      if (parts[1] === 'batches' && parts.length === 4 && ['report', 'history.csv'].includes(parts[3])) {
+        checkToken(req);
+        const batch = batches && BATCH_ID.test(parts[2]) ? batches.get(parts[2]) : null;
+        if (!batch) throw new HttpError(404, '접수된 묶음을 찾을 수 없습니다.');
+        if (parts[3] === 'report') {
+          const card = reportCards.get(batch.id);
+          return sendJson(res, 200, { ...reportOf(batch), card: card ? { settledAt: card.settledAt, updatedAt: card.updatedAt, revisions: card.revisions } : null, saveFailed: reportCards.failed(batch.id) });
+        }
+        res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="${batch.id}-history.csv"` });
+        return res.end(historyCsv(batch, { usageOf: usageOfItems, now: scheduleNow() }));
+      }
       // 묶음 접수 조회: 요청 원문이 들어 있어 토큰을 요구한다. 조회는 상태를 바꾸지 않고 AI를 부르지 않는다
       if (parts[1] === 'batches' && (parts.length === 2 || parts.length === 3)) {
         checkToken(req);
@@ -1556,11 +1616,9 @@ export async function startServer({
         const batch = BATCH_ID.test(parts[2]) ? batches.get(parts[2]) : null;
         if (!batch) throw new HttpError(404, '접수된 묶음을 찾을 수 없습니다.');
         const { submitKey, digest, ...rest } = batch;
-        // 사용량: 확인된 토큰과 미보고 호출 수를 따로 준다(미보고를 0으로 치지 않는다). 건마다 판별 호출과 그 업무의 호출을 한 번씩 센다
-        const usageOf = (items) => ledger.summarize({ roots: items.map((i) => i.run), items: items.map((i) => i.id) });
         return sendJson(res, 200, { ...rest,
-          items: batch.items.map((item) => ({ ...item, usage: usageOf([item]), waitingOn: sequencer.waitingOn(item.id) })),
-          usage: usageOf(batch.items),
+          items: batch.items.map((item) => ({ ...item, usage: usageOfItems([item]), waitingOn: sequencer.waitingOn(item.id) })),
+          usage: usageOfItems(batch.items),
           ...(batch.budget ? { budget: { ...batch.budget, usedCalls: batchCalls(batch), reservedCalls: reservedCalls.get(batch.id) || 0 } } : {}) });
       }
       if (parts.length === 4 && parts[1] === 'agents' && parts[3] === 'preview') {
@@ -1804,6 +1862,7 @@ export async function startServer({
     setInterval(pollFiles, POLL_MS),
     setInterval(() => { if (runner) { try { runner.restoreContinuous({ expiredOnly: true }); } catch { warn('종료 시각이 지난 감시 상태를 확인하지 못했습니다.'); } } }, 1000),
     setInterval(scheduleBroadcast, RECOMPUTE_MS),
+    setInterval(() => { try { checkWaitAlerts(); } catch (error) { warn('대기시간 알림을 확인하지 못했습니다', error); } }, 30_000),
     setInterval(() => {
       for (const res of sseClients) res.write(`event: ping\ndata: ${JSON.stringify({ ts: new Date().toISOString() })}\n\n`);
     }, PING_MS),
@@ -1867,7 +1926,7 @@ export async function startServer({
     releaseAccess?.();
   }
 
-  return { server, url, accessUrl, remote, token, port: actualPort, root, workspaceSource, compat, legacyPending, schedules, close };
+  return { server, url, accessUrl, remote, token, port: actualPort, root, workspaceSource, compat, legacyPending, schedules, checkWaitAlerts, close };
 }
 
 function parseArgs(argv) {

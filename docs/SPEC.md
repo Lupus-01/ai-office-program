@@ -68,6 +68,7 @@ test/                     node:test
 | `schedules.json` | 업무 예약(1회·N회·매일·요일 반복) |
 | `batches/<묶음 번호>.json` | 묶음 접수(2.0): 묶음 번호·제출 순번·제출 키·건별 요청 원문·첨부·완료 기준·선행 업무·건별 상태와 사건 기록(비공개 0700/0600) |
 | `ledger/<YYYY-MM>.jsonl` | 호출 원장(2.0): AI 호출 하나에 한 줄(호출 번호·종류·대화·건·업무·직원·엔진·시각·보고된 사용량 또는 null). 한국 시각 월별(비공개) |
+| `batches/<묶음 번호>.report.json` | 묶음 보고 카드(2.0): 처음 정리된 시각, 건수 확정 이력(최근 100개) |
 | `publications/` | 외부 작업 발행 증표 |
 | `video-publications.json` | 영상 게시 이력(영구) |
 | `final-outputs/settings.json`, `index.json` | 최종산출물 위치·등록 파일·해시 |
@@ -431,6 +432,15 @@ test/                     node:test
 - **묶음 예산 늘리기(`POST /api/batches/:id/budget {calls, reason}`).** 늘린 양·시각·사유를 `budget.log`에 남긴다. 늘리면 기다리던 건은 스스로 시작하고, 예산 때문에 멈췄던 업무는 대표가 답장("이어서 재개")해야 움직인다. 업무별 예산 승인("계속")과 묶음 예산 늘리기는 서로를 대신하지 않는다.
 - **무진전 반복 차단.** 최종 검토가 통과인데 외부 작업 문안의 형식 오류가 남아 반려하는 경우, 같은 단계·같은 오류가 고친 뒤에도 그대로면(산출물 변화 없음, 또는 같은 오류 세 번째) 자동 반려를 멈추고 대표에게 묻는다(`phase: "stuck"`). 오류 문안은 발송·게시하지 않고, 조건을 못 채운 문안을 통과시키지도 않는다.
 - 공급자가 호출당 토큰 상한을 강제하지 않으므로 이 예산은 "새 호출 차단"이지 "토큰 상한 보장"이 아니다. 이미 시작한 호출의 사용량은 끝난 뒤 실제 값으로 적힌다.
+### 묶음 보고·처리 이력·대기시간(2.0, `lib/batch-report.mjs`)
+
+모두 저장된 건 상태·사건 기록·호출 원장으로만 만든다. AI를 부르지 않고 순번·실행 상태를 바꾸지 않는다.
+
+- **묶음 보고(`GET /api/batches/:id/report`).** 원래 접수 순서대로 건마다 한 행: 건별 번호·제목·상태·결과 한 줄(완료는 결과 요약, 그 밖에는 미처리 사유)·산출물(업무 폴더와 보고서) 또는 사유·다음 행동·시도 수·시간·사용량. 상태별 건수(`counts`)의 합은 언제나 접수 건수다. `settled`는 더 진행할 건이 없다는 뜻이다(모두 끝났거나 사람의 결정·선행 업무·묶음 예산을 기다린다). `complete`는 모든 건이 완료 또는 취소다.
+- **보고 카드.** 묶음이 처음 정리됐을 때 카드를 저장하고 `flow.notice`("묶음 보고(…): 완료 3 / 확인 필요 1")를 한 번 남긴다. 그 뒤 건수가 바뀌면(보류 건 재개·완료·취소) 같은 카드의 확정 이력에 더하고 알림은 다시 내지 않는다. 저장은 최초 1회 + 재시도 2회이고, 그래도 실패하면 응답의 `saveFailed`로 표시만 한다. 보고 저장 실패로 업무를 다시 실행하지 않는다.
+- **처리 이력(`GET /api/batches/:id/history.csv`).** UTF-8(BOM)·CRLF CSV. 사건마다 한 줄(묶음 번호·업무 번호·접수 순서·시도 번호·사건 번호·사건·한국 시각·사유)과 건마다 요약 한 줄(네 가지 시간(분)·AI 호출 수·미보고 호출 수·확인된 입력/출력 토큰). 건수는 업무 번호, 호출은 원장의 호출 번호로 한 번씩 센 값이다. 요청 원문·제목·첨부 경로·수신 주소·인증값은 내보내지 않는다. 사유는 프로그램이 정한 문구만 내보내고 실패는 "실행 실패"로만 적는다. `=`·`+`·`-`·`@`로 시작하는 칸은 작은따옴표를 붙인다.
+- **시간 구분(`itemTimes`).** 건의 사건 기록에서 겹치지 않는 네 가지를 계산한다: 실행 자리 대기, 선행 결과 대기, 사람 답변 대기(확인 필요·중지·일시정지부터 재개까지), 실제 작업. 대기 구간은 선행 업무가 모두 끝난 시각을 경계로 선행 결과 대기와 실행 자리 대기로 가른다. 실패 뒤 다시 움직이기 전까지는 어느 쪽에도 넣지 않는다. 접수 시각(`acceptedAt`)과 실제 첫 시작 시각(`firstStartedAt`)을 따로 준다.
+- **대기시간 누적 알림(`waitAlerts`).** 기본은 기록만 한다(기준 없음). 기준(`startServer`의 `waitAlertMinutes`)이 있으면 30초마다 "실행 자리 대기"가 기준을 넘긴 건을 찾아 `flow.notice`를 내고 건에 `wait-alert` 사건(구간 시작 시각 포함)을 남긴다. 같은 건·같은 구간은 한 번만 알리고, 재개 뒤 다시 대기하면 새 구간이다. 선행 결과 대기·사람 답변 대기·실제 작업은 알림 대상이 아니다. 기준값을 회사 설정에서 고르는 화면과 업무 유형별 표본 수 조건은 아직 없다.
 ## 5. 외부 작업
 
 ### 계정 연결
@@ -805,6 +815,7 @@ node scripts/codex-review.mjs --target outputs/<날짜>/<slug> [--reviewers <id�
 - `dashboard/orchestrator.mjs`: `orchestrate({root, run, prompt, execute, signal, maxParallel, resume, onDecision, outbound, intent, judge})`, `checkpointFile`.
 - `lib/final-outputs.mjs`: `finalOutputSettings`, `customOutputDirectory`, `collectFinalOutputs`, `resolveFinalOutput`.
 - `lib/batches.mjs`: `createBatches({root, now, write})` → `submit(body)`, `get(id)`, `findByKey(key)`, `list()`. `items()`, `patch(itemId, fn, event)`. `normalizeSubmission`, `batchSummary`, `itemPrompt`, `BATCH_LIMITS`, `ITEM_STATUS`.
+- `lib/batch-report.mjs`: `batchReport(batch, {waitingOn, usageOf, resultOf, now})`, `historyCsv(batch, {usageOf, now})`, `itemTimes(item, batch, now)`, `waitAlerts(batches, thresholdMs, now)`, `createReportCards({root, write, read, now})`.
 - `lib/ledger.mjs`: `createLedger({root, now})` → `record(call)`, `attach(callIds, item)`, `callsFor({roots, items})`, `summarize(query)`. `summarizeCalls(calls)`.
 - `dashboard/sequencer.mjs`: `createSequencer({batches, startRun, replyRun, latestRun, taskStatus, onChange})` → `pump()`, `started(itemId)`, `reply(rootId, runId, body)`, `cancel(itemId)`, `recover()`, `waitingOn(itemId)`, `itemOfRun(rootId)`, `pauseWaiting()`, `resumePaused()`, `enqueue(request, {source, title, origin})`, `findOrigin(match)`, `ticket(itemId)`.
 
@@ -821,6 +832,7 @@ node scripts/codex-review.mjs --target outputs/<날짜>/<slug> [--reviewers <id�
 | PUT /api/settings | mode·chief·budget 저장 |
 | POST /api/runs | 비서실장 지시. `agentId`가 있으면 400. 유한한 새 업무는 순번을 따른다(앞선 건이 진행 중이면 `{queued, item, batch, ahead}`) |
 | POST /api/batches | 묶음 접수(2.0) `{submitKey, title?, items:[{title?, prompt, attachments?, done?, dependsOn?}]}`. 저장만 하고 실행하지 않는다(AI 호출 0회). 새 접수 201, 같은 `submitKey` 재전송은 원래 번호로 200 `{duplicate, batch}`, 같은 키에 다른 내용 409, 저장 실패 500(접수 0건) |
+| GET /api/batches/:id/report, /api/batches/:id/history.csv | 묶음 보고(건별 행·건수·시간·사용량·보고 카드), 처리 이력 CSV(토큰) |
 | POST /api/batches/:id/budget | 묶음 예산 늘리기 `{calls(1~500), reason}`. 묶음 예산이 없는 묶음은 409 |
 | POST /api/batches/:id/items/:no/cancel | 접수된 건 취소(진행 중·완료는 409) |
 | GET /api/batches[?key=], /api/batches/:id | 묶음 요약 목록(원문 없음, `?key=`는 제출 키로 접수 여부 확인), 묶음 상세(요청 원문, 건별 `usage`·`waitingOn`, 묶음 `usage`·`budget` 포함)(토큰) |
