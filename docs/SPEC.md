@@ -66,6 +66,7 @@ test/                     node:test
 | `orchestrations/<rootId>.json` | 업무 체크포인트 v2(비공개 0700/0600) |
 | `continuous/<rootId>.json` | 지속 감시 체크포인트 |
 | `schedules.json` | 업무 예약(1회·N회·매일·요일 반복) |
+| `batches/<묶음 번호>.json` | 묶음 접수(2.0): 묶음 번호·제출 순번·제출 키·건별 요청 원문·첨부·완료 기준·선행 업무·건별 상태와 사건 기록(비공개 0700/0600) |
 | `publications/` | 외부 작업 발행 증표 |
 | `video-publications.json` | 영상 게시 이력(영구) |
 | `final-outputs/settings.json`, `index.json` | 최종산출물 위치·등록 파일·해시 |
@@ -393,6 +394,16 @@ test/                     node:test
 - 질문하면 업무는 blocked, 실행은 needsReply가 된다. 답장은 같은 계획의 대기 단계부터 이어 간다. 계획 전 질문도 최초 요청을 먼저 저장한다.
 - 서버를 다시 시작하면 진행 중이던 업무는 끊김으로 표시하고 "이어서 재개"로 체크포인트를 재사용한다. 승인된 업무의 산출물은 재개로 덮어쓰지 않는다.
 
+### 묶음 접수(2.0)
+
+대표가 서로 다른 업무 여러 건을 한 번에 맡기는 접수 단위다(기획 `docs/v2/PLAN.md` 3.1). 이 절은 저장·조회까지의 계약이고, 순번 실행은 뒤 단계에서 붙인다.
+
+- 묶음 번호 `B<YYMMDD>-<NNN>`(한국 시각 접수일, 그날의 일련번호), 건별 번호 `<묶음 번호>-<항목 번호>`, 제출 순번 `seq`(작업 공간 전체에서 1씩 증가). 실행 순서의 기준은 `seq`와 항목 번호다.
+- 항목: `title`(없으면 요청 첫 줄, 80자), `prompt`(줄바꿈 보존, 20,000자), `attachments`(`보관함/업로드/` 아래 실제 파일만, 10개), `done`(완료 기준, 2,000자), `dependsOn`(같은 묶음의 **앞선** 항목 번호만 — 순환이 생길 수 없다). 한 묶음 20건, 요청 합계 100,000자.
+- 한 묶음은 파일 하나로 임시 파일에 쓴 뒤 이름을 바꿔 저장한다. 저장이 끝난 뒤에만 번호를 돌려주므로 일부만 접수되는 일이 없다. 저장에 실패하면 접수 0건이다.
+- 제출 키 `submitKey`(16~128자 영숫자·`_`·`-`)는 작성창이 한 번 만든다. 같은 키로 다시 오면(응답 유실·더블클릭·재접속) 저장된 묶음을 그대로 돌려준다. 재전송 대조는 내용 해시로 하고 첨부 파일 존재는 다시 보지 않는다. 같은 키에 다른 내용은 409다. 제목이 같아도 키가 다르면 별도 묶음이다.
+- 접수와 조회는 실행·업무(`runs`·`tasks`)를 만들지 않고 AI를 부르지 않는다. 건의 처음 상태는 `waiting`, 사건 기록은 `accepted` 하나다.
+- 목록 응답에는 요청 원문·첨부 경로·완료 기준·제출 키를 넣지 않는다.
 ## 5. 외부 작업
 
 ### 계정 연결
@@ -766,6 +777,7 @@ node scripts/codex-review.mjs --target outputs/<날짜>/<slug> [--reviewers <id�
 - `dashboard/runner.mjs` `createRunner({root, onChange, maxConcurrent = 4, spawnImpl})`: `start`, `stop`, `stopAll`, `pause`, `resumeAll`, `list`, `startReview`, `reply`, `result`, `latestForTask`, `clearNeedsReply`, `restoreContinuous`, `clearHistory`. 명령 인자는 배열이고 프롬프트는 stdin이다. 오류는 `err.status`(400/404/409)와 한국어 메시지.
 - `dashboard/orchestrator.mjs`: `orchestrate({root, run, prompt, execute, signal, maxParallel, resume, onDecision, outbound, intent, judge})`, `checkpointFile`.
 - `lib/final-outputs.mjs`: `finalOutputSettings`, `customOutputDirectory`, `collectFinalOutputs`, `resolveFinalOutput`.
+- `lib/batches.mjs`: `createBatches({root, now, write})` → `submit(body)`, `get(id)`, `findByKey(key)`, `list()`. `normalizeSubmission`, `batchSummary`, `BATCH_LIMITS`.
 
 ### HTTP API (`dashboard/server.mjs`, 기본 127.0.0.1:4777)
 
@@ -779,6 +791,8 @@ node scripts/codex-review.mjs --target outputs/<날짜>/<slug> [--reviewers <id�
 | GET/PUT /api/company | 회사 규칙·설정·작업 공간·최종산출물 위치(토큰) |
 | PUT /api/settings | mode·chief·budget 저장 |
 | POST /api/runs | 비서실장 지시. `agentId`가 있으면 400 |
+| POST /api/batches | 묶음 접수(2.0) `{submitKey, title?, items:[{title?, prompt, attachments?, done?, dependsOn?}]}`. 저장만 하고 실행하지 않는다(AI 호출 0회). 새 접수 201, 같은 `submitKey` 재전송은 원래 번호로 200 `{duplicate, batch}`, 같은 키에 다른 내용 409, 저장 실패 500(접수 0건) |
+| GET /api/batches[?key=], /api/batches/:id | 묶음 요약 목록(원문 없음, `?key=`는 제출 키로 접수 여부 확인), 묶음 상세(요청 원문 포함)(토큰) |
 | POST /api/uploads | 지시창 파일 올리기 `{name, data(base64)}` → `보관함/업로드/<날짜>/`, 201 `{path, name, size}`(25MB, 허용 형식 밖 415, 너무 큼 413) |
 | POST /api/runs/:id/stop, /reply | 중지, 이어서 답하기 |
 | GET /api/runs/:id/log, /result | 로그 마지막 64KB, 답변 전문(`X-Result-Source`, `X-Session-Id`)(토큰) |

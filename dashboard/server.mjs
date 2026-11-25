@@ -41,6 +41,7 @@ import { createJudge } from '../lib/ai-judge.mjs';
 import { recipeChoices } from '../lib/recipes.mjs';
 import { ensureVault } from '../lib/vault.mjs';
 import { UPLOAD_MAX_BYTES, saveUpload } from '../lib/uploads.mjs';
+import { BATCH_ID, SUBMIT_KEY, batchSummary, createBatches } from '../lib/batches.mjs';
 import { buildState } from './state.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -312,6 +313,7 @@ export async function startServer({
   env = process.env, // 상태 점검과 실제 실행기가 같은 CLI·환경을 사용한다.
   connectionBase = undefined, browserOptions = {},
   scheduleNow = Date.now,
+  batchWrite = undefined, // 묶음 접수 저장 함수(테스트에서 저장 실패를 재현하려고 바꿔 넣는다)
   openFolder = defaultOpenFolder, // "폴더 열기" 실행 함수(테스트에서 실제 탐색기를 띄우지 않도록 바꿔 넣는다)
 } = {}) {
   if (!root) ({ path: root, source: workspaceSource } = resolveWorkspace({ env, program }));
@@ -525,6 +527,9 @@ export async function startServer({
   const runner = demo ? null : createRunner({ root, env, judge, toolStatus: async () => { await toolProbe; return tools; }, onChange: () => scheduleBroadcast(), outbound: browserWork, keepAwake: createKeepAwake(), aside });
   const schedules = demo ? null : createSchedules({ root, now: scheduleNow, runs: () => runner.list(),
     start: (request) => runner.start(request), onChange: () => scheduleBroadcast() });
+
+  // 묶음 접수 저장소(2.0): 저장·조회만 한다
+  const batches = demo ? null : createBatches({ root, now: scheduleNow, ...(batchWrite ? { write: batchWrite } : {}) });
 
   const allRuns = () => (runner ? runner.list() : []);
 
@@ -1411,6 +1416,25 @@ export async function startServer({
         checkToken(req);
         return sendJson(res, 200, { schedules: schedules?.list({ full: true }) || [] });
       }
+      // 묶음 접수 조회: 요청 원문이 들어 있어 토큰을 요구한다. 조회는 상태를 바꾸지 않고 AI를 부르지 않는다
+      if (parts[1] === 'batches' && (parts.length === 2 || parts.length === 3)) {
+        checkToken(req);
+        if (!batches) return parts.length === 2 ? sendJson(res, 200, { batches: [] }) : (() => { throw new HttpError(404, '접수된 묶음을 찾을 수 없습니다.'); })();
+        if (parts.length === 2) {
+          // ?key=: 접수 응답을 받지 못했을 때 같은 제출 키로 접수 여부부터 확인한다
+          const key = url.searchParams.get('key');
+          if (key !== null) {
+            if (!SUBMIT_KEY.test(key)) throw new HttpError(400, '제출 키 형식이 올바르지 않습니다.');
+            const found = batches.findByKey(key);
+            return sendJson(res, 200, { batches: found ? [batchSummary(found)] : [] });
+          }
+          return sendJson(res, 200, { batches: batches.list().map(batchSummary) });
+        }
+        const batch = BATCH_ID.test(parts[2]) ? batches.get(parts[2]) : null;
+        if (!batch) throw new HttpError(404, '접수된 묶음을 찾을 수 없습니다.');
+        const { submitKey, digest, ...rest } = batch;
+        return sendJson(res, 200, rest);
+      }
       if (parts.length === 4 && parts[1] === 'agents' && parts[3] === 'preview') {
         checkToken(req);
         const p = agentPreview(parts[2]);
@@ -1464,6 +1488,17 @@ export async function startServer({
       if (demo) throw new HttpError(409, '데모 모드에서는 파일을 올릴 수 없습니다.');
       try { return sendJson(res, 201, saveUpload(root, body)); }
       catch (error) { if (error.status) throw new HttpError(error.status, error.message); throw error; }
+    }
+
+    // 묶음 접수: 전체를 저장한 뒤에만 번호를 돌려준다. 같은 제출 키의 재전송은 원래 번호(200), 새 접수는 201.
+    // 여기서는 저장만 한다. 의도 판별·실행은 순번 실행기가 차례가 왔을 때 한다
+    if (resource === 'batches' && method === 'POST' && parts.length === 2) {
+      if (!batches) throw new HttpError(409, '데모 모드에서는 업무를 접수할 수 없습니다.');
+      let result;
+      try { result = batches.submit(body); }
+      catch (error) { if (error.status) throw new HttpError(error.status, error.message); throw error; }
+      if (!result.duplicate) scheduleBroadcast();
+      return sendJson(res, result.duplicate ? 200 : 201, { duplicate: result.duplicate, batch: batchSummary(result.batch) });
     }
 
     if (resource === 'history' && method === 'DELETE' && parts.length === 2) return sendJson(res, 200, clearHistory());
