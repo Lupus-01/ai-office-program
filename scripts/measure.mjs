@@ -14,7 +14,7 @@ const sec = (ms) => (ms ? `${Math.round(ms / 1000)}초` : '0초');
 export function measureRows(reports) {
   return reports.flatMap((report) => report.rows.map((row) => ({ id: row.id, title: row.title, via: row.via || 'screen', status: row.label, attempts: row.attempts,
     workMs: row.times?.workMs || 0, slotWaitMs: row.times?.slotWaitMs || 0, depWaitMs: row.times?.depWaitMs || 0, humanWaitMs: row.times?.humanWaitMs || 0,
-    calls: row.usage?.calls || 0, unreported: row.usage?.unreported || 0, input: row.usage?.input || 0, output: row.usage?.output || 0 })));
+    calls: row.usage?.calls || 0, unreported: row.usage?.unreported || 0, input: row.usage?.totalInput ?? row.usage?.input ?? 0, cached: row.usage?.cachedInput || 0, output: row.usage?.output || 0 })));
 }
 // 경로별 요약: 끝난 건만 평균을 낸다(진행 중·대기 건은 건수만 센다)
 export function measureSummary(rows) {
@@ -47,7 +47,8 @@ async function main(argv) {
   console.log('\n| 경로 | 접수 | 완료 | 완료 건 평균 작업 시간 | 평균 AI 호출 | 평균 입력 토큰 | 평균 출력 토큰 | 미보고 호출 |');
   console.log('| --- | --- | --- | --- | --- | --- | --- | --- |');
   for (const g of summary) console.log(`| ${VIA_LABEL[g.via] || g.via} | ${g.total} | ${g.done} | ${g.done ? sec(g.avgWorkMs) : '-'} | ${g.avgCalls ?? '-'} | ${g.avgInput?.toLocaleString('ko-KR') ?? '-'} | ${g.avgOutput?.toLocaleString('ko-KR') ?? '-'} | ${g.unreported} |`);
-  console.log('\n토큰은 엔진이 보고한 값만 더한 것이다. 미보고 호출의 토큰은 들어 있지 않다. 제목(요청 요약)은 표에 싣지 않았다.');
+  console.log('\n입력 토큰은 캐시로 읽은 분량까지 더한 전체다.');
+  console.log('토큰은 엔진이 보고한 값만 더한 것이다. 미보고 호출의 토큰은 들어 있지 않다. 제목(요청 요약)은 표에 싣지 않았다.');
   return undefined;
 }
 

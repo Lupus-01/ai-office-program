@@ -591,7 +591,7 @@ export async function startServer({
     budget: () => loadSettings(root).budget.calls });
   // 순번 실행기(2.0): 접수된 건을 한 번에 한 건씩 기존 단건 실행에 넘긴다. 건 상태는 여기서만 바뀐다
   const sequencer = demo ? null : createSequencer({ batches,
-    startRun: (item, batch) => startBatchItem(item, batch),
+    startRun: (item, batch, control) => startBatchItem(item, batch, control),
     replyRun: (runId, body) => runner.reply(runId, body),
     latestRun: (rootId) => runner.list().filter((r) => !r.phase && (r.rootId || r.id) === rootId).at(-1) || null,
     taskStatus: (id) => loadTaskList(root).find((t) => t.id === id)?.status ?? null,
@@ -953,7 +953,22 @@ export async function startServer({
   // ---- 실행 ----
   // 지시 판별을 기다리는 동안(최대 15초) 같은 지시가 또 들어오면 중복 업무를 만들지 않는다(다른 탭·터미널 포함)
   const startingRuns = new Set();
+  const recentRuns = new Map(); // 제출 키 → { at, result(약속) }. 10분 동안 기억한다
   async function startRunOnce(body) {
+    const submitKey = typeof body.submitKey === 'string' && SUBMIT_KEY.test(body.submitKey) ? body.submitKey : null;
+    if (submitKey) {
+      for (const [key, entry] of recentRuns) if (Date.now() - entry.at > 600000) recentRuns.delete(key);
+      const seen = recentRuns.get(submitKey);
+      if (seen) return seen.result;
+      const result = startRunKeyed(body);
+      recentRuns.set(submitKey, { at: Date.now(), result });
+      // 접수에 실패한 제출은 기억하지 않는다(같은 키로 다시 보낼 수 있게)
+      result.catch(() => { if (recentRuns.get(submitKey)?.result === result) recentRuns.delete(submitKey); });
+      return result;
+    }
+    return startRunKeyed(body);
+  }
+  async function startRunKeyed(body) {
     const key = typeof body.prompt === 'string' ? body.prompt.normalize('NFKC').replace(/\s+/g, ' ').trim() : '';
     if (key && startingRuns.has(key)) throw new HttpError(409, '같은 지시를 접수하고 있습니다. 잠시만 기다려 주세요.');
     startingRuns.add(key);
@@ -1107,7 +1122,7 @@ export async function startServer({
 
   // 순번 실행기가 차례가 온 건을 시작할 때 부른다. 의도 판별은 여기서 한 번만 하고 결과를 건에 남긴다(재시도·재시작 때 다시 묻지 않는다).
   // 묶음의 건은 항상 유한한 새 업무다. 예약·상시 감시·일시정지 같은 지시는 지시창에서 한다
-  async function startBatchItem(item, batch) {
+  async function startBatchItem(item, batch, control = null) {
     // 예약 회차·감시 후속 업무: 접수할 때 정해 둔 인자 그대로 시작한다(예전에도 판별 없이 시작하던 실행이다)
     if (item.start) { const run = runner.start({ ...item.start, prompt: item.prompt }); linkRun(item, run); scheduleBroadcast(); return { run }; }
     const prompt = itemPrompt(item, batch);
@@ -1119,6 +1134,8 @@ export async function startServer({
         quickEdit: judged.quickEdit === true, quickEditFile: judged.quickEditFile || '', quickAgent: judged.quickAgent || '', recipe: judged.recipe || '' };
     }
     if (intent.outputDir) { try { customOutputDirectory(root, intent.outputDir); } catch (err) { throw new Error(`저장 위치를 쓸 수 없습니다: ${err.message}`); } }
+    // 판별을 기다리는 사이 일시정지가 들어왔으면 실행을 만들지 않는다(판별 결과는 건에 남겨 재개 때 다시 묻지 않는다)
+    if (control?.aborted?.()) { batches.patch(item.id, (i) => { i.intent = intent; }); throw Object.assign(new Error('일시정지 요청으로 시작하지 않았습니다. "이어서 해줘"라고 하면 진행합니다.'), { paused: true }); }
     // 지시창에서 온 단건은 예전처럼 지시문을 그대로 보여 주고 지시창의 모델 설정을 쓴다
     const options = item.options || {};
     const run = runner.start({ prompt, continuous: false, intent, model: options.model || null, engine: options.engine || null, effort: options.effort || null,

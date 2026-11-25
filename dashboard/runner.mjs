@@ -754,7 +754,8 @@ export function createRunner({ root, onChange, judge = null, followUp = null, re
               // 접수표(아직 차례를 기다리는 후속 업무)면 순번 실행기에 묻는다. 실행이 생겼으면 그 실행으로 이어서 본다
               if (followUp && String(id).startsWith(TICKET)) {
                 const ticket = followUp.state(String(id).slice(TICKET.length));
-                if (!ticket) return null;
+                // 접수 기록이 없어졌으면(파일 손상 등) 계속 기다리지 않고 실패로 알려 다음 확인 때 다시 전달하게 한다
+                if (!ticket) return { status: 'failed', userStopped: false, summary: '접수 기록을 찾지 못했습니다.' };
                 if (!ticket.runId) return ticket;
                 id = ticket.runId; taskId = taskId || ticket.task;
               }

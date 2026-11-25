@@ -16,6 +16,7 @@ const fail = (status, message) => Object.assign(new Error(message), { status });
 //   canStart(batch) → boolean                         묶음 예산이 남아 있는가(없으면 그 묶음의 건은 시작하지 않고 다음 묶음으로 넘어간다)
 export function createSequencer({ batches, startRun, replyRun, latestRun, taskStatus = () => null, canStart = () => true, onChange = () => {}, warn = () => {} }) {
   const starting = new Set(); // 시작 요청을 보내고 실행 정보를 아직 받지 못한 건
+  const pauseAsked = new Set(); // 시작 준비 중에 일시정지가 들어온 건
   const startResults = new Map(); // 건 번호 → 시작 결과(실행 또는 오류)를 주는 Promise
   let pumping = false, again = false;
 
@@ -78,18 +79,24 @@ export function createSequencer({ batches, startRun, replyRun, latestRun, taskSt
       { type: resume ? 'resumed' : 'started', attempt: (item.attempt || 0) + 1 });
     if (!started) return false; // 저장하지 못하면 시작하지 않는다(다음 변화 때 다시 본다)
     starting.add(item.id);
-    const work = Promise.resolve().then(() => (resume ? { run: replyRun(resume.runId, resume.body) } : startRun(started, batch))).then((result) => {
+    // aborted(): 시작을 준비하는 동안(의도 판별 최대 15초) 일시정지가 들어왔는지. 실행을 만들기 직전에 확인해 시작하지 않는다
+    const work = Promise.resolve().then(() => (resume ? { run: replyRun(resume.runId, resume.body) } : startRun(started, batch, { aborted: () => pauseAsked.has(item.id) }))).then((result) => {
       const run = result?.run;
       if (!run?.id) throw new Error('실행을 시작하지 못했습니다.');
       save(item.id, (i) => { i.run = run.rootId || run.id; if (run.task) i.task = run.task; if (result.intent) i.intent = result.intent; });
       return { run };
     }).catch((error) => {
+      if (error?.paused || pauseAsked.has(item.id)) {
+        // 시작 전에 일시정지됐다: 실패가 아니라 "이어서 해줘"로 다시 차례를 받는 건이다
+        save(item.id, (i) => { i.status = S.stopped; i.paused = true; i.reason = '일시정지했습니다.'; }, { type: 'paused' });
+        throw error;
+      }
       const reason = String(error?.message || '실행을 시작하지 못했습니다.').slice(0, 300);
       save(item.id, (i) => { i.status = S.failed; i.reason = reason; }, { type: S.failed, reason });
       throw error;
     });
     startResults.set(item.id, work);
-    work.catch(() => {}).finally(() => { starting.delete(item.id); startResults.delete(item.id); onChange(); pump(); });
+    work.catch(() => {}).finally(() => { starting.delete(item.id); startResults.delete(item.id); pauseAsked.delete(item.id); onChange(); pump(); });
     return true;
   }
 
@@ -185,6 +192,8 @@ export function createSequencer({ batches, startRun, replyRun, latestRun, taskSt
   function pauseWaiting() {
     const paused = [];
     for (const { item } of all()) {
+      // 시작을 준비 중인 건(아직 실행이 없다): 실행을 만들기 직전에 멈추도록 표시해 둔다
+      if (item.status === S.running && !item.run && starting.has(item.id)) { pauseAsked.add(item.id); paused.push({ item: item.id, title: item.title }); continue; }
       if (item.status !== S.waiting) continue;
       if (save(item.id, (i) => { i.status = S.stopped; i.paused = true; i.reason = '일시정지했습니다.'; }, { type: 'paused' })) paused.push({ item: item.id, title: item.title });
     }
@@ -228,7 +237,10 @@ export function createSequencer({ batches, startRun, replyRun, latestRun, taskSt
     if (!item) return null;
     if (item.run) return { runId: item.run, task: item.task || null };
     if (item.status === S.waiting || item.status === S.running) return { status: 'queued' };
-    return { status: item.status === S.canceled ? 'stopped' : 'failed', userStopped: true, summary: item.reason || '' };
+    // 시작 전에 일시정지된 건은 아직 기다리는 중이다(재개하면 그대로 진행한다 — 같은 일을 새로 만들지 않게)
+    if (item.status === S.stopped && item.paused) return { status: 'queued' };
+    // 대표가 취소한 건만 "사용자가 멈춤"이다. 시작에 실패한 건(도구 로그아웃 등)은 부른 쪽이 다음 확인 때 다시 시도할 수 있다
+    return item.status === S.canceled ? { status: 'stopped', userStopped: true, summary: item.reason || '' } : { status: 'failed', userStopped: false, summary: item.reason || '' };
   }
 
   // 화면용: 대기 중인 건이 무엇을 기다리는지(조회만, 상태를 바꾸지 않는다)

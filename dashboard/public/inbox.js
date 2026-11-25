@@ -34,7 +34,9 @@ export function countsText(batch) {
 export function usageText(usage) {
   if (!usage || !usage.calls) return 'AI 호출 0회';
   const n = (v) => Number(v || 0).toLocaleString('ko-KR');
-  return `AI 호출 ${usage.calls}회 · 확인된 입력 ${n(usage.input)} · 출력 ${n(usage.output)} 토큰${usage.unreported ? ` · 미보고 ${usage.unreported}회(토큰 미포함)` : ''}`;
+  // 입력은 캐시로 읽은 분량까지 더한 전체(totalInput)를 보여 준다. 예전 기록처럼 그 값이 없으면 input을 쓴다
+  const total = usage.totalInput ?? usage.input;
+  return `AI 호출 ${usage.calls}회 · 확인된 입력 ${n(total)}${usage.cachedInput ? `(캐시 ${n(usage.cachedInput)} 포함)` : ''} · 출력 ${n(usage.output)} 토큰${usage.unreported ? ` · 미보고 ${usage.unreported}회(토큰 미포함)` : ''}`;
 }
 // 제출 키: 여러 건을 한 번에 보낼 때 한 번 만들고, 같은 제출을 다시 보낼 때 그대로 쓴다
 export function newSubmitKey(random = (n) => crypto.getRandomValues(new Uint8Array(n))) {
@@ -103,7 +105,8 @@ export function progressText(run, feed = [], task = null) {
 
 // 대화: 내 지시 → (진행 한 줄) → 질문 → 내 답글 → 완료 보고. 끝난 실행은 답변만 남고 중간 과정은 남기지 않는다.
 // message: { who, role: 'me'|'ai', at, text, tone?: 'live'|'question'|'past'|'done'|'failed', run?, deliver?: 파일을 붙일 완료 보고 }
-export function threadMessages({ entry, prompt = null, runs = [], feed = [], results = {} }) {
+// queuedReply: 다른 업무가 진행 중이라 차례를 기다리는 내 답글(있으면 대화에 보여 준다 — 답했는데 "답변 필요"로만 보이지 않게)
+export function threadMessages({ entry, prompt = null, runs = [], feed = [], results = {}, queuedReply = null }) {
   const out = [{ who: '나', role: 'me', at: entry.at, text: prompt || entry.title }];
   const conv = entry.run ? runs.filter((r) => !r.phase && r.target !== 'review' && rootOf(r) === entry.run).sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''))) : [];
   if (!conv.length) {
@@ -118,6 +121,12 @@ export function threadMessages({ entry, prompt = null, runs = [], feed = [], res
       // 내가 이미 답한 앞선 말(질문·중간 보고)은 완료 표시 없이 그대로 둔다. 완료 보고는 마지막 말 하나다
       tone: status === 'needs' ? 'question' : status === 'done' ? (i === conv.length - 1 ? 'done' : 'past') : 'failed', ...(status === 'done' && i === conv.length - 1 && (run.task || entry.task) ? { deliver: true } : {}) });
   });
+  if (entry.item?.resumeQueued) {
+    const last = out.at(-1);
+    if (last?.tone === 'question') last.tone = 'past';
+    out.push({ who: '나', role: 'me', at: null, text: queuedReply || '(보낸 답글)' });
+    out.push({ who: AI_NAME, role: 'ai', at: null, text: '답글을 받았습니다. 진행 중인 업무가 끝나면 이어서 진행합니다.', tone: 'live' });
+  }
   return out;
 }
 
@@ -367,7 +376,7 @@ export function createInbox(deps) {
     const full = detail?.items?.find((i) => i.id === entry.id) || null;
     const latest = convRuns(entry).at(-1) || null;
     const results = Object.fromEntries([...ui.results].map(([id, r]) => [id, r.text]));
-    const messages = threadMessages({ entry, prompt: full?.prompt || null, runs: state().runs, feed: state().feed, results });
+    const messages = threadMessages({ entry, prompt: full?.prompt || null, runs: state().runs, feed: state().feed, results, queuedReply: full?.pendingReply?.body?.prompt || null });
     const before = entry.kind === 'item' ? (entry.item.dependsOn || []).map((no) => entry.batch.items.find((i) => i.no === no)).filter(Boolean) : [];
     const multi = entry.kind === 'item' && entry.batch.total > 1;
     return `<div class="cv">
@@ -548,7 +557,7 @@ export function createInbox(deps) {
       ${cards.length ? `<section class="gd ld-guides" aria-label="업무별 가이드"><p class="gd-count">업무별 가이드 · ${cards.length}건</p><div class="gd-grid">${cards.map(guideCard).join('')}</div></section>` : ''}
       ${mine.map((e) => { const full = ui.details.get(e.batch?.id)?.data?.items?.find((i) => i.id === e.id) || null;
         return `<section class="ld-task" aria-label="${esc(e.title)}"><p class="ld-line">${chip(e.status)}<time>${esc(time(e.at))}</time><button type="button" class="link" data-open-entry="${esc(e.id)}" data-key="ld-open-${esc(e.id)}">이 업무만 보기</button></p>
-          ${threadMessages({ entry: e, prompt: full?.prompt || null, runs: state().runs, feed: state().feed, results }).map((m) => bubble(m, e, lead)).join('')}</section>`; }).join('')}
+          ${threadMessages({ entry: e, prompt: full?.prompt || null, runs: state().runs, feed: state().feed, results, queuedReply: full?.pendingReply?.body?.prompt || null }).map((m) => bubble(m, e, lead)).join('')}</section>`; }).join('')}
       ${noticeHTML(ctx)}${pendingHTML(ctx)}</div>`;
   }
 
@@ -769,6 +778,8 @@ export function createInbox(deps) {
     ui.typing = null;
     ui.notices = ui.notices.filter((n) => n.ctx !== ctx);
     const sentAt = Date.now();
+    const single = ui.lastSingle?.ctx === ctx && ui.lastSingle.text === text ? ui.lastSingle.key : newSubmitKey();
+    ui.lastSingle = { ctx, text, key: single };
     ui.sending = true; $('composerSend').disabled = true;
     const many = mode === 'new' && ui.queue.length > 0;
     const items = many ? [...ui.queue, ...(text ? [{ text, files: ui.attached, dep: false }] : [])] : [{ text, files: fresh ? ui.attached : [] }];
@@ -806,6 +817,7 @@ export function createInbox(deps) {
         // after: 이어받을 앞 업무. 서버가 건에 남기고 실행 지시문 뒤에 그 산출물 위치를 덧붙인다(대화에는 대표가 적은 말만 보인다)
         const body = mode === 'follow' ? { prompt: text, ...(latest?.task || entry?.task ? { after: latest?.task || entry.task } : {}), ...(leadOf(entry) ? { to: entry.item.to } : {}) }
           : { prompt: withUploads(text, fresh ? sentFiles.map((f) => f.path) : []), ...(lead ? { to: lead.id } : {}), ...(mode === 'note' && latest ? { noteFor: latest.id } : {}) };
+        if (mode !== 'note') body.submitKey = single;
         let result;
         try { result = await api('POST', '/api/runs', body); }
         catch (error) {
@@ -817,6 +829,7 @@ export function createInbox(deps) {
           result = got.run ? { id: got.run, rootId: got.run } : { queued: true, item: got.id };
         }
         ui.pending = ui.pending.filter((p) => p !== pending);
+        ui.lastSingle = null;
         await refresh();
         if (!lead) landRun(result, ctx);
         else if (result?.followUp) ui.notices.push({ ctx, at: new Date().toISOString(), text: '진행 중인 업무에 전달했습니다.' });
