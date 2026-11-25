@@ -70,6 +70,7 @@ test/                     node:test
 | `ledger/<YYYY-MM>.jsonl` | 호출 원장(2.0): AI 호출 하나에 한 줄(호출 번호·종류·대화·건·업무·직원·엔진·시각·보고된 사용량 또는 null). 한국 시각 월별(비공개) |
 | `batches/<묶음 번호>.report.json` | 묶음 보고 카드(2.0): 처음 정리된 시각, 건수 확정 이력(최근 100개) |
 | `publications/` | 외부 작업 발행 증표 |
+| `reconcile/<기록 이름>.json` | 발송 결과 대조함(2.0): 시도 번호, 결정 이력(결정·근거·결정자·시각·문안 버전), 아직 반영되지 않은 결정 |
 | `video-publications.json` | 영상 게시 이력(영구) |
 | `final-outputs/settings.json`, `index.json` | 최종산출물 위치·등록 파일·해시 |
 | `history.json` | 내역 정리 기준 시각 |
@@ -573,6 +574,19 @@ test/                     node:test
 - 연결 오류 등으로 멈추면 `phase: publish` 질문으로 남긴다. 재개 때 파일 해시·현재 권한·검토 서명이 유효하면 검토·완료 단계를 다시 하지 않는다.
 - 과거 미발송 상태·재발송 금지는 최초 발송의 철회가 아니다. "발송 없음" 같은 열거형 지시는 발송 요청으로 만들지 않는다.
 
+### 발송 결과 대조함(2.0, `lib/reconcile.mjs`)
+
+발송·게시 직후 끊겨 결과가 불확실한 실행 기록(`.office/publications/`의 `committing`·`uncertain`)을 한곳에서 보고 결정을 남긴다. 대조함은 아무것도 보내지 않는다.
+
+- **조회(`GET /api/reconcile`, `?all=1`은 결정 이력이 있는 지난 건 포함).** 건마다 상태, 작업 종류·서비스·대상 주소, 문안 버전(내용 해시 앞 12자), 시도 번호와 시도 시각, 관측된 증표(결과 주소·확인 시각·결과 화면을 읽지 못한 이유·직원 보고 요약), 결정 이력, 그 발송이 속한 업무(실행·업무 id·접수 건 번호)를 준다. 실행 기록 파일 이름의 앞부분이 대화 id의 해시라서 업무를 찾을 수 있다. 문안 원문과 수신 주소는 넣지 않는다(문안은 그 업무의 대화·미리보기에서 본다). 조회·새로고침·다른 기기에서 열기는 외부 발송 0회, AI 호출 0회다.
+- **결정(`POST /api/reconcile/:id {decision, basis, attempt?}`).**
+  - `confirm`(발송 확인): 확인한 증표를 `basis`에 적어야 한다. 업무가 다시 진행될 때 **같은 문안 버전이면** 다시 보내지 않고 확인 처리한다. 문안이 바뀌었으면 반영되지 않는다.
+  - `hold`(확인 보류): 기록만 남는다. 그 업무는 확인 필요로 남고 다른 독립 업무는 계속한다.
+  - `resend`(새 발송 승인): 미발송을 확인한 근거를 `basis`에 적어야 한다. 이때만 새 시도 번호를 준다. 업무가 다시 진행될 때 한 번 다시 보낸다.
+- **한 번만 반영.** 결정이 이미 있거나 그새 처리된 건에 온 결정은 409와 최신 상태(`current`)를 받는다. 두 기기가 동시에 승인해도 새 시도는 한 건이다. `attempt`를 보내면 그 시도 번호일 때만 받는다.
+- **반영 방법.** 결정은 곁 파일(`.office/reconcile/`)에 남고, 기존 발송 문(`browser-work.mjs`의 `deliver`·`deliverWeb`)이 불확실한 기록을 만났을 때 `reconcile.apply`로 결정을 한 번 꺼내 기존 조건(확인 처리 / 재발송 허용)에 반영한다. 실행 기록 형식과 발송 절차는 바꾸지 않았다. 답장 문구("발송됐음 확인", "미발송 확인, 재발송")로 하던 예전 방식도 그대로 된다.
+- 발송 확인·새 발송 승인을 하면 서버가 그 업무의 마지막 실행에 "이어서 재개"를 넣는다(순번을 따른다). 실행을 찾지 못하거나 이어 가지 못하면 결정만 남기고 응답의 `note`로 알린다.
+- 결정자(`by`)는 로그인 구분이 생기기 전까지 `local`(이 PC) 또는 `remote`(다른 기기)다. 결정 이력은 최근 50개를 남긴다.
 ## 6. 안전선
 
 ### 안전선 모듈(`lib/guardrails.mjs`)
@@ -816,6 +830,7 @@ node scripts/codex-review.mjs --target outputs/<날짜>/<slug> [--reviewers <id�
 - `lib/final-outputs.mjs`: `finalOutputSettings`, `customOutputDirectory`, `collectFinalOutputs`, `resolveFinalOutput`.
 - `lib/batches.mjs`: `createBatches({root, now, write})` → `submit(body)`, `get(id)`, `findByKey(key)`, `list()`. `items()`, `patch(itemId, fn, event)`. `normalizeSubmission`, `batchSummary`, `itemPrompt`, `BATCH_LIMITS`, `ITEM_STATUS`.
 - `lib/batch-report.mjs`: `batchReport(batch, {waitingOn, usageOf, resultOf, now})`, `historyCsv(batch, {usageOf, now})`, `itemTimes(item, batch, now)`, `waitAlerts(batches, thresholdMs, now)`, `createReportCards({root, write, read, now})`.
+- `lib/reconcile.mjs`: `createReconcile({root})` → `list({all})`, `get(id)`, `decide(id, {decision, basis, by, attempt})`, `apply(file, flags)`. `scopeKey(rootId)`.
 - `lib/ledger.mjs`: `createLedger({root, now})` → `record(call)`, `attach(callIds, item)`, `callsFor({roots, items})`, `summarize(query)`. `summarizeCalls(calls)`.
 - `dashboard/sequencer.mjs`: `createSequencer({batches, startRun, replyRun, latestRun, taskStatus, onChange})` → `pump()`, `started(itemId)`, `reply(rootId, runId, body)`, `cancel(itemId)`, `recover()`, `waitingOn(itemId)`, `itemOfRun(rootId)`, `pauseWaiting()`, `resumePaused()`, `enqueue(request, {source, title, origin})`, `findOrigin(match)`, `ticket(itemId)`.
 
@@ -832,6 +847,7 @@ node scripts/codex-review.mjs --target outputs/<날짜>/<slug> [--reviewers <id�
 | PUT /api/settings | mode·chief·budget 저장 |
 | POST /api/runs | 비서실장 지시. `agentId`가 있으면 400. 유한한 새 업무는 순번을 따른다(앞선 건이 진행 중이면 `{queued, item, batch, ahead}`) |
 | POST /api/batches | 묶음 접수(2.0) `{submitKey, title?, items:[{title?, prompt, attachments?, done?, dependsOn?}]}`. 저장만 하고 실행하지 않는다(AI 호출 0회). 새 접수 201, 같은 `submitKey` 재전송은 원래 번호로 200 `{duplicate, batch}`, 같은 키에 다른 내용 409, 저장 실패 500(접수 0건) |
+| GET /api/reconcile, POST /api/reconcile/:id | 발송 결과 대조함 목록(토큰), 결정 `{decision: confirm\|hold\|resend, basis, attempt?}`(이미 결정·처리된 건은 409와 `current`) |
 | GET /api/batches/:id/report, /api/batches/:id/history.csv | 묶음 보고(건별 행·건수·시간·사용량·보고 카드), 처리 이력 CSV(토큰) |
 | POST /api/batches/:id/budget | 묶음 예산 늘리기 `{calls(1~500), reason}`. 묶음 예산이 없는 묶음은 409 |
 | POST /api/batches/:id/items/:no/cancel | 접수된 건 취소(진행 중·완료는 409) |

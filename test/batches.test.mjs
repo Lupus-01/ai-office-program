@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BATCH_LIMITS, batchSummary, createBatches } from '../lib/batches.mjs';
 import { writePrivate } from '../lib/private-state.mjs';
+import { scopeKey } from '../lib/reconcile.mjs';
 
 const KEY = (n) => `submit-key-${String(n).padStart(8, '0')}`;
 const NOW = Date.parse('2026-11-25T01:00:00Z'); // 한국 시각 11월 25일 10시
@@ -232,4 +233,25 @@ test('API: 토큰 없이는 접수·조회할 수 없고, 거부된 제출은 �
   // 거부된 요청은 아무것도 남기지 않는다(재전송·조회가 AI를 부르지 않는 것은 sequencer-api 테스트가 호출 수로 확인한다)
   assert.deepEqual((await get(`/api/batches?key=${KEY(11)}`)).json, { batches: [] });
   assert.deepEqual((await get(`/api/batches?key=${KEY(12)}`)).json, { batches: [] });
+});
+
+test('API: 발송 결과 대조함 — 조회는 기록만 읽고, 결정은 근거와 함께 한 번만 반영된다(동시 결정은 409와 최신 상태)', async () => {
+  // 결과가 불확실한 발송 기록 하나(어느 실행에도 속하지 않는 옛 기록)
+  const id = `${scopeKey('run-gone')}-${'a'.repeat(24)}`;
+  writePrivate(join(root, '.office', 'publications', `${id}.json`), { status: 'uncertain', method: 'api', action: 'post', service: 'naver_cafe', connection: 'c1', contentHash: 'f'.repeat(64), target: 'https://cafe.naver.com/f-e/cafes/1/menus/2' });
+  assert.equal((await request('GET', '/api/reconcile')).status, 403);
+  const list = await get('/api/reconcile');
+  assert.equal(list.json.items.length, 1);
+  assert.deepEqual({ id: list.json.items[0].id, pending: list.json.items[0].pending, run: list.json.items[0].run, attempt: list.json.items[0].attempt }, { id, pending: true, run: null, attempt: 1 });
+  assert.equal((await post(`/api/reconcile/${id}`, { decision: 'confirm' })).status, 400);
+  assert.equal((await post('/api/reconcile/not-a-record', { decision: 'hold' })).status, 404);
+  assert.equal((await post(`/api/reconcile/${id}`, { decision: 'hold' })).status, 200);
+  // 두 요청이 동시에 온다: 하나만 반영되고 다른 하나는 409와 최신 상태를 받는다
+  const [a, b] = await Promise.all([post(`/api/reconcile/${id}`, { decision: 'resend', basis: '게시판에 없음', attempt: 1 }), post(`/api/reconcile/${id}`, { decision: 'resend', basis: '게시판에 없음', attempt: 1 })]);
+  assert.deepEqual([a.status, b.status].sort(), [200, 409]);
+  const ok = a.status === 200 ? a : b, refused = a.status === 200 ? b : a;
+  assert.equal(ok.json.item.attempt, 2);
+  assert.match(ok.json.note, /업무 실행을 찾지 못했습니다/);
+  assert.equal(refused.json.current.attempt, 2);
+  assert.equal((await get('/api/reconcile')).json.items[0].decision.decision, 'resend');
 });

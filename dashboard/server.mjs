@@ -12,6 +12,7 @@ import { quickToolCheck, checkToolLogins, detectedMode } from '../lib/doctor.mjs
 import { loadSettings, saveSettings } from '../lib/settings.mjs';
 import { BUDGET_WARN_RATIO, TASK_BUDGET_RANGE, validatePostGap, validateTaskBudget } from '../lib/guardrails.mjs';
 import { createLedger } from '../lib/ledger.mjs';
+import { createReconcile, scopeKey } from '../lib/reconcile.mjs';
 import { batchReport, createReportCards, historyCsv, waitAlerts } from '../lib/batch-report.mjs';
 import { modelCatalog } from '../lib/models.mjs';
 import { createConnectionStore, CONNECTION_PROVIDERS, CUSTOM_PROVIDER, CUSTOM_PROVIDER_INFO, validateLoginValues } from '../lib/connections.mjs';
@@ -526,7 +527,9 @@ export async function startServer({
   const cafeApi = createNaverCafeApi({ root, store: connections });
   // Aside(브라우저 업무 권장 엔진): 설치돼 있으면 Aside 직원이 대표의 Aside 로그인으로 일하고, 실행기는 결과 화면을 다시 읽어 대조한다
   const aside = demo ? null : createAside({ env });
-  const browserWork = createBrowserWork({ root, store: connections, sessions: browserSessions, cafeApi, aside });
+  // 발송 결과 대조함(2.0): 결과가 불확실한 발송 기록과 대표의 결정. 조회는 기록만 읽고 아무것도 보내지 않는다
+  const reconcile = createReconcile({ root });
+  const browserWork = createBrowserWork({ root, store: connections, sessions: browserSessions, cafeApi, aside, reconcile });
   // 지시·답장 의도 판별(짧은 AI 호출). 로그인된 도구가 없으면 규칙 판별로 대신한다
   // 호출 원장(2.0): 직원·비서실장 실행과 판별 호출을 호출당 한 번 적는다. 판별 호출은 사용량을 보고하지 않아 "미보고"로 남는다
   const ledger = demo ? null : createLedger({ root });
@@ -1034,6 +1037,14 @@ export async function startServer({
     const run = sequenced?.run || await callRunner(() => runner.reply(id, reply), '답장을 보내지 못했습니다.');
     scheduleBroadcast();
     return run;
+  }
+
+  // 대조함 한 건에 그 발송이 속한 업무를 붙인다(실행 기록 파일 이름 앞부분 = 대화 id의 해시)
+  function reconcileView(entry) {
+    const latest = runner ? runner.list().filter((r) => !r.phase && scopeKey(r.rootId || r.id) === entry.scope).at(-1) : null;
+    const rootId = latest ? latest.rootId || latest.id : null;
+    return { ...entry, run: latest?.id || null, root: rootId, task: latest?.task || null, request: latest?.request || null,
+      item: rootId && sequencer ? sequencer.itemOfRun(rootId) : null, busy: latest ? ['running', 'queued'].includes(latest.status) : false };
   }
 
   // 대기시간 누적 알림: "실행 자리 대기" 구간이 기준을 넘긴 건을 구간마다 한 번만 알린다(건의 wait-alert 사건으로 중복을 막는다).
@@ -1587,6 +1598,11 @@ export async function startServer({
         checkToken(req);
         return sendJson(res, 200, { schedules: schedules?.list({ full: true }) || [] });
       }
+      // 발송 결과 대조함: 결과가 불확실한 발송과 그 업무. 기록만 읽는다(외부 발송 0회, AI 호출 0회). ?all=1이면 결정 이력이 있는 지난 건도 준다
+      if (parts.length === 2 && parts[1] === 'reconcile') {
+        checkToken(req);
+        return sendJson(res, 200, { items: reconcile.list({ all: ['1', 'true'].includes(url.searchParams.get('all') ?? '') }).map(reconcileView) });
+      }
       // 묶음 보고(건별 상태·결과 한 줄·산출물 또는 미처리 사유·다음 행동)와 처리 이력 CSV. 저장된 정보로만 만든다(AI 호출 0회)
       if (parts[1] === 'batches' && parts.length === 4 && ['report', 'history.csv'].includes(parts[3])) {
         checkToken(req);
@@ -1687,6 +1703,31 @@ export async function startServer({
       const summary = batchSummary(result.batch);
       if (!result.duplicate) { scheduleBroadcast(); sequenceSoon(); }
       return sendJson(res, result.duplicate ? 200 : 201, { duplicate: result.duplicate, batch: summary });
+    }
+    // 발송 결과 대조함의 결정: POST /api/reconcile/<기록> {decision: confirm|hold|resend, basis, attempt?}
+    // 결정만 기록하고 여기서는 보내지 않는다. 발송 확인·새 발송 승인은 그 업무를 이어서 진행시켜 기존 발송 문이 결정을 한 번 반영하게 한다.
+    // 두 기기가 동시에 결정해도 먼저 온 하나만 반영되고 나머지는 409와 최신 상태를 받는다
+    if (resource === 'reconcile' && method === 'POST' && parts.length === 3) {
+      if (demo) throw new HttpError(409, '데모 모드에서는 결정을 기록할 수 없습니다.');
+      let entry;
+      try { entry = reconcile.decide(id, { decision: body.decision, basis: body.basis, attempt: Number.isInteger(body.attempt) ? body.attempt : null, by: remote ? 'remote' : 'local' }); }
+      catch (error) {
+        if (error.status === 409 && error.current) return sendJson(res, 409, { error: error.message, current: reconcileView(error.current) });
+        if (error.status) throw new HttpError(error.status, error.message);
+        throw error;
+      }
+      const view = reconcileView(entry);
+      let resumed = null, note = '';
+      if (body.decision !== 'hold') {
+        // 그 업무의 마지막 실행에 "이어서 재개"를 넣는다(순번을 따른다). 진행 중이거나 실행을 찾지 못하면 결정만 남고, 업무가 다시 진행될 때 반영된다
+        if (!view.run) note = '이 발송의 업무 실행을 찾지 못했습니다. 그 업무 대화에서 "이어서 재개"라고 답하면 결정이 반영됩니다.';
+        else {
+          try { resumed = await replyRun(view.run, { prompt: '이어서 재개' }); }
+          catch (error) { note = `결정은 기록했습니다. 업무를 바로 이어 가지는 못했습니다: ${error.message}`; }
+        }
+      }
+      scheduleBroadcast();
+      return sendJson(res, 200, { item: reconcileView(reconcile.get(id)), resumed, ...(note ? { note } : {}) });
     }
     // 묶음 예산 늘리기: POST /api/batches/<묶음>/budget {calls, reason}. 업무별 예산 승인("계속")과는 따로다(서로 대신하지 않는다)
     if (resource === 'batches' && method === 'POST' && parts.length === 4 && action === 'budget') {
