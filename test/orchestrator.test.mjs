@@ -121,7 +121,7 @@ function fixture(t, options = {}) {
           if (!(options.missingFirst && counts[id] === 1)) {
             const file = join(root, output);
             mkdirSync(dirname(file), { recursive: true });
-            writeFileSync(file, options.empty ? '' : `완료 ${counts[id]}`);
+            writeFileSync(file, options.empty ? '' : options.stageText ? options.stageText(id, counts[id]) : `완료 ${counts[id]}`);
           }
           finish(`결과: ${output} 작성 완료`);
         } else if (input.includes('첫 줄은 VERDICT:')) {
@@ -1404,4 +1404,40 @@ test('최종 검토 재작업 한도: 전문 검토가 있는 업무도 두 번�
   assert.match(report, /지적 3: 끝맺음 표현이 겹침/);
   assert.match(f.calls.filter((c) => c.kind === 'review').at(-1).input, /이미 재작업을 2번 했습니다/);
   assert.doesNotMatch(f.calls.filter((c) => c.kind === 'review')[1].input, /이미 재작업을 2번 했습니다/);
+});
+
+// ── 2.0 S4: 병렬 호출 선점·무진전 반복 차단 ──
+
+test('리허설 5: 잔여 호출 1회일 때 준비된 단계가 둘이어도 한 단계만 시작하고, 한도를 넘는 호출은 시작하지 않는다', async (t) => {
+  // 계획 1 + 회의 2 + 계획 1 = 4회를 쓴 뒤 남은 1회에서 독립 단계 a·c가 함께 준비된다
+  const f = fixture(t, { independent: true, meeting: true });
+  saveSettings(f.root, { budget: { calls: 5, minutes: 60 } });
+  const run = f.runner.start({ prompt: '자료를 조사해 보고서로 정리해 줘', schedule: { id: 'daily-1', slot: '2026-11-25' } });
+  await f.final(run);
+  const checkpoint = JSON.parse(readFileSync(join(f.root, '.office', 'orchestrations', `${run.rootId}.json`)));
+  assert.equal(checkpoint.budget.calls, 5, '센 호출 수가 한도를 넘지 않는다');
+  assert.equal(f.calls.length, 5, '실제로 시작한 AI 호출도 한도까지만');
+  assert.equal((f.counts.a || 0) + (f.counts.c || 0), 1, '남은 한 자리는 한 단계만 쓴다');
+  assert.match(f.runner.result(run.id).text, /예산을 모두 써서 멈췄습니다\(AI 호출 5\/5회/);
+  // 재시작 뒤 이어서 재개해도 쓴 예산은 초기화되지 않는다(새 AI 호출 0)
+  f.restart();
+  const before = f.calls.length;
+  await f.final(f.runner.reply(run.id, { prompt: '이어서 재개' }));
+  assert.equal(f.calls.length, before);
+  assert.equal(JSON.parse(readFileSync(join(f.root, '.office', 'orchestrations', `${run.rootId}.json`))).budget.calls, 5);
+});
+
+test('리허설 6: 같은 외부 문안 형식 오류가 고친 뒤에도 되풀이되면 자동 반려를 유한하게 끝내고 대표에게 묻는다(오류 문안 전송 0건)', async (t) => {
+  let deliveries = 0;
+  const f = fixture(t, { publication: true, stageText: (id, n) => (id === 'b' ? '{"posts":[]}' : `완료 ${n}`), // 게시 후보도 사유도 없는 문안(형식 오류)
+    outbound: { connections: () => [{ id: 'naver-1', label: '네이버', provider: 'naver', status: 'connected' }],
+      async deliver() { deliveries++; return { status: 'confirmed', resultUrl: 'https://blog.naver.com/fixture/1' }; } } });
+  const run = f.runner.start({ prompt: '자료를 정리하고 블로그에 게시해 줘. 끝까지 자동으로 진행해.' });
+  const done = await f.final(run);
+  assert.equal(done.needsReply, true, `확인 필요로 멈춘다(업무 자리 반납): ${f.runner.result(run.id).text.slice(0, 400)} / 검토 ${f.counts.review} b ${f.counts.b}`);
+  assert.match(f.runner.result(run.id).text, /같은 형식 오류가 고친 뒤에도 그대로라 자동 수정을 멈췄습니다[\s\S]*발송·게시하지 않았습니다/);
+  assert.equal(deliveries, 0, '오류 문안은 전송하지 않는다');
+  assert.ok(f.counts.review <= 3 && f.counts.b <= 3, `자동 호출은 유한하다(검토 ${f.counts.review}회, 재작성 ${f.counts.b}회)`);
+  assert.ok(f.calls.length < 15, `예산(기본 40회)을 다 쓰기 전에 멈춘다: ${f.calls.length}회`);
+  assert.equal(loadTasks(f.root)[0].status, 'blocked');
 });

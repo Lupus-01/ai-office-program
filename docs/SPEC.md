@@ -67,6 +67,7 @@ test/                     node:test
 | `continuous/<rootId>.json` | 지속 감시 체크포인트 |
 | `schedules.json` | 업무 예약(1회·N회·매일·요일 반복) |
 | `batches/<묶음 번호>.json` | 묶음 접수(2.0): 묶음 번호·제출 순번·제출 키·건별 요청 원문·첨부·완료 기준·선행 업무·건별 상태와 사건 기록(비공개 0700/0600) |
+| `ledger/<YYYY-MM>.jsonl` | 호출 원장(2.0): AI 호출 하나에 한 줄(호출 번호·종류·대화·건·업무·직원·엔진·시각·보고된 사용량 또는 null). 한국 시각 월별(비공개) |
 | `publications/` | 외부 작업 발행 증표 |
 | `video-publications.json` | 영상 게시 이력(영구) |
 | `final-outputs/settings.json`, `index.json` | 최종산출물 위치·등록 파일·해시 |
@@ -420,6 +421,16 @@ test/                     node:test
 - **일시정지·재개:** "하던 작업 멈추고 정리해 둬"는 차례를 기다리던 건도 `stopped`(`paused`)로 멈춘 뒤 실행을 멈춘다(멈춘 자리에 다음 건이 시작되지 않는다). 그 뒤 새로 접수한 건은 평소대로 진행한다. "이어서 해줘"는 실행하다 멈춘 건을 답장으로 잇고(순번을 거친다 — 한 건만 바로, 나머지는 재개 예약) 시작 전에 멈춘 건을 대기로 되돌린다.
 - **복구(결과 증거 우선):** 실행이 끊기거나 실패로 남았어도 업무가 이미 전달까지 끝났으면(`tasks` 상태 `done`) 완료로 적고 다시 실행하지 않는다. 결과 없이 끊긴 건은 `needs`로 두고 자동으로 다시 실행하지 않는다(대표가 답장·"이어서 해줘"로 재개). 건은 그 대화의 마지막 실행만 보므로 옛 실행의 늦은 변화가 새 시도를 덮지 않는다.
 - **업데이트(`npm run office:update`)**의 진행 중 업무 확인은 차례를 기다리는 건도 센다(`waitingItems`). 선행 업무가 취소·실패·중지돼 스스로 시작할 수 없는 건은 세지 않는다.
+### 호출 원장과 예산(2.0)
+
+- **호출 원장(`lib/ledger.mjs`).** 공급자 호출 하나를 번호 하나로 한 번만 적는다. 직원·비서실장 실행(계획·단계·점검·검토·회의·발행)은 실행기가 끝날 때, 판별 호출(지시·답장 뜻 판별)은 판별기가 실제로 CLI를 띄웠을 때 적는다. 상위 업무 실행은 코드가 지휘만 하므로 호출이 아니다 — 부모 합계와 자식 호출을 함께 세지 않는다. 접수 전에 한 판별 호출은 업무로 접수된 뒤 그 건에 귀속한다(`attach`).
+- **미보고 사용량.** 사용량을 보고하지 않은 호출(판별 호출, 일부 엔진)은 0으로 치지 않고 `usage: null`로 남긴다. 요약(`summarizeCalls`)은 `calls`·`reported`·`unreported`·확인된 `input`/`output`/`cachedInput`/`cacheCreation`·`measurable`(측정 가능 비율, 호출이 없으면 null)을 따로 준다. 묶음 상세(`GET /api/batches/:id`)가 묶음과 건마다 이 요약을 준다.
+- **업무 예산의 선점.** 오케스트레이터는 호출을 시작하기 전에 호출 수를 먼저 깎고, 한도에 닿으면 새 호출을 시작하지 않는다. 병렬 단계는 남은 호출 수만큼만 한꺼번에 시작한다(잔여 1회면 한 단계). 단계 묶음 사이의 기존 점검(80%에서 질문, 무인 업무는 100%에서 그 회차 중단)은 그대로다. 한도 때문에 시작하지 못한 호출이 생기면 같은 예산 질문(무인 업무는 중단)으로 끝난다. 쓴 예산은 체크포인트에 남아 재시작·재개로 초기화되지 않는다.
+- **묶음 예산.** 작성창에서 접수한 묶음에만 둔다(`budget: {limitCalls, warned, log}`). 시작값은 회사 설정의 업무 1건 호출 예산이다(묶음 전체 상한, 대표 결정 D3). 지시창 단건·예약 회차·감시 후속 업무의 한 건짜리 묶음에는 두지 않는다(업무 예산만 따른다). 쓴 양은 원장에서 그 묶음의 건에 속한 호출 수(판별 포함)로 세고, 진행 중인 호출은 시작 전에 잡아 둔다(`reserve`). 업무 예산과 묶음 예산 중 먼저 닿는 쪽이 적용된다.
+- 묶음 예산의 80%를 넘는 순간 `flow.notice`를 한 번 남긴다. 100%면 그 묶음의 새 AI 호출을 시작하지 않는다: 진행 중이던 업무는 사유와 함께 멈춰 `needs`가 되고, 같은 묶음의 대기 건은 시작하지 않으며(`waitingOn.kind: "budget"`), 예산이 따로인 다른 묶음·지시창 업무는 진행한다. 조회·보고는 계속 된다.
+- **묶음 예산 늘리기(`POST /api/batches/:id/budget {calls, reason}`).** 늘린 양·시각·사유를 `budget.log`에 남긴다. 늘리면 기다리던 건은 스스로 시작하고, 예산 때문에 멈췄던 업무는 대표가 답장("이어서 재개")해야 움직인다. 업무별 예산 승인("계속")과 묶음 예산 늘리기는 서로를 대신하지 않는다.
+- **무진전 반복 차단.** 최종 검토가 통과인데 외부 작업 문안의 형식 오류가 남아 반려하는 경우, 같은 단계·같은 오류가 고친 뒤에도 그대로면(산출물 변화 없음, 또는 같은 오류 세 번째) 자동 반려를 멈추고 대표에게 묻는다(`phase: "stuck"`). 오류 문안은 발송·게시하지 않고, 조건을 못 채운 문안을 통과시키지도 않는다.
+- 공급자가 호출당 토큰 상한을 강제하지 않으므로 이 예산은 "새 호출 차단"이지 "토큰 상한 보장"이 아니다. 이미 시작한 호출의 사용량은 끝난 뒤 실제 값으로 적힌다.
 ## 5. 외부 작업
 
 ### 계정 연결
@@ -794,6 +805,7 @@ node scripts/codex-review.mjs --target outputs/<날짜>/<slug> [--reviewers <id�
 - `dashboard/orchestrator.mjs`: `orchestrate({root, run, prompt, execute, signal, maxParallel, resume, onDecision, outbound, intent, judge})`, `checkpointFile`.
 - `lib/final-outputs.mjs`: `finalOutputSettings`, `customOutputDirectory`, `collectFinalOutputs`, `resolveFinalOutput`.
 - `lib/batches.mjs`: `createBatches({root, now, write})` → `submit(body)`, `get(id)`, `findByKey(key)`, `list()`. `items()`, `patch(itemId, fn, event)`. `normalizeSubmission`, `batchSummary`, `itemPrompt`, `BATCH_LIMITS`, `ITEM_STATUS`.
+- `lib/ledger.mjs`: `createLedger({root, now})` → `record(call)`, `attach(callIds, item)`, `callsFor({roots, items})`, `summarize(query)`. `summarizeCalls(calls)`.
 - `dashboard/sequencer.mjs`: `createSequencer({batches, startRun, replyRun, latestRun, taskStatus, onChange})` → `pump()`, `started(itemId)`, `reply(rootId, runId, body)`, `cancel(itemId)`, `recover()`, `waitingOn(itemId)`, `itemOfRun(rootId)`, `pauseWaiting()`, `resumePaused()`, `enqueue(request, {source, title, origin})`, `findOrigin(match)`, `ticket(itemId)`.
 
 ### HTTP API (`dashboard/server.mjs`, 기본 127.0.0.1:4777)
@@ -809,8 +821,9 @@ node scripts/codex-review.mjs --target outputs/<날짜>/<slug> [--reviewers <id�
 | PUT /api/settings | mode·chief·budget 저장 |
 | POST /api/runs | 비서실장 지시. `agentId`가 있으면 400. 유한한 새 업무는 순번을 따른다(앞선 건이 진행 중이면 `{queued, item, batch, ahead}`) |
 | POST /api/batches | 묶음 접수(2.0) `{submitKey, title?, items:[{title?, prompt, attachments?, done?, dependsOn?}]}`. 저장만 하고 실행하지 않는다(AI 호출 0회). 새 접수 201, 같은 `submitKey` 재전송은 원래 번호로 200 `{duplicate, batch}`, 같은 키에 다른 내용 409, 저장 실패 500(접수 0건) |
+| POST /api/batches/:id/budget | 묶음 예산 늘리기 `{calls(1~500), reason}`. 묶음 예산이 없는 묶음은 409 |
 | POST /api/batches/:id/items/:no/cancel | 접수된 건 취소(진행 중·완료는 409) |
-| GET /api/batches[?key=], /api/batches/:id | 묶음 요약 목록(원문 없음, `?key=`는 제출 키로 접수 여부 확인), 묶음 상세(요청 원문 포함)(토큰) |
+| GET /api/batches[?key=], /api/batches/:id | 묶음 요약 목록(원문 없음, `?key=`는 제출 키로 접수 여부 확인), 묶음 상세(요청 원문, 건별 `usage`·`waitingOn`, 묶음 `usage`·`budget` 포함)(토큰) |
 | POST /api/uploads | 지시창 파일 올리기 `{name, data(base64)}` → `보관함/업로드/<날짜>/`, 201 `{path, name, size}`(25MB, 허용 형식 밖 415, 너무 큼 413) |
 | POST /api/runs/:id/stop, /reply | 중지, 이어서 답하기(접수된 건이고 다른 건이 진행 중이면 `{resumeQueued, item, ahead}`) |
 | GET /api/runs/:id/log, /result | 로그 마지막 64KB, 답변 전문(`X-Result-Source`, `X-Session-Id`)(토큰) |

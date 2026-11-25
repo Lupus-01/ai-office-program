@@ -7,6 +7,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startServer } from '../dashboard/server.mjs';
+import { saveSettings } from '../lib/settings.mjs';
 
 const FAKE = String.raw`
 import {readFileSync,writeFileSync,appendFileSync,mkdirSync} from 'node:fs';
@@ -172,4 +173,77 @@ test('HTTP: 지시창 단건도 순번을 따른다 — 첫 지시는 바로 시
   const order = readFileSync(logFile, 'utf8').trim().split('\n').map((line) => JSON.parse(line).task).filter(Boolean);
   const [a, b] = batches.map((x) => x.items[0].task);
   assert.ok(order.lastIndexOf(a) < order.indexOf(b), order.join(' '));
+});
+
+test('HTTP: 묶음 예산 — 다 쓰면 그 묶음의 새 AI 호출이 0이고, 늘리면 이어 간다. 호출은 원장에 한 번씩 적힌다', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'office-seq-budget-'));
+  mkdirSync(join(root, 'org'));
+  writeFileSync(join(root, 'org/departments.json'), JSON.stringify([{ id: 'research', name: '리서치부', engine: 'codex', codexRole: 'exec' }]));
+  writeFileSync(join(root, 'org/roster.json'), JSON.stringify([{ id: 'research-1', name: '김대리', department: 'research' }]));
+  // 업무 1건 예산 5회 = 묶음 전체 상한 5회(대표 결정 D3). 한 건은 계획·단계·검토 3회를 쓴다
+  saveSettings(root, { budget: { calls: 5, minutes: 60 } });
+  const bin = join(root, 'fake.mjs'); writeFileSync(bin, FAKE);
+  const logFile = join(root, 'calls.jsonl');
+  const previous = { codex: process.env.CODEX_BIN, claude: process.env.CLAUDE_BIN };
+  process.env.CODEX_BIN = join(root, 'must-not-run-global.mjs'); process.env.CLAUDE_BIN = process.env.CODEX_BIN;
+  let server;
+  t.after(async () => {
+    await server?.close();
+    for (const [name, key] of [['CODEX_BIN', 'codex'], ['CLAUDE_BIN', 'claude']]) { if (previous[key] === undefined) delete process.env[name]; else process.env[name] = previous[key]; }
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  });
+  server = await startServer({ root, port: 0, quiet: true, env: { ...process.env, CLAUDE_BIN: join(root, 'no-claude.mjs'), CODEX_BIN: bin, FIXTURE_LOG: logFile } });
+  const base = `http://127.0.0.1:${server.port}`;
+  const headers = { 'X-Office-Token': server.token, Origin: base, 'Content-Type': 'application/json' };
+  const post = async (path, body, status) => {
+    const response = await fetch(base + path, { method: 'POST', headers, body: JSON.stringify(body) });
+    const json = await response.json(); assert.equal(response.status, status, json.error); return json;
+  };
+  const get = async (path) => (await fetch(base + path, { headers })).json();
+  const calls = () => (existsSync(logFile) ? readFileSync(logFile, 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line)).filter((c) => c.task) : []);
+  const waitFor = async (id, expected) => {
+    const deadline = Date.now() + 30000;
+    let last;
+    while (Date.now() < deadline) {
+      last = (await get(`/api/batches/${id}`)).items.map((i) => i.status);
+      if (JSON.stringify(last) === JSON.stringify(expected)) return;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.deepEqual(last, expected);
+  };
+
+  const { batch } = await post('/api/batches', { submitKey: 'seq-budget-submit-key-01', items: [{ title: '하나', prompt: '첫째 일을 정리해 줘.' }, { title: '둘', prompt: '둘째 일을 정리해 줘.' }, { title: '셋', prompt: '셋째 일을 정리해 줘.' }] }, 201);
+  // 1번 3회 + 2번 2회 = 5회에서 2번의 검토 호출이 막힌다. 3번은 시작하지 않는다
+  await waitFor(batch.id, ['done', 'needs', 'waiting']);
+  let detail = await get(`/api/batches/${batch.id}`);
+  assert.equal(detail.budget.limitCalls, 5);
+  assert.equal(detail.budget.usedCalls, 5);
+  assert.equal(calls().length, 5, '한도를 넘는 AI 호출은 시작하지 않는다');
+  assert.deepEqual(detail.items[2].waitingOn, { kind: 'budget' });
+  assert.equal(detail.items[2].usage.calls, 0, '차례가 오지 않은 건의 AI 호출 0');
+  // 사용량: 확인된 토큰과 미보고 호출 수를 따로 준다(가짜 CLI는 호출마다 입력 10·출력 5를 보고한다)
+  assert.deepEqual({ calls: detail.usage.calls, reported: detail.usage.reported, unreported: detail.usage.unreported, input: detail.usage.input, output: detail.usage.output }, { calls: 5, reported: 5, unreported: 0, input: 50, output: 25 });
+  assert.equal(detail.items[0].usage.calls, 3);
+  assert.match(readFileSync(join(root, '.office', 'events.jsonl'), 'utf8'), /예산의 80%를 썼습니다/);
+  // 조회·대기만으로는 호출이 늘지 않는다
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal(calls().length, 5);
+
+  // 지시창 단건(묶음 예산 없음)은 묶음 예산과 별개로 진행할 수 있다
+  await post(`/api/batches/${batch.id}/budget`, { calls: 0 }, 400);
+  const raised = await post(`/api/batches/${batch.id}/budget`, { calls: 5, reason: '정상 3건에 부족' }, 200);
+  assert.equal(raised.budget.limitCalls, 10);
+  // 늘리면 기다리던 3번이 스스로 시작한다. 막혔던 2번은 대표가 재개해야 움직인다
+  await waitFor(batch.id, ['done', 'needs', 'done']);
+  const state = await get('/api/state');
+  const blocked = state.runs.filter((r) => !r.phase && r.task === detail.items[1].task).at(-1);
+  await post(`/api/runs/${blocked.id}/reply`, { prompt: '이어서 재개' }, 202);
+  await waitFor(batch.id, ['done', 'done', 'done']);
+  detail = await get(`/api/batches/${batch.id}`);
+  assert.equal(detail.usage.calls, calls().length, '원장의 호출 수 = 실제 호출 수(호출당 한 번)');
+  assert.ok(detail.usage.calls <= 10 && detail.budget.usedCalls === detail.usage.calls);
+  assert.equal(detail.budget.log.length, 1);
+  assert.equal(detail.budget.log[0].add, 5);
+  // 원장 파일이 남는다(재시작 뒤 예산을 이어서 센다)
+  assert.ok(existsSync(join(root, '.office', 'ledger')));
 });

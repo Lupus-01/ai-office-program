@@ -83,7 +83,9 @@ function groupAlive(pid) {
 // followUp: 순번 실행기 연결(2.0). 감시가 만든 후속 업무를 바로 시작하지 않고 접수표를 받아 순번을 따르게 한다
 //   { find(monitorId, key) → 접수표 id | null, start(request) → { id: 접수표 id } | null, state(접수표 id) → { runId, task } | { status, … } | null }
 // replyVia(runId, body): "이어서 해줘" 일괄 재개가 답장을 보낼 때 거치는 길(없으면 바로 reply). 대기로 접수되면 { queued: true }를 돌려준다
-export function createRunner({ root, onChange, judge = null, followUp = null, replyVia = null, maxConcurrent = 4, spawnImpl = child_process.spawn, killGraceMs = 5000, outbound = null, keepAwake = null, env = process.env, toolStatus = () => null, aside = null, platform = process.platform }) {
+// ledger: 호출 원장(lib/ledger.mjs). 직원·비서실장 실행 하나가 끝날 때마다 한 번 적는다
+// budget: 묶음 예산 문(2.0). reserve(rootId) → 반납 함수. 잔량이 없으면 던진다(호출을 시작하기 전에 자리를 먼저 잡는다)
+export function createRunner({ root, onChange, judge = null, followUp = null, replyVia = null, ledger = null, budget = null, maxConcurrent = 4, spawnImpl = child_process.spawn, killGraceMs = 5000, outbound = null, keepAwake = null, env = process.env, toolStatus = () => null, aside = null, platform = process.platform }) {
   // Aside 직원 실행의 세션 정리(CLI를 끝내도 Aside 세션은 계속 돌기 때문)
   const asideTools = aside || createAside({ env, spawnImpl });
   const officeDir = join(root, '.office');
@@ -670,6 +672,12 @@ export function createRunner({ root, onChange, judge = null, followUp = null, re
     changed(run);
     const execute = async ({ agentId = null, prompt, phase, readOnly = false, deadlineAt = null, browser = null, model = null, effort = null }) => {
       controller.signal.throwIfAborted();
+      // 묶음 예산: 기다림(await) 없이 바로 잔량을 잡는다. 동시에 들어온 호출이 남은 한 자리를 함께 쓰지 못한다
+      const release = budget ? budget.reserve(run.rootId) : null;
+      try { return await executeReserved({ agentId, prompt, phase, readOnly, deadlineAt, browser, model, effort }, release); }
+      catch (error) { release?.(); throw error; }
+    };
+    const executeReserved = async ({ agentId, prompt, phase, readOnly, deadlineAt, browser, model, effort }, release) => {
       const tools = agentId ? null : await toolStatus();
       controller.signal.throwIfAborted();
       let settle;
@@ -702,6 +710,9 @@ export function createRunner({ root, onChange, judge = null, followUp = null, re
       childSpec.onComplete = (r, text) => {
         clearTimeout(deadlineTimer);
         children.delete(r.id);
+        // 예산 자리를 돌려주고 원장에 실제 호출을 적는다(시작하지 못하고 취소된 대기 실행은 호출이 아니다)
+        release?.();
+        if (ledger && r.startedAt) { try { ledger.record({ kind: phase, root: run.rootId, task: run.task, agent: agentId || 'chief', engine: childSpec.engine, status: r.status, startedAt: r.startedAt, usage: r.usage }); } catch { /* 기록 실패가 업무를 막지 않는다 */ } }
         run.usage = addUsage(run.usage, r.usage);
         // 날짜별 사용량(상시 업무의 하루 사용량·이상 알림에 쓴다)
         run.dailyUsage = addDailyUsage(run.dailyUsage, r.usage);
@@ -769,7 +780,9 @@ export function createRunner({ root, onChange, judge = null, followUp = null, re
               }
               return start(request);
             } });
-        } else text = await orchestrate({ root, run, prompt: spec.input, execute, signal: controller.signal, intent: spec.intent || null, recipe: spec.recipe || null, judge,
+        } else text = await orchestrate({ root, run, prompt: spec.input, execute, signal: controller.signal, intent: spec.intent || null, recipe: spec.recipe || null,
+          // 업무 안의 판별 호출(답장 뜻 판별)도 이 대화에 귀속해 원장에 남긴다
+          judge: judge && ((schema, text, options = {}) => judge(schema, text, { ...options, tag: { root: run.rootId, task: run.task } })),
           maxParallel: maxConcurrent, resume: spec.resumeOrchestration, onDecision: () => { spec.needsDecision = true; }, outbound, notes: entry.notes, engineOf, platform });
       } catch (err) {
         status = controller.signal.aborted ? 'stopped' : 'failed';

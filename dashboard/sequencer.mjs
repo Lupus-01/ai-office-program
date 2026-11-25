@@ -13,7 +13,8 @@ const BUSY = new Set(['running', 'queued']);
 const RESUMABLE = new Set([S.needs, S.stopped, S.failed]);
 const fail = (status, message) => Object.assign(new Error(message), { status });
 
-export function createSequencer({ batches, startRun, replyRun, latestRun, taskStatus = () => null, onChange = () => {}, warn = () => {} }) {
+//   canStart(batch) → boolean                         묶음 예산이 남아 있는가(없으면 그 묶음의 건은 시작하지 않고 다음 묶음으로 넘어간다)
+export function createSequencer({ batches, startRun, replyRun, latestRun, taskStatus = () => null, canStart = () => true, onChange = () => {}, warn = () => {} }) {
   const starting = new Set(); // 시작 요청을 보내고 실행 정보를 아직 받지 못한 건
   const startResults = new Map(); // 건 번호 → 시작 결과(실행 또는 오류)를 주는 Promise
   let pumping = false, again = false;
@@ -69,7 +70,7 @@ export function createSequencer({ batches, startRun, replyRun, latestRun, taskSt
   }
 
   const running = () => all().filter(({ item }) => item.status === S.running);
-  const pick = () => all().find(({ batch, item }) => item.status === S.waiting && !blockedBy(batch, item)) || null;
+  const pick = () => all().find(({ batch, item }) => item.status === S.waiting && !blockedBy(batch, item) && canStart(batch)) || null;
 
   function begin({ batch, item }) {
     const resume = item.pendingReply || null;
@@ -230,6 +231,7 @@ export function createSequencer({ batches, startRun, replyRun, latestRun, taskSt
     if (!found || found.item.status !== S.waiting) return null;
     const dep = blockedBy(found.batch, found.item);
     if (dep) return { kind: 'dependency', item: dep.id, title: dep.title, status: dep.status };
+    if (!canStart(found.batch)) return { kind: 'budget' };
     const ahead = running()[0];
     return ahead ? { kind: 'slot', item: ahead.item.id, title: ahead.item.title } : { kind: 'slot' };
   }

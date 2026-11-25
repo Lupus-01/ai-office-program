@@ -10,7 +10,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ID_PATTERN, MAX_COMPANY_RULES, exportOrg, importOrg, loadCompanyRules, loadOrg, loadPresets, mutateOrg, saveCompanyRules, slugifyId, validateOrg } from '../lib/org.mjs';
 import { quickToolCheck, checkToolLogins, detectedMode } from '../lib/doctor.mjs';
 import { loadSettings, saveSettings } from '../lib/settings.mjs';
-import { validatePostGap, validateTaskBudget } from '../lib/guardrails.mjs';
+import { BUDGET_WARN_RATIO, TASK_BUDGET_RANGE, validatePostGap, validateTaskBudget } from '../lib/guardrails.mjs';
+import { createLedger } from '../lib/ledger.mjs';
 import { modelCatalog } from '../lib/models.mjs';
 import { createConnectionStore, CONNECTION_PROVIDERS, CUSTOM_PROVIDER, CUSTOM_PROVIDER_INFO, validateLoginValues } from '../lib/connections.mjs';
 import { createBrowserSessions } from '../lib/browser-session.mjs';
@@ -525,7 +526,38 @@ export async function startServer({
   const aside = demo ? null : createAside({ env });
   const browserWork = createBrowserWork({ root, store: connections, sessions: browserSessions, cafeApi, aside });
   // 지시·답장 의도 판별(짧은 AI 호출). 로그인된 도구가 없으면 규칙 판별로 대신한다
-  const judge = demo ? null : createJudge({ env, engine: () => tools.claude?.loggedIn === true ? 'claude' : tools.codex?.loggedIn === true ? 'codex' : null });
+  // 호출 원장(2.0): 직원·비서실장 실행과 판별 호출을 호출당 한 번 적는다. 판별 호출은 사용량을 보고하지 않아 "미보고"로 남는다
+  const ledger = demo ? null : createLedger({ root });
+  const judge = demo ? null : createJudge({ env, engine: () => tools.claude?.loggedIn === true ? 'claude' : tools.codex?.loggedIn === true ? 'codex' : null,
+    onCall: ({ tag, engine, startedAt, ok }) => {
+      const id = ledger.record({ kind: 'judge', root: tag?.root || null, item: tag?.item || null, task: tag?.task || null, agent: 'chief', engine, status: ok ? 'done' : 'failed', startedAt });
+      tag?.calls?.push(id);
+    } });
+  // 판별 호출에 귀속 정보를 붙인다(tag.item: 건 번호, tag.calls: 호출 번호를 받아 둘 배열)
+  const judgeFor = (tag) => judge && ((schema, text, options = {}) => judge(schema, text, { ...options, tag }));
+  // 묶음 예산 문: 호출을 시작하기 전에 잔량을 잡고(reserve), 끝나면 돌려준다. 쓴 양은 원장의 호출 수다(재시작해도 이어진다)
+  const reservedCalls = new Map(); // 묶음 번호 → 진행 중인 호출 수
+  const batchCalls = (batch) => ledger.callsFor({ roots: batch.items.map((i) => i.run), items: batch.items.map((i) => i.id) }).length;
+  const batchBudgetLeft = (batch) => (batch.budget ? batch.budget.limitCalls - batchCalls(batch) - (reservedCalls.get(batch.id) || 0) : Infinity);
+  const batchBudget = {
+    reserve(rootId) {
+      const itemId = sequencer.itemOfRun(rootId);
+      const batch = itemId ? batches.get(itemId.replace(/-\d+$/, '')) : null;
+      if (!batch?.budget) return () => {};
+      const left = batchBudgetLeft(batch);
+      if (left <= 0) throw Object.assign(new Error(`묶음 예산을 모두 썼습니다(${batch.id}: AI 호출 ${batch.budget.limitCalls}회). 묶음 예산을 늘린 뒤 이 업무에 "이어서 재개"라고 답해 주세요.`), { budget: 'batch' });
+      reservedCalls.set(batch.id, (reservedCalls.get(batch.id) || 0) + 1);
+      // 80%를 넘는 순간 한 번만 알린다
+      if (!batch.budget.warned && left - 1 <= batch.budget.limitCalls * (1 - BUDGET_WARN_RATIO)) {
+        try {
+          batches.patchBatch(batch.id, (b) => { b.budget.warned = true; });
+          appendEvent(root, { engine: 'claude', session: 'office-server', instance: 'office-server', kind: 'flow.notice', summary: redact(`묶음 ${batch.id}(${batch.title})이 예산의 80%를 썼습니다(AI 호출 ${batch.budget.limitCalls - left + 1}/${batch.budget.limitCalls}회). 다 쓰면 이 묶음의 새 AI 호출을 멈춥니다.`) });
+        } catch (error) { warn('묶음 예산 알림을 남기지 못했습니다', error); }
+      }
+      let released = false;
+      return () => { if (released) return; released = true; reservedCalls.set(batch.id, Math.max(0, (reservedCalls.get(batch.id) || 0) - 1)); };
+    },
+  };
   let sequenceSoon = () => {};
   // 순번 실행기 연결(실행기보다 뒤에 만들어지므로 부를 때 찾는다)
   // 감시가 만든 후속 업무: 자료 키당 한 건만 접수하고 차례에 시작한다. 감시 부모 실행은 업무 자리를 차지하지 않는다
@@ -541,20 +573,23 @@ export async function startServer({
     if (sequenced?.queued) return { queued: true };
     return sequenced?.run || runner.reply(runId, body);
   };
-  const runner = demo ? null : createRunner({ root, env, judge, followUp, replyVia, toolStatus: async () => { await toolProbe; return tools; }, onChange: () => { scheduleBroadcast(); sequenceSoon(); }, outbound: browserWork, keepAwake: createKeepAwake(), aside });
+  const runner = demo ? null : createRunner({ root, env, judge, followUp, replyVia, ledger, budget: batchBudget, toolStatus: async () => { await toolProbe; return tools; }, onChange: () => { scheduleBroadcast(); sequenceSoon(); }, outbound: browserWork, keepAwake: createKeepAwake(), aside });
   const schedules = demo ? null : createSchedules({ root, now: scheduleNow, runs: () => runner.list(),
     // 예약 회차는 회차당 한 번 접수하고 순번을 따른다(예약 시각과 실제 시작 시각이 다를 수 있다). 접수하지 못하면 예전처럼 바로 시작한다
     start: (request) => sequencer.enqueue(request, { source: 'schedule' }) || runner.start(request),
     ticket: (itemId) => sequencer.ticket(itemId), onChange: () => scheduleBroadcast() });
 
   // 묶음 접수 저장소(2.0): 저장·조회만 한다
-  const batches = demo ? null : createBatches({ root, now: scheduleNow, ...(batchWrite ? { write: batchWrite } : {}) });
+  const batches = demo ? null : createBatches({ root, now: scheduleNow, ...(batchWrite ? { write: batchWrite } : {}),
+    // 묶음 예산의 시작값: 업무 1건 예산을 묶음 전체의 상한으로 둔다(대표 결정 D3). 부족하면 대표가 늘린다
+    budget: () => loadSettings(root).budget.calls });
   // 순번 실행기(2.0): 접수된 건을 한 번에 한 건씩 기존 단건 실행에 넘긴다. 건 상태는 여기서만 바뀐다
   const sequencer = demo ? null : createSequencer({ batches,
     startRun: (item, batch) => startBatchItem(item, batch),
     replyRun: (runId, body) => runner.reply(runId, body),
     latestRun: (rootId) => runner.list().filter((r) => !r.phase && (r.rootId || r.id) === rootId).at(-1) || null,
     taskStatus: (id) => loadTaskList(root).find((t) => t.id === id)?.status ?? null,
+    canStart: (batch) => batchBudgetLeft(batch) > 0,
     onChange: () => scheduleBroadcast(), warn: (message, error) => warn(message, error) });
   // 실행 상태가 바뀔 때마다 한 번씩만 다음 건을 살핀다(실행기 안에서 바로 부르지 않고 한 박자 늦춘다)
   let sequencePending = false;
@@ -883,7 +918,9 @@ export async function startServer({
     if (model !== null && typeof model !== 'string') throw new HttpError(400, 'model은 문자열이어야 합니다.');
     // 의도는 비서실장(AI)이 판별하고, 권한이 되는 판단은 대표 원문 근거가 있을 때만 쓴다(실패하면 규칙 판별)
     await toolProbe;
-    const intent = await judgeCommand(prompt, { judge, now: scheduleNow(), staff: quickCandidates(loadOrg(root)), active: runner.activeOrchestrations(), recipes: recipeChoices(root) });
+    // 접수 전 판별 호출도 원장에 남기고, 업무로 접수되면 그 건에 귀속한다
+    const judgeTag = { calls: [] };
+    const intent = await judgeCommand(prompt, { judge: judgeFor(judgeTag), now: scheduleNow(), staff: quickCandidates(loadOrg(root)), active: runner.activeOrchestrations(), recipes: recipeChoices(root) });
     // "하던 작업 멈추고 정리해 둬"/"이어서 해줘"는 새 업무가 아니라 일시정지·일괄 재개다
     if (intent.kind === 'pause') {
       // 차례를 기다리던 건을 먼저 멈춘다(진행 중인 건이 멈춘 자리에 다음 건이 시작되지 않게)
@@ -925,6 +962,7 @@ export async function startServer({
     if (!monitor && !runIntent.quick && !runIntent.quickEdit) {
       const { batch } = await callRunner(() => batches.submit({ submitKey: randomBytes(24).toString('hex'), items: [{ prompt }] },
         { source: 'command', intent: runIntent, options: { model, engine: body.engine || null, effort: body.effort || null } }), '작업을 접수하지 못했습니다.');
+      ledger.attach(judgeTag.calls, batch.items[0].id);
       const result = await callRunner(() => sequencer.started(batch.items[0].id), '작업을 시작하지 못했습니다.');
       scheduleBroadcast();
       return result.run || result;
@@ -965,16 +1003,22 @@ export async function startServer({
     return run;
   }
 
+  // 실행이 생기자마자 건에 연결한다. 업무의 첫 AI 호출이 묶음 예산 문을 지날 때 어느 묶음인지 알아야 한다
+  function linkRun(item, run) {
+    try { batches.patch(item.id, (i) => { i.run = run.rootId || run.id; if (run.task) i.task = run.task; }); }
+    catch (error) { warn(`실행을 접수 건에 연결하지 못했습니다(${item.id})`, error); }
+  }
+
   // 순번 실행기가 차례가 온 건을 시작할 때 부른다. 의도 판별은 여기서 한 번만 하고 결과를 건에 남긴다(재시도·재시작 때 다시 묻지 않는다).
   // 묶음의 건은 항상 유한한 새 업무다. 예약·상시 감시·일시정지 같은 지시는 지시창에서 한다
   async function startBatchItem(item, batch) {
     // 예약 회차·감시 후속 업무: 접수할 때 정해 둔 인자 그대로 시작한다(예전에도 판별 없이 시작하던 실행이다)
-    if (item.start) { const run = runner.start({ ...item.start, prompt: item.prompt }); scheduleBroadcast(); return { run }; }
+    if (item.start) { const run = runner.start({ ...item.start, prompt: item.prompt }); linkRun(item, run); scheduleBroadcast(); return { run }; }
     const prompt = itemPrompt(item, batch);
     await toolProbe;
     let intent = item.intent || null;
     if (!intent) {
-      const judged = await judgeCommand(prompt, { judge, now: scheduleNow(), staff: quickCandidates(loadOrg(root)), active: [], recipes: recipeChoices(root) });
+      const judged = await judgeCommand(prompt, { judge: judgeFor({ item: item.id }), now: scheduleNow(), staff: quickCandidates(loadOrg(root)), active: [], recipes: recipeChoices(root) });
       intent = { actions: judged.actions || [], delegated: judged.delegated === true, outputDir: judged.outputDir || null, source: judged.source, quick: judged.quick === true,
         quickEdit: judged.quickEdit === true, quickEditFile: judged.quickEditFile || '', quickAgent: judged.quickAgent || '', recipe: judged.recipe || '' };
     }
@@ -983,6 +1027,7 @@ export async function startServer({
     const options = item.options || {};
     const run = runner.start({ prompt, continuous: false, intent, model: options.model || null, engine: options.engine || null, effort: options.effort || null,
       ...(item.source === 'command' ? {} : { display: item.title }) });
+    linkRun(item, run);
     scheduleBroadcast();
     return { run, intent };
   }
@@ -1511,7 +1556,12 @@ export async function startServer({
         const batch = BATCH_ID.test(parts[2]) ? batches.get(parts[2]) : null;
         if (!batch) throw new HttpError(404, '접수된 묶음을 찾을 수 없습니다.');
         const { submitKey, digest, ...rest } = batch;
-        return sendJson(res, 200, rest);
+        // 사용량: 확인된 토큰과 미보고 호출 수를 따로 준다(미보고를 0으로 치지 않는다). 건마다 판별 호출과 그 업무의 호출을 한 번씩 센다
+        const usageOf = (items) => ledger.summarize({ roots: items.map((i) => i.run), items: items.map((i) => i.id) });
+        return sendJson(res, 200, { ...rest,
+          items: batch.items.map((item) => ({ ...item, usage: usageOf([item]), waitingOn: sequencer.waitingOn(item.id) })),
+          usage: usageOf(batch.items),
+          ...(batch.budget ? { budget: { ...batch.budget, usedCalls: batchCalls(batch), reservedCalls: reservedCalls.get(batch.id) || 0 } } : {}) });
       }
       if (parts.length === 4 && parts[1] === 'agents' && parts[3] === 'preview') {
         checkToken(req);
@@ -1579,6 +1629,19 @@ export async function startServer({
       const summary = batchSummary(result.batch);
       if (!result.duplicate) { scheduleBroadcast(); sequenceSoon(); }
       return sendJson(res, result.duplicate ? 200 : 201, { duplicate: result.duplicate, batch: summary });
+    }
+    // 묶음 예산 늘리기: POST /api/batches/<묶음>/budget {calls, reason}. 업무별 예산 승인("계속")과는 따로다(서로 대신하지 않는다)
+    if (resource === 'batches' && method === 'POST' && parts.length === 4 && action === 'budget') {
+      if (!batches) throw new HttpError(409, '데모 모드에서는 예산을 바꿀 수 없습니다.');
+      const batch = BATCH_ID.test(id) ? batches.get(id) : null;
+      if (!batch) throw new HttpError(404, '접수된 묶음을 찾을 수 없습니다.');
+      if (!batch.budget) throw new HttpError(409, '이 업무는 묶음 예산이 없습니다. 업무 예산은 그 업무의 질문에 "계속"이라고 답해 늘립니다.');
+      const [min, max] = TASK_BUDGET_RANGE.calls;
+      if (!Number.isInteger(body.calls) || body.calls < 1 || body.calls > max) throw new HttpError(400, `늘릴 호출 수는 1~${max}회로 입력해 주세요.`);
+      const reason = typeof body.reason === 'string' ? redact(body.reason.trim(), 200) : '';
+      const next = batches.patchBatch(id, (b) => { b.budget.limitCalls += body.calls; b.budget.warned = false; b.budget.log.push({ at: new Date(scheduleNow()).toISOString(), add: body.calls, reason }); });
+      scheduleBroadcast(); sequenceSoon();
+      return sendJson(res, 200, { id, budget: { ...next.budget, usedCalls: batchCalls(next) }, min });
     }
     // 건 취소: POST /api/batches/<묶음>/items/<항목 번호>/cancel
     if (resource === 'batches' && method === 'POST' && parts.length === 6 && parts[3] === 'items' && parts[5] === 'cancel') {

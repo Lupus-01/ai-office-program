@@ -114,7 +114,13 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
   const sessionStart = Date.now(), activeBase = state.budget.activeMs;
   let loginWaitMs = 0; // 대표가 로그인하는 시간은 답장 대기처럼 세지 않는다
   const activeMs = () => activeBase + (Date.now() - sessionStart) - loginWaitMs;
-  const execute = (args) => { state.budget.calls++; return runAI(args); };
+  // 호출을 시작하기 전에 잔량을 먼저 깎는다(선점). 한도를 다 쓰면 새 AI 호출을 시작하지 않는다 —
+  // 병렬 단계가 남은 한 자리를 함께 쓰지 못한다. 묶음 예산은 실행기(runAI)가 같은 방식으로 따로 막는다
+  const execute = (args) => {
+    if (state.budget.calls >= state.budget.limitCalls) throw Object.assign(new Error('업무 예산의 AI 호출 수를 모두 썼습니다.'), { budget: 'task' });
+    state.budget.calls++;
+    return runAI(args);
+  };
   // 최초 지시의 외부 작업·위임 판별(지시창에서 AI가 근거와 함께 판단한 값)은 업무 내내 유지한다
   if (!saved.originalRequest && intent) state.intent = intent;
   let answer = null;
@@ -898,7 +904,8 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
           if (waiting.size) return ask([...waiting.values()]);
           throw new Error('진행할 수 있는 계획 단계가 없습니다.');
         }
-        const results = await Promise.all(ready.slice(0, Math.max(1, maxParallel)).map((s) => executeStage(s, state.rejectionReasons?.[s.id] || state.rejectionReason || '')));
+        // 남은 호출 수보다 많은 단계를 한꺼번에 시작하지 않는다(잔여 1회면 한 단계만)
+        const results = await Promise.all(ready.slice(0, Math.max(1, Math.min(maxParallel, state.budget.limitCalls - state.budget.calls))).map((s) => executeStage(s, state.rejectionReasons?.[s.id] || state.rejectionReason || '')));
         for (const { stage, result } of results) {
           if (result.status === 'done') continue;
           // 질문/이관/분담은 완료 이벤트를 만들지 않는다.
@@ -1008,7 +1015,19 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
         const left = (Array.isArray(review.stages) ? review.stages : []).map((t) => `- ${plan.stages.find((s) => s.id === t?.id)?.title || t?.id}: ${t?.reason}`);
         review = { ...review, verdict: 'pass', report: `${typeof review.report === 'string' && review.report.trim() ? review.report.trim() : `# ${plan.goal}`}\n\n## 확인 필요(재작업 한도로 고치지 못함)\n\n${[...left, ...(left.length ? [] : [`- ${review.reason || '검토 지적을 확인해 주세요.'}`])].join('\n')}\n` };
       }
-      if (review.verdict === 'pass' && prepared.errors.length) review = { verdict: 'reject', stage: prepared.errors[0].stage, reason: prepared.errors.map((e) => e.reason).join(' ') };
+      if (review.verdict === 'pass' && prepared.errors.length) {
+        // 무진전 반복 차단: 같은 단계·같은 형식 오류가 고친 뒤에도 그대로면(산출물 변화 없음, 또는 세 번째) 자동 반려를 멈추고 대표에게 묻는다.
+        // 외부 작업 조건을 못 채운 문안을 통과시키지 않는다(자동 승인 없음). 질문으로 멈추면 업무 자리를 반납해 다른 업무가 진행한다
+        const errorKey = JSON.stringify(prepared.errors.map((e) => [e.stage, e.reason]));
+        const outputKey = JSON.stringify([...new Set(prepared.errors.map((e) => e.stage))].map((id) => { const s = plan.stages.find((x) => x.id === id); return s ? fingerprint(s) : null; }));
+        const seen = state.stuck?.errorKey === errorKey ? state.stuck : null;
+        if (seen && (seen.outputKey === outputKey || seen.count >= 2)) {
+          state.stuck = null; persist();
+          return ask([{ phase: 'stuck', question: `외부 작업 문안의 같은 형식 오류가 고친 뒤에도 그대로라 자동 수정을 멈췄습니다. ${prepared.errors.map((e) => e.reason).join(' ')} 어떻게 고칠지 알려 주시거나, 원본·대상을 바꿔 다시 지시해 주세요. 이 문안은 발송·게시하지 않았습니다.` }]);
+        }
+        state.stuck = { errorKey, outputKey, count: (seen?.count || 0) + 1 };
+        review = { verdict: 'reject', stage: prepared.errors[0].stage, reason: prepared.errors.map((e) => e.reason).join(' ') };
+      } else if (review.verdict === 'pass') state.stuck = null;
       if (review.verdict === 'question' && review.question?.trim()) return ask([{ phase: 'review', question: review.question }]);
       if (review.verdict === 'pass' && evidence.every((e) => e.verdict === 'PASS')
           && plan.stages.every((s) => fingerprint(s) === state.completed[s.id])) {
@@ -1216,6 +1235,13 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
     }
   } catch (err) {
     checkStop();
+    // 예산을 다 써서 시작하지 못한 호출: 업무 예산은 평소의 예산 질문으로, 묶음 예산은 사유를 그대로 알리고 멈춘다(자동 승인 없음)
+    if (err.budget === 'task') {
+      state.budget.activeMs = activeMs();
+      return unattended ? blocked(`이번 회차 업무가 예산을 모두 써서 멈췄습니다(${budgetText()}). 다음 회차는 새 예산으로 진행합니다. 예산은 회사 설정에서 바꿀 수 있습니다.`)
+        : ask([{ phase: 'budget', question: `이 업무가 예산을 모두 썼습니다(${budgetText()}). 계속할까요? "계속"이면 처음 예산만큼 늘려 이어 가고, "그만"이면 지금까지의 결과로 멈춥니다.` }]);
+    }
+    if (err.budget === 'batch') return blocked(err.message);
     return blocked(`업무 진행이 중단됐습니다. ${err.message}`);
   }
 }
