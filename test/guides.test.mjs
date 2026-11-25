@@ -59,6 +59,9 @@ test('누락 점검: 근무 중인 직원·고정 절차 가운데 가이드가 
   const shown = publicGuides(guides, { roster: [{ id: 'writer-1', active: false }] });
   assert.ok(shown.every((g) => !('agent' in g) && !('recipe' in g)));
   assert.deepEqual(shown.map((g) => g.paused), [true, false, false]);
+  // 어느 팀 일인지는 싣는다(가이드 페이지의 팀별 묶음, 팀장 방의 "맡길 수 있는 일")
+  const withDept = publicGuides(guides, { roster: [{ id: 'writer-1', department: 'writing' }], departments: [{ id: 'writing', name: '시험문서부' }] });
+  assert.deepEqual(withDept.map((g) => g.dept || null), [{ id: 'writing', name: '시험문서부' }, null, null]);
   rmSync(root, { recursive: true, force: true });
 });
 

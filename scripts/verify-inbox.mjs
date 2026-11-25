@@ -89,10 +89,11 @@ try {
   const conv = (text) => page.locator('#sidebar .sb-conv', { hasText: text }).first();
   const waitMark = async (text, label) => { await conv(text).locator('.mark').filter({ hasText: label }).waitFor({ timeout: 30000 }); };
   const visible = (sel) => page.locator(sel).isVisible();
+  await page.locator('#sidebar [data-lead]').first().waitFor();
   const sidebarText = await page.locator('#sidebar').textContent();
   check('처음 열면 새 대화 화면이고 예전 화면(#app)은 보이지 않는다', (await page.locator('#chTitle').textContent()) === '새 대화' && !(await visible('#app')) && await visible('#composerText'));
-  check('왼쪽에는 새 대화·대화 목록·설정만 있고 사무실 구조(봇·부서·관제·사무실·조직·산출물)는 없다',
-    sidebarText.includes('새 대화') && sidebarText.includes('설정') && !/봇|시험조사부|관제|사무실|조직|산출물|비서실장/.test(sidebarText));
+  check('왼쪽에는 새 대화·팀장·대화 목록·가이드·설정이 있고 예전 화면(관제·사무실·조직·산출물)과 직원 이름은 없다',
+    sidebarText.includes('새 대화') && sidebarText.includes('시험조사부 팀장') && sidebarText.includes('가이드') && sidebarText.includes('설정') && !/봇|가나대리|관제|사무실|조직|산출물|비서실장/.test(sidebarText));
   check('본문이 화면 폭 안에 든다', await fits());
   await shot('01-empty.png');
 
@@ -220,7 +221,12 @@ try {
   await page.locator('#sidebar [data-new]').click();
   await page.locator('#chBody .gd-card').first().waitFor();
   check('새 대화에 "어떤 일을 맡기시겠어요?"와 업무 예시 카드가 보이고, 예시가 없는 것은 준비 중으로 표시된다', (await page.locator('#chBody .ch-empty-title').textContent()) === '어떤 일을 맡기시겠어요?' && await page.locator('#chBody .gd-card').count() === 2 && (await page.locator('#chBody .gd-card', { hasText: '주간 회신 집계' }).textContent()).includes('준비 중'));
-  check('예시 카드에는 직원·부서 이름이 나오지 않는다', !/가나대리|시험조사부|research/.test(await page.locator('#chBody .gd').textContent()));
+  check('예시 카드는 팀별로 묶이고 직원 이름·id는 나오지 않는다', (await page.locator('#chBody .gd-group').allTextContents()).join(',') === '시험조사부,공통' && !/가나대리|research-1/.test(await page.locator('#chBody .gd').textContent()));
+  // 검색창은 다시 그려지지 않아야 한다(입력란을 갈아 끼우면 한글 조합 중 글자가 두 번 들어간다)
+  await page.locator('#chBody [data-guide-q]').evaluate((el) => { el.dataset.same = '1'; });
+  await page.locator('#chBody [data-guide-q]').pressSequentially('메일 문안', { delay: 40 });
+  await page.waitForTimeout(1500);
+  check('검색창에 적는 동안과 화면이 갱신된 뒤에도 입력란이 그대로이고 글자가 한 번만 들어간다', await page.locator('#chBody [data-guide-q]').evaluate((el) => el.dataset.same === '1' && el.value === '메일 문안' && document.activeElement === el) && await page.locator('#chBody .gd-card').count() === 1);
   await page.locator('#chBody [data-guide-q]').fill('상담사 메일');
   check('업무 이름(다른 이름 포함)으로 찾으면 맞는 예시만 남고 검색창 초점이 유지된다', await page.locator('#chBody .gd-card').count() === 1 && await page.evaluate(() => document.activeElement?.dataset.guideQ !== undefined));
   await shot('08a-guides.png');
@@ -264,6 +270,41 @@ try {
   await conv('터미널에서 맡긴 일').click();
   await page.locator('#chBody .tone-done').waitFor();
   check('터미널에서 맡긴 업무의 대화에서도 완료 보고를 받고 이어서 답할 수 있다', (await page.locator('#chBody').textContent()).includes('터미널의 Claude·Codex에게 말해서 맡긴 업무') && await text.isEnabled());
+
+  // ── 팀장 방: 사이드바의 팀장에게 말을 걸어 그 팀에 일을 맡긴다 ──
+  const generalBefore = await page.locator('#sidebar .sb-conv[data-open-entry]').count();
+  await page.locator('#sidebar [data-lead="research"]').click();
+  check('팀장을 누르면 그 팀장과의 대화가 열리고 입력창이 그 팀장을 향한다', (await page.locator('#chTitle').textContent()) === '시험조사부 팀장' && (await text.getAttribute('placeholder')).includes('시험조사부 팀장에게') && await page.locator('#sidebar [data-lead="research"]').getAttribute('aria-current') === 'page');
+  check('팀장 방에 그 팀에 맡길 수 있는 일(가이드)이 보인다', await page.locator('#chBody .ld-guides .gd-card').count() === 1);
+  await text.fill('오늘은 문의 건수부터 정리해 줘.');
+  await page.keyboard.press('Enter');
+  await page.locator('#chBody .wm-me', { hasText: '오늘은 문의 건수부터' }).first().waitFor({ timeout: 1500 });
+  await page.locator('#chBody .ld-task .tone-done').waitFor({ timeout: 30000 });
+  check('팀장에게 보낸 말은 그 방에 남고 팀장 이름으로 완료 보고가 온다(대화 목록에는 따로 생기지 않는다)', (await page.locator('#chTitle').textContent()) === '시험조사부 팀장' && (await page.locator('#chBody .ld-task .wm-ai .wm-head strong').first().textContent()) === '시험조사부 팀장'
+    && await page.locator('#sidebar .sb-conv[data-open-entry]').count() === generalBefore);
+  await text.fill('명단이 필요한 일: 팀장 방에서 맡긴 검수.');
+  await page.keyboard.press('Enter');
+  await page.locator('#chBody .ld-task .tone-question').waitFor({ timeout: 30000 });
+  check('팀장이 물어보면 사이드바의 팀장에 "답변 필요"가 뜨고 입력창이 답변용으로 바뀐다', (await page.locator('#sidebar [data-lead="research"]').textContent()).includes('답변 필요 1') && (await text.getAttribute('placeholder')) === '답변을 적어 보내세요');
+  await shot('08c-lead.png');
+  await text.fill('명단 보냈어');
+  await page.keyboard.press('Enter');
+  await page.locator('#sidebar [data-lead="research"] .mark-needs').waitFor({ state: 'detached', timeout: 30000 });
+  await page.locator('#chBody .ld-task').nth(1).locator('.tone-done').waitFor({ timeout: 30000 });
+  check('답하면 새 업무가 생기지 않고 그 업무가 이어져 끝난다', await page.locator('#chBody .ld-task').count() === 2);
+  await page.locator('#chBody .ld-task').first().locator('[data-open-entry]').click();
+  check('"이 업무만 보기"로 그 업무의 대화(중지·취소·자세히)를 연다', (await page.locator('#chTitle').textContent()).includes('오늘은 문의 건수부터') && (await page.locator('#chBody .wm-ai .wm-head strong').first().textContent()) === '시험조사부 팀장');
+
+  // ── 가이드 페이지: 기본 사용법 + 팀별 업무 가이드 ──
+  await page.locator('#sidebar [data-page="guides"]').click();
+  await page.locator('#chBody [data-guide-q]').fill('');
+  check('사이드바의 가이드를 누르면 기본 사용법과 팀별 업무 가이드가 보인다', (await page.locator('#chTitle').textContent()) === '가이드' && (await page.locator('#chBody .gd-usage').textContent()).includes('일 맡기기') && await page.locator('#chBody .gd-card').count() === 2);
+  await page.locator('#chBody .gd-card', { hasText: '안내 메일 문안 준비' }).click();
+  await page.locator('#chBody [data-use][data-to="lead"]').click();
+  check('가이드의 "○○ 팀장에게 맡기기"는 그 팀장 방의 입력창에 예시를 넣는다(보내지는 않는다)', (await page.locator('#chTitle').textContent()) === '시험조사부 팀장' && await text.inputValue() === EXAMPLE_NEW && await page.locator('#chBody .ld-task').count() === 2);
+  await text.fill('');
+  await page.locator('#chBody [data-guide-q]').count();
+  await shot('08d-guides-page.png');
 
   // ── 설정: 직원 구성은 여기서만 연다 ──
   await page.locator('#sidebar [data-page="settings"]').click();

@@ -1255,6 +1255,31 @@ button.badge-reply:hover { background: color-mix(in srgb, var(--warn) 24%, trans
 .gd-foot { margin-top: 18px; }
 .gd-detail code { padding: 1px 6px; border-radius: 4px; background: var(--panel-3); font-size: .92em; }
 
+/* 팀장(사이드바와 팀장 방) */
+.sb-title { margin: 14px 12px 6px; color: var(--sb-text); font-size: 12.5px; font-weight: 800; opacity: .85; }
+.sb-title:first-child { margin-top: 2px; }
+.sb-lead { display: flex; align-items: center; gap: 10px; min-height: 56px; }
+.sb-lead-av { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: rgba(127, 127, 127, .3); color: var(--sb-strong); font-size: 15px; font-weight: 800; }
+.sb-lead-main { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.sb-lead-sum { min-width: 0; overflow: hidden; text-overflow: ellipsis; opacity: .8; }
+.av-lead { background: #2f7d6b; }
+.ld-intro { display: flex; gap: 16px; margin-bottom: 24px; padding: 18px 20px; border: var(--border); border-radius: 14px; background: var(--panel-2); }
+.ld-av { flex: none; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 14px; background: #2f7d6b; color: #fff; font-size: 22px; font-weight: 800; }
+.ld-intro strong { font-size: 18px; }
+.ld-boss { margin-left: 8px; color: var(--muted); font-size: 14px; }
+.ld-intro p { margin-top: 4px; font-size: 15px; line-height: 1.65; overflow-wrap: anywhere; }
+.ld-hint { color: var(--muted); }
+.ld-guides { margin: 0 0 28px; }
+.ld-task { margin-top: 8px; padding-top: 16px; border-top: var(--border); }
+.ld-line { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; color: var(--faint); font-size: 13px; }
+.ld-line .link { display: inline-flex; align-items: center; min-height: 44px; margin-left: auto; color: var(--accent); font-weight: 700; }
+.gd-group { margin: 22px 4px 10px; font-size: 15px; font-weight: 800; }
+.gd-usage { margin-bottom: 8px; padding: 6px 18px; border: var(--border); border-radius: 12px; background: var(--panel-2); }
+.gd-usage summary { display: flex; align-items: center; min-height: 48px; cursor: pointer; font-size: 16px; font-weight: 800; }
+.gd-dl { margin: 4px 0 14px; font-size: 15.5px; line-height: 1.7; }
+.gd-dl dt { margin-top: 12px; font-weight: 800; }
+.gd-dl dd { margin: 2px 0 0; color: var(--muted); overflow-wrap: anywhere; }
+
 /* 설정·처리 이력 */
 .set-title { margin: 26px 4px 8px; color: var(--muted); font-size: 13.5px; font-weight: 800; }
 .set-title:first-child { margin-top: 0; }

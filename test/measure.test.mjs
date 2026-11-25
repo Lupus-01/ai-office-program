@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { batchSummary, createBatches } from '../lib/batches.mjs';
+import { batchSummary, createBatches, itemPrompt } from '../lib/batches.mjs';
 import { batchReport } from '../lib/batch-report.mjs';
 import { createClient } from '../scripts/office-ask.mjs';
 import { measureRows, measureSummary } from '../scripts/measure.mjs';
@@ -22,6 +22,12 @@ test('접수 경로: 터미널 AI가 넣은 건은 terminal로 남고, 화면에
   assert.equal('via' in batchSummary(screen).items[0], false, '화면이 기본이라 따로 싣지 않는다');
   assert.deepEqual([batchReport(terminal).rows[0].via, batchReport(screen).rows[0].via, batchReport(many).rows[1].via], ['terminal', 'screen', 'screen']);
   assert.equal(batchReport({ ...many, items: many.items.map((i) => ({ ...i, source: 'schedule' })) }).rows[0].via, 'schedule');
+  // 팀장 방에서 맡긴 업무: 요청 원문과 제목은 그대로 두고, 실행 지시문 뒤에 담당 팀만 덧붙인다
+  const led = batches.submit({ submitKey: key('d'), items: [{ prompt: '오늘은 문의 건수부터 정리해 줘' }] }, { source: 'command', via: 'screen', to: 'research', toName: '시험조사부', toLead: '가나팀장' }).batch;
+  assert.equal(batchSummary(led).items[0].to, 'research');
+  assert.equal(led.items[0].title, '오늘은 문의 건수부터 정리해 줘');
+  assert.match(itemPrompt(led.items[0], led), /^오늘은 문의 건수부터 정리해 줘\n\n\[담당 지정\]\n이 업무는 시험조사부에 맡긴다\. 팀장 가나팀장/);
+  assert.doesNotMatch(itemPrompt(terminal.items[0], terminal), /담당 지정/);
   // 다시 읽어도 경로가 남는다
   assert.equal(batchSummary(createBatches({ root }).get(terminal.id)).items[0].via, 'terminal');
 });

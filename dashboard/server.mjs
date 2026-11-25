@@ -968,6 +968,15 @@ export async function startServer({
     if (body.agentId !== undefined && body.agentId !== null) throw new HttpError(400, '직원에게 직접 지시할 수 없습니다. 비서실장에게 업무를 지시해 주세요.');
     const model = body.model || null;
     if (model !== null && typeof model !== 'string') throw new HttpError(400, 'model은 문자열이어야 합니다.');
+    // to: 대화 화면의 팀장 방에서 보낸 업무. 그 팀에 맡기라는 담당 지정일 뿐이고(직원 개별 지시가 아니다) 계획·검토는 평소대로 비서실장을 거친다
+    let to = null;
+    if (body.to !== undefined && body.to !== null) {
+      const org = loadOrg(root);
+      const dept = typeof body.to === 'string' ? org.departments.find((d) => d.id === body.to && d.active !== false && d.codexRole !== 'review') : null;
+      const staff = dept ? org.roster.filter((a) => a.department === dept.id && a.active !== false) : [];
+      if (!staff.length) throw new HttpError(400, '그 팀을 찾을 수 없거나 근무 중인 직원이 없습니다. 새 대화로 맡겨 주세요.');
+      to = { to: dept.id, toName: dept.name, toLead: staff.find((a) => a.lead)?.name || '' };
+    }
     // 의도는 비서실장(AI)이 판별하고, 권한이 되는 판단은 대표 원문 근거가 있을 때만 쓴다(실패하면 규칙 판별)
     await toolProbe;
     // 접수 전 판별 호출도 원장에 남기고, 업무로 접수되면 그 건에 귀속한다
@@ -1011,9 +1020,11 @@ export async function startServer({
     // 상시 감시(업무 자리를 차지하지 않는다)와 빠른 조회·간단한 수정은 예전처럼 즉시 실행한다
     let monitor;
     try { monitor = Boolean(continuousRequest(prompt, continuous)); } catch { monitor = true; /* 형식 오류는 실행기가 예전 문구로 알린다 */ }
+    // 팀을 지정한 업무는 빠른 경로(직원 한 명이 바로 답함)를 쓰지 않고 그 팀에 맡긴다
+    if (to) Object.assign(runIntent, { quick: false, quickEdit: false, quickEditFile: '', quickAgent: '' });
     if (!monitor && !runIntent.quick && !runIntent.quickEdit) {
       const { batch } = await callRunner(() => batches.submit({ submitKey: randomBytes(24).toString('hex'), items: [{ prompt }] },
-        { source: 'command', via: body.via === 'terminal' ? 'terminal' : 'screen', intent: runIntent, options: { model, engine: body.engine || null, effort: body.effort || null } }), '작업을 접수하지 못했습니다.');
+        { source: 'command', via: body.via === 'terminal' ? 'terminal' : 'screen', ...(to || {}), intent: runIntent, options: { model, engine: body.engine || null, effort: body.effort || null } }), '작업을 접수하지 못했습니다.');
       ledger.attach(judgeTag.calls, batch.items[0].id);
       const result = await callRunner(() => sequencer.started(batch.items[0].id), '작업을 시작하지 못했습니다.');
       scheduleBroadcast();
@@ -1619,9 +1630,9 @@ export async function startServer({
       if (parts.length === 2 && parts[1] === 'guides') {
         checkToken(req);
         const loaded = loadGuides(root);
-        let roster = [];
-        try { roster = loadOrg(root).roster || []; } catch { /* 조직을 읽지 못하면 연결 점검만 빠진다 */ }
-        return sendJson(res, 200, { guides: publicGuides(loaded.guides, { roster }), exists: loaded.exists, problems: loaded.problems,
+        let roster = [], departments = [];
+        try { const org = loadOrg(root); roster = org.roster || []; departments = org.departments || []; } catch { /* 조직을 읽지 못하면 연결 점검만 빠진다 */ }
+        return sendJson(res, 200, { guides: publicGuides(loaded.guides, { roster, departments }), exists: loaded.exists, problems: loaded.problems,
           coverage: guideCoverage(loaded.guides, { roster, recipes: recipeChoices(root) }) });
       }
       // 발송 결과 대조함: 결과가 불확실한 발송과 그 업무. 기록만 읽는다(외부 발송 0회, AI 호출 0회). ?all=1이면 결정 이력이 있는 지난 건도 준다

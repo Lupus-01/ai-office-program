@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { attentionEntries, composeMode, countsText, entrySig, isUnread, itemNote, newSubmitKey, progressText, richText, runStatus, sizeText, streamEntries, threadMessages, usageText, waitingText, withUploads } from '../dashboard/public/inbox.js';
+import { leadList, leadReplyTarget, attentionEntries, composeMode, countsText, entrySig, isUnread, itemNote, newSubmitKey, progressText, richText, runStatus, sizeText, streamEntries, threadMessages, usageText, waitingText, withUploads } from '../dashboard/public/inbox.js';
 import { SUBMIT_KEY } from '../lib/batches.mjs';
 import { THEMES, VIEWS, esc } from '../dashboard/public/app.js';
 
@@ -96,6 +96,17 @@ test('입력창: 새 대화·답글·진행 중 덧붙이기·보낼 수 없음�
   assert.equal(composeMode(entry('canceled'), { status: 'done', canReply: true }).mode, 'off');
 });
 
+test('팀장: 근무 중인 직원이 있는 팀만 사이드바에 서고, 팀장 방의 입력창은 답을 기다리는 업무가 있으면 그 업무에 답한다', () => {
+  const state = { agents: { a1: { name: '가나팀장', lead: true }, a2: { name: '다라대리' }, b1: { name: '마바사원', active: false }, v1: { name: '검증' }, c1: { name: '사아대리' } },
+    departments: [{ id: 'research', name: '시험조사부', summary: '자료 조사', members: ['a1', 'a2'] }, { id: 'rest', name: '쉬는부', members: ['b1'] }, { id: 'off', name: '휴무부', active: false, members: ['a2'] },
+      { id: 'verify', name: '검증실', codexRole: 'review', members: ['v1'] }, { id: 'docs', name: '시험문서부', members: ['c1'] }] };
+  assert.deepEqual(leadList(state), [{ id: 'research', name: '시험조사부', label: '시험조사부 팀장', boss: '가나팀장', summary: '자료 조사' }, { id: 'docs', name: '시험문서부', label: '시험문서부 팀장', boss: '', summary: '' }]);
+  assert.deepEqual(leadList({}), []);
+  assert.equal(leadReplyTarget([]), null);
+  assert.equal(leadReplyTarget([{ id: 'a', status: 'needs' }, { id: 'b', status: 'done' }]), null, '마지막 업무가 끝났으면 새 업무를 맡긴다');
+  assert.equal(leadReplyTarget([{ id: 'a', status: 'done' }, { id: 'b', status: 'needs' }]).id, 'b');
+});
+
 test('문구: 대기 사유·건수·사용량, 그리고 결과 글의 제목 줄은 안전하게 굵게만 바꾼다', () => {
   assert.equal(waitingText(item(2, 'waiting')), '차례 대기');
   assert.equal(waitingText(item(2, 'waiting', { waitingOn: { kind: 'slot', title: '집계' } })), '차례 대기 — 앞선 업무 "집계"');
@@ -118,12 +129,13 @@ test('화면 파일: 대화형 뼈대(대화 목록·대화·입력창)만 있�
   assert.deepEqual(THEMES, ['calm', 'neon', 'pastel']);
   assert.deepEqual(VIEWS.slice(0, 2), ['inbox', 'team']);
   const src = await readFile(path.join(PUBLIC, 'inbox.js'), 'utf8');
-  for (const field of ['e.title', 'm.text', 'm.who', 'b.title', 'row.result', 'row.next', 'it.target', 'item.text.split', 'f.name', 'p.text', 'n.text']) assert.match(src, new RegExp(`esc\\(${field.replaceAll('.', '\\.')}`), field);
+  for (const field of ['e.title', 'm.text', 'l.label', 'lead.label', 'b.title', 'row.result', 'row.next', 'it.target', 'item.text.split', 'f.name', 'p.text', 'n.text']) assert.match(src, new RegExp(`esc\\(${field.replaceAll('.', '\\.')}`), field);
   // (threadMessages는 화면에 넣기 전의 일반 글을 만들고, 그 글은 bubble에서 esc를 거친다 — entry.*는 거기서만 쓴다)
   assert.ok(!/\$\{(?:e|m|b|f|p|n|d|row|it|item|full)\.(?:title|text|note|prompt|reason|result|next|target|summary|name|rel|error)\}/.test(src), 'esc 없이 넣은 곳이 없어야 한다');
   // 화면에서 사무실 구조로 가는 길은 설정의 직원 구성 하나뿐이다
   assert.deepEqual([...new Set([...src.matchAll(/data-view="([a-z]+)"/g)].map((m) => m[1]))], ['team']);
-  assert.doesNotMatch(src, /departments\.(?:map|filter)|agents\[|'control'|'office'|'outputs'/, '부서·직원 목록과 예전 화면을 그리지 않는다');
+  assert.doesNotMatch(src, /'control'|'office'|'outputs'|memberCount|activeCount/, '예전 화면(관제·사무실·산출물)과 직원 현황판은 그리지 않는다');
+  assert.match(src, /getElementById\('gdResults'\)/, '검색창은 다시 그리지 않고 결과 칸만 바꾼다(한글 조합 중 글자 중복 방지)');
   // 상태를 바꾸는 요청은 정해진 곳뿐이다: 보내기(단건·묶음)·답글·중지·취소·예산·대조 결정
   assert.deepEqual([...new Set([...src.matchAll(/api\('POST', [`']([^`'$]+)/g)].map((m) => m[1]))].sort(), ['/api/batches', '/api/batches/', '/api/reconcile/', '/api/runs', '/api/runs/']);
   assert.match(src, /ev\.isComposing/, '한글 조합 중 Enter는 보내지 않는다');

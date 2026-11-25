@@ -133,6 +133,18 @@ export function composeMode(entry, latest) {
     placeholder: entry.status === 'needs' ? '답변을 적어 보내세요' : entry.status === 'done' ? '고칠 점이나 더 맡길 일을 이어서 적어 보내세요' : '이어서 진행하려면 답글을 보내세요(예: 이어서 진행)' };
 }
 
+// 사이드바에 세울 팀장: 근무 중인 직원이 있는 부서(검토 전용 부서 제외). 팀장이 없으면 부서 이름만으로 방을 만든다
+// lead: { id(부서 id), name(부서 이름), label('○○부 팀장'), boss(팀장 이름), summary }
+export function leadList(state) {
+  const agents = state.agents || {};
+  return (state.departments || []).filter((d) => d.active !== false && d.codexRole !== 'review')
+    .map((dept) => { const staff = (dept.members || []).map((m) => (typeof m === 'string' ? agents[m] : m)).filter((a) => a && a.active !== false && a.status !== 'off-duty'); return { dept, staff }; })
+    .filter(({ staff }) => staff.length)
+    .map(({ dept, staff }) => ({ id: dept.id, name: dept.name, label: `${dept.name} 팀장`, boss: staff.find((a) => a.lead)?.name || '', summary: dept.summary || '' }));
+}
+// 팀장 방에서 입력창이 하는 일: 마지막 업무가 답을 기다리면 그 업무에 답하고, 아니면 그 팀에 새 업무를 맡긴다
+export const leadReplyTarget = (mine) => (mine.at(-1)?.status === 'needs' ? mine.at(-1) : null);
+
 // 업무 예시 찾기: 띄어 쓴 낱말이 모두 들어 있는 가이드만(업무 이름·설명·다른 이름·산출물·예시 이름에서 찾는다). 빈 검색어는 전부
 export function searchGuides(guides, query) {
   const words = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
@@ -153,9 +165,9 @@ export function richText(text, esc) {
 export function createInbox(deps) {
   const { api, authedGet, toast, esc, state, refresh, view, setView, openThread, openCompletion, download, upload, store, resultMessage, open } = deps;
   const $ = (id) => document.getElementById(id);
-  // page: chat(대화 또는 새 대화) | guides(업무 예시 목록) | guide(예시 상세) | settings | reports | report | reconcile | guidecheck.  pane: 좁은 화면에서 지금 보이는 쪽(list | main)
-  // guideCtx: 예시를 어디에 쓸지 — 'new'(새 대화) 또는 예시를 연 대화의 id
-  const ui = { page: 'chat', open: store('ai-office-open') || null, report: null, guide: null, guideCtx: 'new', guideQ: store('ai-office-guide-q') || '', guides: { list: [], coverage: null, problems: [], exists: false, loaded: false, at: 0 },
+  // page: chat(대화 또는 새 대화) | guides(업무 예시 목록) | guide(예시 상세) | lead(팀장 방) | settings | reports | report | reconcile | guidecheck.  pane: 좁은 화면에서 지금 보이는 쪽(list | main)
+  // guideCtx: 예시를 어디에 쓸지 — 'new'(새 대화), 예시를 연 대화의 id, 또는 'lead:<부서 id>'(팀장 방)
+  const ui = { page: 'chat', open: store('ai-office-open') || null, report: null, lead: null, guide: null, guideCtx: 'new', guideQ: store('ai-office-guide-q') || '', guides: { list: [], coverage: null, problems: [], exists: false, loaded: false, at: 0 },
     pane: 'list', filter: store('ai-office-filter') === 'needs' ? 'needs' : 'all',
     details: new Map(), results: new Map(), reports: new Map(), files: new Map(), reconcile: { items: [], loaded: false, count: -1 },
     queue: [], attached: [], submitKey: newSubmitKey(), pending: [], notices: [], sending: false, stick: true, ctx: undefined, seen: null, listTop: 0 };
@@ -184,7 +196,12 @@ export function createInbox(deps) {
     return d.toLocaleString('ko-KR', today ? { hour: '2-digit', minute: '2-digit', hour12: false } : { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }); };
   const mins = (ms) => (ms >= 60000 ? `${Math.round(ms / 60000)}분` : ms > 0 ? '1분 미만' : '0분');
   const chip = (status, label) => `<span class="chip chip-${esc(status)}">${esc(label || ITEM_LABEL[status] || status)}</span>`;
-  const avatar = (role) => `<span class="av av-${role}" aria-hidden="true">${role === 'me' ? '나' : 'AI'}</span>`;
+  const avatar = (role, mark) => `<span class="av av-${role}${mark ? ' av-lead' : ''}" aria-hidden="true">${role === 'me' ? '나' : esc(mark || 'AI')}</span>`;
+  const leads = () => leadList(state());
+  const findLead = (id) => leads().find((l) => l.id === id) || null;
+  const leadOf = (entry) => (entry?.item?.to ? findLead(entry.item.to) : null);
+  const leadEntries = (id) => entries().filter((e) => e.item?.to === id);
+  const initial = (lead) => [...lead.name][0] || '팀';
   const entries = () => streamEntries(state());
   const findEntry = (id) => entries().find((e) => e.id === id) || null;
   const convRuns = (entry) => (entry?.run ? state().runs.filter((r) => !r.phase && r.target !== 'review' && rootOf(r) === entry.run) : []);
@@ -213,7 +230,19 @@ export function createInbox(deps) {
     const s = state(), all = entries(), v = view();
     syncSeen(all);
     const attention = attentionEntries(all);
-    const shown = (ui.filter === 'needs' ? attention : all).slice().reverse();
+    // 팀장에게 맡긴 업무는 그 팀장 방에 모이고, 나머지가 "대화" 목록에 선다
+    const team = leads(), teamIds = new Set(team.map((l) => l.id));
+    const general = (list) => list.filter((e) => !teamIds.has(e.item?.to));
+    const shown = general(ui.filter === 'needs' ? attention : all).slice().reverse();
+    const hereLead = v === 'inbox' && ui.page === 'lead' ? ui.lead : null;
+    const leadRow = (l) => {
+      const mine = all.filter((e) => e.item?.to === l.id), needs = mine.filter((e) => ATTENTION.includes(e.status)).length, busy = mine.some((e) => e.status === 'running' || e.status === 'waiting');
+      const unread = l.id !== hereLead && mine.some((e) => isUnread(e, sigOf(e), ui.seen));
+      if (ui.filter === 'needs' && !needs) return '';
+      return `<button type="button" class="sb-conv sb-lead${unread ? ' is-unread' : ''}" data-lead="${esc(l.id)}" data-key="lead-${esc(l.id)}" aria-current="${l.id === hereLead ? 'page' : 'false'}"><span class="sb-lead-av" aria-hidden="true">${esc(initial(l))}</span>
+        <span class="sb-lead-main"><span class="sb-conv-title">${esc(l.label)}</span><span class="sb-conv-sub">${needs ? `<span class="mark mark-needs">답변 필요 ${needs}</span>` : busy ? '<span class="mark mark-running">진행 중</span>' : `<span class="sb-lead-sum">${esc(l.summary || '말을 걸어 일을 맡기세요')}</span>`}${unread ? '<span class="sb-new-dot">새 소식</span>' : ''}</span></span></button>`;
+    };
+    const leadRows = team.map(leadRow).join('');
     const conn = deps.connState?.() || 'connecting';
     const here = v === 'inbox' && ui.page === 'chat' ? ui.open : null;
     const rec = s.reconcilePending || 0;
@@ -230,18 +259,22 @@ export function createInbox(deps) {
           <button type="button" data-filter="needs" data-key="sb-f-needs" aria-pressed="${ui.filter === 'needs'}">답변 필요${attention.length ? ` <span class="sb-badge sb-badge-alert">${attention.length}</span>` : ''}</button></div></div>
       <nav class="sb-scroll" data-scroll="list" aria-label="대화 목록">
         ${rec ? `<button type="button" class="sb-conv sb-conv-alert" data-page="reconcile" data-key="sb-rec" aria-current="${v === 'inbox' && ui.page === 'reconcile' ? 'page' : 'false'}"><span class="sb-conv-title">발송 결과 확인</span><span class="sb-conv-sub"><span class="mark mark-needs">확인 필요 ${rec}건</span></span></button>` : ''}
+        ${leadRows ? `<h2 class="sb-title">팀장</h2>${leadRows}<h2 class="sb-title">대화</h2>` : ''}
         ${shown.map(row).join('') || `<p class="sb-empty">${ui.filter === 'needs' ? '답변을 기다리는 대화가 없습니다.' : '아직 대화가 없습니다. 맡길 일을 적어 보내면 여기에 쌓입니다.'}</p>`}
       </nav>
-      <div class="sb-foot"><button type="button" class="sb-item" data-page="settings" data-key="sb-settings" aria-current="${(v === 'inbox' && ['settings', 'reports', 'report'].includes(ui.page)) || v === 'team' ? 'page' : 'false'}"><span class="sb-ic" aria-hidden="true">⚙</span><span class="sb-label">설정</span></button></div>`);
+      <div class="sb-foot"><button type="button" class="sb-item" data-page="guides" data-key="sb-guides" aria-current="${v === 'inbox' && ['guides', 'guide'].includes(ui.page) ? 'page' : 'false'}"><span class="sb-ic" aria-hidden="true">?</span><span class="sb-label">가이드</span></button>
+        <button type="button" class="sb-item" data-page="settings" data-key="sb-settings" aria-current="${(v === 'inbox' && ['settings', 'reports', 'report', 'guidecheck'].includes(ui.page)) || v === 'team' ? 'page' : 'false'}"><span class="sb-ic" aria-hidden="true">⚙</span><span class="sb-label">설정</span></button></div>`);
   }
 
   // ── 오른쪽 머리말 ──
   function renderHead(entry) {
     const batch = ui.page === 'report' ? (state().batches || []).find((b) => b.id === ui.report) : null;
     const guide = ui.page === 'guide' ? ui.guides.list.find((g) => g.id === ui.guide) : null;
+    const room = ui.page === 'lead' ? findLead(ui.lead) : null;
     const [title, sub] = ui.page === 'settings' ? ['설정', '']
-      : ui.page === 'guides' ? ['업무 예시', '맡길 일을 고르면 준비할 것과 보낼 말 예시를 볼 수 있습니다']
-        : ui.page === 'guide' ? [guide?.title || '업무 예시', '']
+      : ui.page === 'lead' ? [room?.label || '팀장', room?.summary || '']
+      : ui.page === 'guides' ? ['가이드', '어떻게 맡기고 어떻게 말하면 되는지, 업무별로 볼 수 있습니다']
+        : ui.page === 'guide' ? [guide?.title || '가이드', '']
           : ui.page === 'guidecheck' ? ['업무 예시 점검', '예시가 빠진 업무와 다시 볼 예시를 모았습니다. 여기서는 아무것도 실행하지 않습니다.']
       : ui.page === 'reports' ? ['처리 이력', '맡긴 업무의 건별 결과와 처리 이력']
         : ui.page === 'report' ? [`보고 · ${batch?.title || ''}`, '']
@@ -255,14 +288,14 @@ export function createInbox(deps) {
         + (latest && BUSY.includes(latest.status) ? `<button type="button" class="btn btn-sm" data-stop="${esc(latest.id)}" data-key="ch-stop">중지</button>` : '')
         + (entry.kind === 'item' && ['waiting', 'needs', 'failed', 'stopped'].includes(entry.status) ? `<button type="button" class="btn btn-sm btn-ghost" data-cancel="${esc(entry.id)}" data-key="ch-cancel">업무 취소</button>` : '');
     } else if (['reports', 'report', 'guidecheck'].includes(ui.page)) actions = `<button type="button" class="btn btn-sm btn-ghost" data-page="${ui.page === 'report' ? 'reports' : 'settings'}" data-key="ch-up">‹ ${ui.page === 'report' ? '처리 이력' : '설정'}</button>`;
-    else if (ui.page === 'guide') actions = `<button type="button" class="btn btn-sm btn-ghost" data-guides data-key="ch-up">‹ 예시 목록</button>`;
-    else if (ui.page === 'guides' && ui.guideCtx !== 'new') actions = `<button type="button" class="btn btn-sm btn-ghost" data-open-entry="${esc(ui.guideCtx)}" data-key="ch-up">‹ 대화로</button>`;
+    else if (ui.page === 'guide') actions = `<button type="button" class="btn btn-sm btn-ghost" data-guides-back data-key="ch-up">‹ 목록</button>`;
+    else if (ui.page === 'guides' && ui.guideCtx !== 'new' && !ui.guideCtx.startsWith('lead:')) actions = `<button type="button" class="btn btn-sm btn-ghost" data-open-entry="${esc(ui.guideCtx)}" data-key="ch-up">‹ 대화로</button>`;
     setHTML($('chActions'), actions);
     const s = state();
     const ready = s.tools?.claude?.loggedIn === true || s.tools?.codex?.loggedIn === true;
     const probing = !s.tools || s.tools?.claude?.installed === null || s.tools?.codex?.installed === null;
     const noTeam = Array.isArray(s.departments) && s.departments.length === 0 && !s.demo;
-    const notice = ui.page !== 'chat' || s.demo || probing ? '' : !ready ? '로그인된 AI 도구가 없어 업무를 시작할 수 없습니다. 터미널에서 Claude 또는 Codex에 로그인한 뒤 서버를 다시 켜 주세요.'
+    const notice = !['chat', 'lead'].includes(ui.page) || s.demo || probing ? '' : !ready ? '로그인된 AI 도구가 없어 업무를 시작할 수 없습니다. 터미널에서 Claude 또는 Codex에 로그인한 뒤 서버를 다시 켜 주세요.'
       : noTeam ? '일을 맡을 직원 구성이 아직 없습니다. <button type="button" class="link" data-view="team" data-key="notice-team">설정 › 직원 구성</button>에서 먼저 추가해 주세요.' : '';
     $('chNotice').hidden = !notice;
     setHTML($('chNotice'), notice);
@@ -308,11 +341,11 @@ export function createInbox(deps) {
       <button type="button" class="btn btn-sm btn-primary" data-dl="${i}" data-task="${esc(task)}" data-key="dl-${i}" aria-label="${esc(f.name)} 받기">받기</button></li>`).join('')}</ul>` : ''}
       <button type="button" class="link fc-more" data-completion="${esc(task)}" data-key="fc-open">${list.length ? '미리 보기 · 저장 폴더 열기' : '완료 보고 자세히 보기'}</button>`;
   };
-  const bubble = (m, entry) => `<article class="wm wm-${m.role}${m.tone ? ` tone-${m.tone}` : ''}">${avatar(m.role)}<div class="wm-main"><header class="wm-head"><strong>${esc(m.who)}</strong><time>${esc(time(m.at))}</time>${m.tone === 'question' ? '<span class="wm-tag tag-warn">답변 필요</span>' : m.tone === 'done' ? '<span class="wm-tag tag-ok">완료</span>' : ''}</header>
+  const bubble = (m, entry, lead = leadOf(entry)) => `<article class="wm wm-${m.role}${m.tone ? ` tone-${m.tone}` : ''}">${avatar(m.role, lead && m.role === 'ai' ? initial(lead) : '')}<div class="wm-main"><header class="wm-head"><strong>${esc(lead && m.role === 'ai' ? lead.label : m.who)}</strong><time>${esc(time(m.at))}</time>${m.tone === 'question' ? '<span class="wm-tag tag-warn">답변 필요</span>' : m.tone === 'done' ? '<span class="wm-tag tag-ok">완료</span>' : ''}</header>
       <div class="wm-text"${m.tone === 'live' ? ' role="status"' : ''}>${m.tone === 'live' ? '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> ' : ''}${m.role === 'ai' && m.tone && m.tone !== 'live' ? richText(m.text, esc) : esc(m.text)}</div>
       ${m.deliver ? fileCards(convRuns(entry).at(-1)?.task || entry.task) : ''}</div></article>`;
   const pendingHTML = (ctx) => ui.pending.filter((p) => p.ctx === ctx).map((p) => `<article class="wm wm-me is-pending">${avatar('me')}<div class="wm-main"><header class="wm-head"><strong>나</strong><time>${esc(time(p.at))}</time></header><div class="wm-text">${esc(p.text)}</div>
-      <p class="wm-sending${p.error ? ' is-error' : ''}" role="status">${p.error ? esc(p.error) : `<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> ${ctx === 'new' ? 'AI 비서가 확인하고 있습니다…' : '보내는 중…'}`}</p></div></article>`).join('');
+      <p class="wm-sending${p.error ? ' is-error' : ''}" role="status">${p.error ? esc(p.error) : `<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> ${ctx === 'new' ? 'AI 비서가 확인하고 있습니다…' : ctx.startsWith('lead:') ? '전달하고 있습니다…' : '보내는 중…'}`}</p></div></article>`).join('');
   const noticeHTML = (ctx) => ui.notices.filter((n) => n.ctx === ctx).map((n) => `<article class="wm wm-ai">${avatar('ai')}<div class="wm-main"><header class="wm-head"><strong>${AI_NAME}</strong><time>${esc(time(n.at))}</time></header><div class="wm-text">${esc(n.text)}</div></div></article>`).join('');
   const EVENT_LABEL = { accepted: '접수', started: '시작', resumed: '재개', needs: '답변 필요로 보류', stopped: '중지', paused: '일시정지', failed: '실패', done: '완료', canceled: '취소', 'resume-queued': '답글 접수(재개 예약)', unpaused: '일시정지 해제', requeued: '대기로 복귀', 'wait-alert': '대기 알림' };
   function chatHTML(entry, detail) {
@@ -347,18 +380,38 @@ export function createInbox(deps) {
     ui.guidesBusy = false;
     if (view() === 'inbox' && (['guides', 'guide', 'guidecheck'].includes(ui.page) || (ui.page === 'chat' && !current()))) renderMain();
   }
-  function guideListHTML() {
-    const found = searchGuides(ui.guides.list, ui.guideQ);
-    return `<section class="gd" aria-label="업무 예시">
-      <label class="gd-search"><span class="sr-only">업무 이름으로 예시 찾기</span><input type="search" data-guide-q data-keep="guide-q" data-key="guide-q" value="${esc(ui.guideQ)}" placeholder="업무 이름으로 찾기 — 예: 메일, 보고서, 집계" autocomplete="off"></label>
-      <p class="gd-count" role="status">${ui.guideQ.trim() ? `"${esc(ui.guideQ.trim())}" ${found.length}건` : `이런 일을 맡길 수 있어요 · ${found.length}건`}</p>
-      ${found.length ? `<div class="gd-grid">${found.map((g) => `<button type="button" class="gd-card" data-guide="${esc(g.id)}" data-key="guide-${esc(g.id)}"><strong>${esc(g.title)}</strong>${g.ready ? '' : '<span class="wm-tag">준비 중</span>'}${g.paused ? '<span class="wm-tag tag-warn">지금은 맡길 수 없음</span>' : ''}
-        <span class="gd-sum">${esc(g.summary)}</span>${g.output ? `<span class="gd-out">받는 것: ${esc(g.output)}</span>` : ''}</button>`).join('')}</div>` : '<p class="cv-line">맞는 예시가 없습니다. 예시가 없어도 맡길 일을 그대로 적어 보내면 됩니다.</p>'}</section>`;
+  const guideCard = (g) => `<button type="button" class="gd-card" data-guide="${esc(g.id)}" data-key="guide-${esc(g.id)}"><strong>${esc(g.title)}</strong>${g.ready ? '' : '<span class="wm-tag">준비 중</span>'}${g.paused ? '<span class="wm-tag tag-warn">지금은 맡길 수 없음</span>' : ''}
+        <span class="gd-sum">${esc(g.summary)}</span>${g.output ? `<span class="gd-out">받는 것: ${esc(g.output)}</span>` : ''}</button>`;
+  // 검색 결과: 검색어가 없으면 팀별로 묶어 보여 준다
+  function guideResultsHTML() {
+    const q = ui.guideQ.trim(), found = searchGuides(ui.guides.list, q);
+    const count = `<p class="gd-count" role="status">${q ? `"${esc(q)}" ${found.length}건` : `이런 일을 맡길 수 있어요 · ${found.length}건`}</p>`;
+    if (!found.length) return `${count}<p class="cv-line">맞는 가이드가 없습니다. 가이드가 없어도 맡길 일을 그대로 적어 보내면 됩니다.</p>`;
+    if (q) return `${count}<div class="gd-grid">${found.map(guideCard).join('')}</div>`;
+    const groups = new Map();
+    for (const g of found) { const name = g.dept?.name || '공통'; if (!groups.has(name)) groups.set(name, []); groups.get(name).push(g); }
+    return count + [...groups].map(([name, list]) => `${groups.size > 1 ? `<h3 class="gd-group">${esc(name)}</h3>` : ''}<div class="gd-grid">${list.map(guideCard).join('')}</div>`).join('');
   }
+  function guideListHTML() {
+    return `<section class="gd" aria-label="업무 가이드">
+      <label class="gd-search"><span class="sr-only">업무 이름으로 가이드 찾기</span><input type="search" data-guide-q data-keep="guide-q" data-key="guide-q" value="${esc(ui.guideQ)}" placeholder="업무 이름으로 찾기 — 예: 메일, 보고서, 집계" autocomplete="off"></label>
+      <div id="gdResults">${guideResultsHTML()}</div></section>`;
+  }
+  // 가이드 페이지: 기본 사용법(프로그램 설명) + 업무별 가이드(회사 파일)
+  const USAGE = [['일 맡기기', '새 대화에 맡길 일을 적어 보내거나, 왼쪽의 팀장을 골라 그 팀에 말합니다. 어느 팀 일인지 모르면 새 대화에 적으면 알아서 나눠 맡깁니다.'],
+    ['진행 보기', '보내면 대화가 생기고 지금 하는 일이 한 줄로 보입니다. 끝나면 완료 보고가 올라옵니다.'],
+    ['질문에 답하기', '확인할 것이 있으면 "답변 필요"로 멈춥니다. 그 대화에 답을 적어 보내면 같은 업무로 이어집니다.'],
+    ['파일 받기', '완료 보고 아래 파일 카드의 "받기"를 누릅니다. 고칠 점은 같은 대화에 이어서 적어 보냅니다.'],
+    ['여러 건 한 번에', '새 대화에서 "＋ 업무 추가"로 담아 한 번에 보내면 순서대로 한 건씩 처리합니다.'],
+    ['메일·글 보내기', '보내기 직전에 받는 대상과 문안을 한 번 확인받습니다. 준비가 끝난 것과 실제로 보낸 것은 다릅니다.'],
+    ['터미널에서 맡기기', '프로그램 폴더의 Claude·Codex에게 말해서 맡긴 업무도 이 목록에 "터미널에서 맡김"으로 생깁니다.']];
+  const guidesPageHTML = () => `<div class="cv"><details class="gd-usage" data-keep-open="usage"${ui.guides.list.length ? '' : ' open'}><summary data-key="gd-usage">기본 사용법</summary><dl class="gd-dl">${USAGE.map(([t, d]) => `<dt>${t}</dt><dd>${d}</dd>`).join('')}</dl></details>
+      ${ui.guides.list.length ? guideListHTML() : `<p class="cv-line">${ui.guides.loaded ? '아직 등록한 업무 가이드가 없습니다. 업무별 가이드는 작업 공간의 org/guides.json 파일에 둡니다.' : '불러오는 중…'}</p>`}</div>`;
   function guideHTML() {
     const g = ui.guides.list.find((x) => x.id === ui.guide);
     if (!g) return `<div class="cv"><p class="cv-line">${ui.guides.loaded ? '이 예시를 찾지 못했습니다.' : '불러오는 중…'}</p></div>`;
-    const inChat = ui.guideCtx !== 'new' ? findEntry(ui.guideCtx) : null;
+    const inChat = ui.guideCtx !== 'new' && !ui.guideCtx.startsWith('lead:') ? findEntry(ui.guideCtx) : null;
+    const boss = findLead(ui.guideCtx.startsWith('lead:') ? ui.guideCtx.slice(5) : g.dept?.id);
     const section = (title, items) => (items.length ? `<h2 class="gd-h">${title}</h2><ul class="gd-list">${items.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '');
     return `<div class="cv gd-detail">
       ${g.summary ? `<p class="gd-lead">${esc(g.summary)}</p>` : ''}
@@ -370,7 +423,7 @@ export function createInbox(deps) {
       ${g.ready ? g.examples.map((ex, i) => `<article class="gd-ex"><header><strong>${esc(ex.label)}</strong>${ex.kind === 'reply' ? '<span class="wm-tag">진행 중인 대화에 보내는 답글</span>' : ''}</header><p class="gd-text">${esc(ex.text)}</p>
         <div class="row-actions">${ex.kind === 'reply'
           ? (inChat ? `<button type="button" class="btn btn-primary" data-use="${i}" data-to="chat" data-key="use-${i}">이 대화에 답글로 넣기</button>` : '')
-          : `<button type="button" class="btn btn-primary" data-use="${i}" data-to="new" data-key="use-${i}">새 대화에 넣기</button>`}
+          : `${boss ? `<button type="button" class="btn btn-primary" data-use="${i}" data-to="lead" data-lead-id="${esc(boss.id)}" data-key="lead-use-${i}">${esc(boss.label)}에게 맡기기</button>` : ''}<button type="button" class="btn${boss ? '' : ' btn-primary'}" data-use="${i}" data-to="new" data-key="use-${i}">새 대화에 넣기</button>`}
           <button type="button" class="btn" data-copy="${i}" data-key="copy-${i}">예시 복사</button></div></article>`).join('') : '<p class="cv-line">예시를 준비하고 있습니다. 맡길 일을 그대로 적어 보내도 됩니다.</p>'}
       <p class="cv-line gd-foot">예시의 [대괄호] 부분만 바꿔 쓰면 됩니다. 넣은 뒤 보내기를 눌러야 접수됩니다.${g.reviewed ? ` · 마지막 검토 ${esc(g.reviewed)}` : ''}</p></div>`;
   }
@@ -389,11 +442,16 @@ export function createInbox(deps) {
       ${block('검토일이 없는 예시', c.unreviewed)}</div>`;
   }
   // 예시를 입력창에 넣는다(보내지는 않는다). 새 대화에 쓰던 글이 있으면 그 글은 "한 번에 보낼 업무"로 담아 두고 예시를 새로 쓴다
-  function useExample(index, to) {
+  function useExample(index, to, leadId) {
     const g = ui.guides.list.find((x) => x.id === ui.guide), ex = g?.examples?.[index];
     if (!ex) return;
     if (ui.ctx !== undefined) store(`ai-office-draft-${ui.ctx}`, $('composerText').value);
-    if (to === 'chat') {
+    if (to === 'lead') {
+      const lead = findLead(leadId);
+      if (!lead) { toast('그 팀을 찾지 못했어요. 새 대화에 넣어 주세요.', { type: 'warn' }); return; }
+      store(`ai-office-draft-lead:${lead.id}`, appendDraft(store(`ai-office-draft-lead:${lead.id}`), ex.text));
+      ui.ctx = undefined; go({ page: 'lead', lead: lead.id }, { replace: true });
+    } else if (to === 'chat') {
       const entry = findEntry(ui.guideCtx);
       if (!entry || composeMode(entry, convRuns(entry).at(-1)).mode === 'off') { toast('이 대화에는 지금 보낼 수 없어요. 예시를 복사해 두었다가 쓰세요.', { type: 'warn' }); return; }
       store(`ai-office-draft-${entry.id}`, appendDraft(store(`ai-office-draft-${entry.id}`), ex.text));
@@ -415,6 +473,21 @@ export function createInbox(deps) {
     if (!ex) return;
     try { await navigator.clipboard.writeText(ex.text); toast('예시를 복사했어요.'); }
     catch { toast('복사하지 못했어요. 예시 글을 직접 골라 복사해 주세요.', { type: 'error' }); }
+  }
+
+  // ── 팀장 방: 그 팀에 맡긴 업무가 한 대화로 이어진다 ──
+  function leadHTML(lead) {
+    const mine = leadEntries(lead.id).slice(-15), ctx = `lead:${lead.id}`;
+    const results = Object.fromEntries([...ui.results].map(([id, r]) => [id, r.text]));
+    const cards = ui.guides.list.filter((g) => g.dept?.id === lead.id);
+    return `<div class="cv">
+      <div class="ld-intro"><span class="ld-av" aria-hidden="true">${esc(initial(lead))}</span><div><strong>${esc(lead.label)}</strong>${lead.boss ? `<span class="ld-boss">${esc(lead.boss)}</span>` : ''}
+        <p>${esc(lead.summary || '이 팀에 맡길 일을 말해 주세요.')}</p><p class="ld-hint">오늘 할 일을 아래에 적어 보내면 이 팀이 맡아 진행하고, 여기로 보고합니다.</p></div></div>
+      ${cards.length ? `<section class="gd ld-guides" aria-label="이 팀에 맡길 수 있는 일"><p class="gd-count">이 팀에 맡길 수 있는 일 · ${cards.length}건</p><div class="gd-grid">${cards.map(guideCard).join('')}</div></section>` : ''}
+      ${mine.map((e) => { const full = ui.details.get(e.batch?.id)?.data?.items?.find((i) => i.id === e.id) || null;
+        return `<section class="ld-task" aria-label="${esc(e.title)}"><p class="ld-line">${chip(e.status)}<time>${esc(time(e.at))}</time><button type="button" class="link" data-open-entry="${esc(e.id)}" data-key="ld-open-${esc(e.id)}">이 업무만 보기</button></p>
+          ${threadMessages({ entry: e, prompt: full?.prompt || null, runs: state().runs, feed: state().feed, results }).map((m) => bubble(m, e, lead)).join('')}</section>`; }).join('')}
+      ${noticeHTML(ctx)}${pendingHTML(ctx)}</div>`;
   }
 
   // ── 설정 ──
@@ -516,9 +589,21 @@ export function createInbox(deps) {
     renderHead(entry);
     const nearBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 120;
     const paint = (html, follow) => { if (setHTML(body, html) && follow && (ui.stick || nearBottom)) body.scrollTop = body.scrollHeight; };
-    syncComposer(entry);
+    syncComposer();
     if (['guides', 'guide', 'guidecheck'].includes(ui.page) || (ui.page === 'chat' && !entry)) loadGuides();
-    if (ui.page === 'guides') return paint(`<div class="cv">${ui.guides.list.length ? guideListHTML() : `<p class="cv-line">${ui.guides.loaded ? '아직 등록한 업무 예시가 없습니다.' : '불러오는 중…'}</p>`}</div>`);
+    if (ui.page === 'guides') return paint(guidesPageHTML());
+    if (ui.page === 'lead') {
+      const lead = findLead(ui.lead);
+      if (!lead) return paint('<div class="cv"><p class="cv-line">이 팀을 찾지 못했습니다. 설정 › 직원 구성에서 확인해 주세요.</p></div>');
+      loadGuides();
+      paint(leadHTML(lead), true);
+      const mine = leadEntries(lead.id).slice(-15);
+      if (view() === 'inbox' && (!narrow() || ui.pane === 'main') && !document.hidden) mine.forEach(markSeen);
+      const loaded = (await Promise.all(mine.flatMap((e) => [loadDetail(e), loadResults(e), loadFiles(e)]))).some(Boolean);
+      if (loaded && ui.page === 'lead' && ui.lead === lead.id) paint(leadHTML(lead), true);
+      ui.stick = false;
+      return undefined;
+    }
     if (ui.page === 'guide') return paint(guideHTML());
     if (ui.page === 'guidecheck') return paint(guideCheckHTML());
     if (ui.page === 'settings') return paint(settingsHTML());
@@ -538,29 +623,40 @@ export function createInbox(deps) {
   // ── 입력창 ──
   function autoGrow(el) { el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 220)}px`; }
   // 입력란은 다시 그리지 않는다. 대화를 옮기면 그 대화에서 쓰던 글을 되살린다
-  function syncComposer(entry) {
+  function where() {
+    if (ui.page === 'lead') {
+      const lead = findLead(ui.lead);
+      if (lead) {
+        const ask = leadReplyTarget(leadEntries(lead.id)), latest = ask ? convRuns(ask).at(-1) : null;
+        if (ask && latest && latest.canReply !== false) return { ctx: `lead:${lead.id}`, lead, entry: ask, latest, mode: 'reply', hint: '답하면 방금 그 업무로 이어서 진행합니다', placeholder: '답변을 적어 보내세요' };
+        return { ctx: `lead:${lead.id}`, lead, entry: null, latest: null, mode: 'lead', hint: 'Enter로 보내기 · Shift+Enter로 줄바꿈', placeholder: `${lead.label}에게 맡길 일을 적어 보내세요 — 예: 오늘은 이 일부터 진행해 줘` };
+      }
+    }
+    const entry = current(), latest = convRuns(entry).at(-1);
+    return { ctx: entry?.id || 'new', lead: null, entry, latest, ...composeMode(entry, latest) };
+  }
+  function syncComposer() {
     const form = $('composer'), text = $('composerText');
-    form.hidden = ui.page !== 'chat' || state().demo === true;
+    form.hidden = !['chat', 'lead'].includes(ui.page) || state().demo === true;
     if (form.hidden) return;
-    const ctx = entry?.id || 'new';
+    const mode = where(), ctx = mode.ctx, fresh = ['new', 'lead'].includes(mode.mode);
     if (ui.ctx !== ctx) {
       if (ui.ctx !== undefined) store(`ai-office-draft-${ui.ctx}`, text.value);
       ui.ctx = ctx; text.value = store(`ai-office-draft-${ctx}`) || ''; autoGrow(text);
     }
-    const mode = composeMode(entry, convRuns(entry).at(-1));
     form.dataset.mode = mode.mode;
     text.disabled = mode.mode === 'off'; text.placeholder = mode.mode === 'off' ? mode.hint : mode.placeholder || '';
     $('composerSend').disabled = mode.mode === 'off' || ui.sending;
     $('composerAdd').hidden = mode.mode !== 'new';
-    $('composerAttach').hidden = mode.mode !== 'new';
+    $('composerAttach').hidden = !fresh;
     // 대화 안에서는 "예시"로 보완 답글 예시를 찾아 넣을 수 있다(새 대화에서는 예시가 화면에 이미 보인다)
-    $('composerGuide').hidden = mode.mode === 'new' || mode.mode === 'off' || !ui.guides.list.length;
+    $('composerGuide').hidden = fresh || mode.mode === 'off' || mode.lead || !ui.guides.list.length;
     const q = mode.mode === 'new' ? ui.queue : [];
     setHTML($('composerQueue'), q.map((item, i) => `<li class="cq-item"><span class="cq-no">${i + 1}</span><span class="cq-text">${esc(item.text.split('\n')[0])}${item.files.length ? ` <span class="wm-tag">첨부 ${item.files.length}</span>` : ''}</span>
       ${i > 0 ? `<label class="inline cq-dep"><input type="checkbox" data-dep="${i}" data-key="cq-dep-${i}"${item.dep ? ' checked' : ''}> ${i}번 결과를 받아서</label>` : ''}
       <button type="button" class="icon-btn" data-unqueue="${i}" data-key="cq-rm-${i}" aria-label="${i + 1}번 업무 빼기">✕</button></li>`).join(''));
     $('composerQueue').hidden = !q.length;
-    const files = mode.mode === 'new' ? ui.attached : [];
+    const files = fresh ? ui.attached : [];
     setHTML($('composerFiles'), files.map((f, i) => `<li class="chief-file"><span class="chief-file-name" title="${esc(f.path)}">📄 ${esc(f.name)}</span><button type="button" class="chief-file-remove" data-unfile="${i}" data-key="cf-rm-${i}" aria-label="${esc(f.name)} 빼기">✕</button></li>`).join(''));
     $('composerFiles').hidden = !files.length;
     $('composerHint').textContent = q.length ? `${q.length}건을 담았습니다. 보내면 순서대로 한 건씩 처리합니다.` : mode.hint;
@@ -571,12 +667,12 @@ export function createInbox(deps) {
     const text = $('composerText').value.trim();
     if (!text) { $('composerText').focus(); toast('담을 업무를 먼저 적어 주세요.'); return; }
     ui.queue.push({ text, files: ui.attached, dep: false }); ui.attached = [];
-    $('composerText').value = ''; store('ai-office-draft-new', ''); autoGrow($('composerText')); saveComposer(); syncComposer(null); $('composerText').focus();
+    $('composerText').value = ''; store('ai-office-draft-new', ''); autoGrow($('composerText')); saveComposer(); syncComposer(); $('composerText').focus();
   }
   async function attach(files) {
     for (const file of files) {
       if (ui.attached.length >= COMPOSE_LIMITS.attachments) { toast(`첨부는 ${COMPOSE_LIMITS.attachments}개까지 붙일 수 있어요.`, { type: 'error' }); break; }
-      try { ui.attached.push({ name: file.name, path: await upload(file) }); syncComposer(current()); }
+      try { ui.attached.push({ name: file.name, path: await upload(file) }); syncComposer(); }
       catch (error) { toast(`${file.name}: ${error.message} (이 파일만 다시 붙이면 됩니다)`, { type: 'error' }); }
     }
   }
@@ -590,19 +686,18 @@ export function createInbox(deps) {
   async function send(ev) {
     ev?.preventDefault();
     if (ui.sending) return;
-    const entry = current(), ctx = entry?.id || 'new';
-    const latest = convRuns(entry).at(-1), { mode } = composeMode(entry, latest);
+    const { ctx, lead, latest, mode } = where(), fresh = ['new', 'lead'].includes(mode);
     const text = $('composerText').value.trim();
     if (mode === 'off') return;
     if (!text && !(mode === 'new' && ui.queue.length)) { $('composerText').focus(); return; }
     ui.sending = true; $('composerSend').disabled = true;
     const many = mode === 'new' && ui.queue.length > 0;
-    const items = many ? [...ui.queue, ...(text ? [{ text, files: ui.attached, dep: false }] : [])] : [{ text, files: mode === 'new' ? ui.attached : [] }];
+    const items = many ? [...ui.queue, ...(text ? [{ text, files: ui.attached, dep: false }] : [])] : [{ text, files: fresh ? ui.attached : [] }];
     const pending = { id: Math.random().toString(36).slice(2), ctx, text: many ? `${items.length}건: ${items.map((i) => i.text.split('\n')[0]).join(' / ')}` : text, at: new Date().toISOString() };
     // 보내는 즉시 내 말을 보여 준다(접수 확인은 뒤따라온다)
     ui.pending.push(pending); ui.stick = true;
     $('composerText').value = ''; store(`ai-office-draft-${ctx}`, ''); autoGrow($('composerText'));
-    const sentFiles = ui.attached; if (mode === 'new') ui.attached = [];
+    const sentFiles = ui.attached; if (fresh) ui.attached = [];
     render();
     try {
       if (many) {
@@ -627,21 +722,23 @@ export function createInbox(deps) {
         else if (out?.taskClosed || out?.historyCleared) toast(resultMessage(out));
         await refresh();
       } else {
-        const result = await api('POST', '/api/runs', { prompt: withUploads(text, mode === 'new' ? sentFiles.map((f) => f.path) : []) });
+        // to: 팀장 방에서 보낸 업무는 그 팀에 맡긴다(서버가 팀을 확인하고 건에 남긴다)
+        const result = await api('POST', '/api/runs', { prompt: withUploads(text, fresh ? sentFiles.map((f) => f.path) : []), ...(lead ? { to: lead.id } : {}) });
         ui.pending = ui.pending.filter((p) => p !== pending);
         await refresh();
-        landRun(result, ctx);
+        if (!lead) landRun(result, ctx);
+        else if (!result?.id && !result?.queued) ui.notices.push({ ctx, at: new Date().toISOString(), text: resultMessage(result) });
       }
     } catch (error) {
       pending.error = `보내지 못했어요: ${error.message}`;
-      if (!many && ui.ctx === ctx) { $('composerText').value = text; if (mode === 'new') ui.attached = sentFiles; autoGrow($('composerText')); }
+      if (!many && ui.ctx === ctx) { $('composerText').value = text; if (fresh) ui.attached = sentFiles; autoGrow($('composerText')); }
       setTimeout(() => { ui.pending = ui.pending.filter((p) => p !== pending); render(); }, 8000);
     } finally { ui.sending = false; ui.stick = true; render(); if (!narrow()) $('composerText').focus(); }
   }
 
   // ── 이동 ──
   // 좁은 화면에서는 목록 → 대화를 한 화면씩 보여 주고, 브라우저 뒤로 가기로 목록에 돌아온다
-  const snapshot = () => ({ aiOffice: true, page: ui.page, open: ui.open, report: ui.report, guide: ui.guide, guideCtx: ui.guideCtx, pane: ui.pane, depth: ui.depth || 0 });
+  const snapshot = () => ({ aiOffice: true, page: ui.page, open: ui.open, report: ui.report, lead: ui.lead, guide: ui.guide, guideCtx: ui.guideCtx, pane: ui.pane, depth: ui.depth || 0 });
   function go(next, { replace = false, focus = false, push = false } = {}) {
     if (ui.pane === 'list') ui.listTop = $('sidebar').querySelector('[data-scroll="list"]')?.scrollTop || 0;
     const wasMain = ui.pane === 'main' && history.state?.pane === 'main';
@@ -654,7 +751,7 @@ export function createInbox(deps) {
     try { if (pushing) history.pushState(snapshot(), ''); else history.replaceState(snapshot(), ''); } catch { /* 기록을 쓸 수 없는 환경 */ }
     if (view() !== 'inbox') setView('inbox'); else render();
     if (ui.page === 'reconcile') loadReconcile(true);
-    if (focus) { if (ui.page === 'chat' && !ui.open && !narrow()) $('composerText').focus(); else $('chTitle').focus({ preventScroll: true }); }
+    if (focus) { if (((ui.page === 'chat' && !ui.open) || ui.page === 'lead') && !narrow()) $('composerText').focus(); else $('chTitle').focus({ preventScroll: true }); }
   }
   function backToList() {
     if (history.state?.pane === 'main' && history.length > 1) { history.go(-(history.state.depth || 1)); return; }
@@ -667,8 +764,8 @@ export function createInbox(deps) {
   }
   function onPop(ev) {
     // 목록으로 돌아갈 때는 고른 대화를 그대로 둔다(목록에서 어디를 보고 있었는지 알 수 있게)
-    const st = ev.state?.aiOffice && ev.state.pane === 'main' ? ev.state : { page: ui.page, open: ui.open, report: ui.report, guide: ui.guide, guideCtx: ui.guideCtx, pane: 'list' };
-    Object.assign(ui, { page: st.page, open: st.open, report: st.report, guide: st.guide || null, guideCtx: st.guideCtx || 'new', pane: st.pane, depth: st.pane === 'main' ? st.depth || 1 : 0 });
+    const st = ev.state?.aiOffice && ev.state.pane === 'main' ? ev.state : { page: ui.page, open: ui.open, report: ui.report, lead: ui.lead, guide: ui.guide, guideCtx: ui.guideCtx, pane: 'list' };
+    Object.assign(ui, { page: st.page, open: st.open, report: st.report, lead: st.lead || null, guide: st.guide || null, guideCtx: st.guideCtx || 'new', pane: st.pane, depth: st.pane === 'main' ? st.depth || 1 : 0 });
     if (view() !== 'inbox') setView('inbox'); else render();
     if (ui.pane === 'list') restoreList();
   }
@@ -694,11 +791,13 @@ export function createInbox(deps) {
     if (t.dataset.back !== undefined) return view() === 'inbox' ? backToList() : go({ page: 'settings' }, { replace: true, focus: true });
     if (t.dataset.new !== undefined) return go({ page: 'chat', open: null }, { focus: true });
     if (t.dataset.filter) { ui.filter = t.dataset.filter; store('ai-office-filter', ui.filter); return renderSidebar(); }
-    if (t.dataset.page) return go({ page: t.dataset.page }, { focus: true });
+    if (t.dataset.page) return go({ page: t.dataset.page, ...(t.dataset.page === 'guides' ? { guideCtx: 'new' } : {}) }, { focus: true });
+    if (t.dataset.lead) return go({ page: 'lead', lead: t.dataset.lead }, { focus: true });
+    if (t.dataset.guidesBack !== undefined) return (history.state?.depth || 0) > 1 ? history.back() : go({ page: 'guides' }, { focus: true });
     // 예시 상세는 기록에 한 칸 더 쌓는다(뒤로 가면 찾던 목록·검색어로 돌아온다)
-    if (t.dataset.guide) return go({ page: 'guide', guide: t.dataset.guide, guideCtx: ui.page === 'chat' ? 'new' : ui.guideCtx }, { focus: true, push: true });
-    if (t.dataset.guides !== undefined) return ui.guideCtx === 'new' && t.id !== 'composerGuide' ? go({ page: 'chat', open: null }, { focus: false }) : go({ page: 'guides', guideCtx: t.id === 'composerGuide' ? (current()?.id || 'new') : ui.guideCtx }, { focus: true });
-    if (t.dataset.use !== undefined) return useExample(Number(t.dataset.use), t.dataset.to);
+    if (t.dataset.guide) return go({ page: 'guide', guide: t.dataset.guide, guideCtx: ui.page === 'chat' ? 'new' : ui.page === 'lead' ? `lead:${ui.lead}` : ui.guideCtx }, { focus: true, push: true });
+    if (t.dataset.guides !== undefined) return go({ page: 'guides', guideCtx: current()?.id || 'new' }, { focus: true });
+    if (t.dataset.use !== undefined) return useExample(Number(t.dataset.use), t.dataset.to, t.dataset.leadId);
     if (t.dataset.copy !== undefined) return copyExample(Number(t.dataset.copy));
     if (t.dataset.view) { ui.pane = 'main'; return setView(t.dataset.view); }
     if (t.dataset.open) { const out = open[t.dataset.open]?.(); render(); return out; }
@@ -712,8 +811,8 @@ export function createInbox(deps) {
     if (t.dataset.cancel) return cancelItem(t);
     if (t.dataset.budget) return raiseBudget(t);
     if (t.dataset.stop) return api('POST', `/api/runs/${encodeURIComponent(t.dataset.stop)}/stop`).then(() => { toast('중지 요청을 보냈어요.'); return refresh(); }).catch((error) => toast(error.message, { type: 'error' }));
-    if (t.dataset.unqueue !== undefined) { ui.queue.splice(Number(t.dataset.unqueue), 1); if (ui.queue[0]) ui.queue[0].dep = false; saveComposer(); return syncComposer(current()); }
-    if (t.dataset.unfile !== undefined) { ui.attached.splice(Number(t.dataset.unfile), 1); return syncComposer(current()); }
+    if (t.dataset.unqueue !== undefined) { ui.queue.splice(Number(t.dataset.unqueue), 1); if (ui.queue[0]) ui.queue[0].dep = false; saveComposer(); return syncComposer(); }
+    if (t.dataset.unfile !== undefined) { ui.attached.splice(Number(t.dataset.unfile), 1); return syncComposer(); }
     return undefined;
   }
 
@@ -734,12 +833,20 @@ export function createInbox(deps) {
     $('composer').addEventListener('submit', send);
     // Enter로 보내고 Shift+Enter로 줄바꿈(한글 조합 중에는 보내지 않는다). 휴대폰 자판의 Enter는 줄바꿈으로 둔다
     text.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && ev.keyCode !== 229 && !window.matchMedia('(pointer: coarse)').matches) { ev.preventDefault(); send(); } });
-    text.addEventListener('input', () => { autoGrow(text); if (ui.ctx !== undefined) store(`ai-office-draft-${ui.ctx}`, text.value); if (ui.queue.length) syncComposer(current()); });
+    text.addEventListener('input', () => { autoGrow(text); if (ui.ctx !== undefined) store(`ai-office-draft-${ui.ctx}`, text.value); if (ui.queue.length) syncComposer(); });
     $('composerAdd').addEventListener('click', queueCurrent);
     $('composerAttach').addEventListener('click', () => { $('composerFile').value = ''; $('composerFile').click(); });
     $('composerFile').addEventListener('change', (ev) => attach([...ev.target.files]));
     // 예시 찾기: 적는 대로 목록만 다시 거른다(서버에 묻지 않는다)
-    $('chBody').addEventListener('input', (ev) => { if (ev.target.dataset.guideQ === undefined) return; ui.guideQ = ev.target.value; store('ai-office-guide-q', ui.guideQ); renderMain(); });
+    // 입력란을 갈아 끼우면 한글 조합이 끊겨 글자가 두 번 들어가므로, 입력란은 그대로 두고 결과 칸만 바꾼다
+    $('chBody').addEventListener('input', (ev) => {
+      if (ev.target.dataset.guideQ === undefined) return;
+      ui.guideQ = ev.target.value; store('ai-office-guide-q', ui.guideQ);
+      const box = document.getElementById('gdResults');
+      if (box) box.innerHTML = guideResultsHTML();
+      // 다음 갱신이 같은 내용으로 보고 건드리지 않게, 지금 화면에 해당하는 글을 기억해 둔다
+      $('chBody')._html = ui.page === 'guides' ? guidesPageHTML() : newChatHTML();
+    });
     loadGuides();
     $('composerQueue').addEventListener('change', (ev) => { const i = Number(ev.target.dataset.dep); if (ui.queue[i]) { ui.queue[i].dep = ev.target.checked; saveComposer(); } });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
