@@ -444,3 +444,52 @@ test('카페 댓글 간격: 등록 가능 시각(notBefore)을 직접 등록 스
   await h.work.deliver({ ...baseDeliver, publication: { ...publication, id: 'g3' }, body: '반가워요', execute: async () => '' });
   assert.deepEqual(plain, { notBefore: 0 });
 });
+
+// ---- 네이버 카페 글 직접 등록(AI 없이): 등록 전 확인을 통과하면 직원을 부르지 않고, 누르기 전에 어긋나면 직원에게 한 번 넘긴다 ----
+test('카페 글 직접 등록: 제목과 글·링크 조각을 스크립트에 넘기고, 등록되면 직원을 부르지 않고 올라간 글을 읽어 확인한다', async (t) => {
+  const board = 'https://cafe.naver.com/f-e/cafes/31520563/menus/44';
+  const posted = 'https://cafe.naver.com/ca-fe/cafes/31520563/articles/901';
+  const f = asideWork(t, { pages: { [posted]: '댕댕이 귀환 문 열고 나갔다 돌아온 댕댕이' } });
+  let got = null, runs = 0;
+  f.aside.cafePost = async (target, options) => { got = { target, ...options }; return { submitted: true, url: posted }; };
+  const publication = { id: 'p1', action: 'post', service: 'naver_cafe', connection: ASIDE_CONNECTION, target: board, recipients: [], subject: '댕댕이 귀환' };
+  const body = '문 열고 나갔다 돌아온 댕댕이\n\nhttps://www.youtube.com/shorts/jYsBJsmiOIc';
+  const result = await f.work.deliver({ ...baseDeliver, publication, body, notBefore: 12345, execute: async () => { runs++; return ''; } });
+  assert.equal(result.status, 'confirmed'); assert.equal(result.method, 'aside'); assert.equal(result.resultUrl, posted);
+  assert.equal(runs, 0, '직접 등록되면 직원 실행은 없다');
+  assert.deepEqual(got, { target: board, subject: '댕댕이 귀환', notBefore: 12345, segments: [{ text: '문 열고 나갔다 돌아온 댕댕이\n\n', card: false }, { text: 'https://www.youtube.com/shorts/jYsBJsmiOIc', card: true }] });
+  let again = 0;
+  f.aside.cafePost = async () => { again++; return { submitted: true, url: posted }; };
+  await f.work.deliver({ ...baseDeliver, publication, body, execute: async () => { runs++; return ''; } });
+  assert.equal(again, 0, '확인된 글은 다시 올리지 않는다');
+});
+
+test('카페 글 직접 등록: 누르기 전에 어긋나면 직원 실행으로 한 번 넘어가고, 눌렀는지 모르면 다시 시키지 않고 불확실로 멈춘다', async (t) => {
+  const board = 'https://cafe.naver.com/f-e/cafes/31520563/menus/44';
+  const posted = 'https://cafe.naver.com/ca-fe/cafes/31520563/articles/902';
+  const publication = { id: 'p2', action: 'post', service: 'naver_cafe', connection: ASIDE_CONNECTION, target: board, recipients: [], subject: '댕댕이 귀환' };
+  const body = '문 열고 나갔다 돌아온 댕댕이\n\nhttps://www.youtube.com/shorts/jYsBJsmiOIc';
+  // 1) 카드가 안 생겨 누르지 않음 → 직원이 올린다
+  const f = asideWork(t, { pages: { [posted]: '댕댕이 귀환 문 열고 나갔다 돌아온 댕댕이' } });
+  let direct = 0, runs = 0;
+  f.aside.cafePost = async () => { direct++; return { submitted: false, reason: '링크가 영상·장소 카드로 바뀌지 않았습니다' }; };
+  const viaStaff = await f.work.deliver({ ...baseDeliver, publication, body, execute: async () => { runs++; return JSON.stringify({ status: 'done', submitted: true, resultUrl: posted }); } });
+  assert.equal(viaStaff.status, 'confirmed'); assert.deepEqual([direct, runs], [1, 1]);
+  // 2) 눌렀는데 결과를 모름(또는 스크립트 오류) → 직원에게 넘기지 않고 불확실
+  for (const fake of [async () => ({ submitted: null, reason: '등록을 눌렀지만 글 화면으로 넘어가지 않았습니다' }), async () => { throw new Error('Aside 응답이 너무 늦습니다.'); }]) {
+    const g = asideWork(t, { pages: {} });
+    let staff = 0;
+    g.aside.cafePost = fake;
+    await assert.rejects(g.work.deliver({ ...baseDeliver, publication: { ...publication, id: 'p3' }, body, execute: async () => { staff++; return '{"status":"done","submitted":true}'; } }), /글 직접 등록 결과를 확인하지 못했습니다/);
+    assert.equal(staff, 0, '결과를 모를 때는 직원 실행으로 넘어가지 않는다(같은 글이 두 번 올라가지 않게)');
+    assert.equal(records(g.root)[0].status, 'uncertain');
+    await assert.rejects(g.work.deliver({ ...baseDeliver, publication: { ...publication, id: 'p3' }, body, execute: async () => { staff++; return ''; } }), /불확실/);
+    assert.equal(staff, 0);
+  }
+  // 3) 스크립트가 없는 환경(예전 Aside 모듈)에서는 예전처럼 직원이 올린다
+  const h = asideWork(t, { pages: { [posted]: '댕댕이 귀환 문 열고 나갔다 돌아온 댕댕이' } });
+  let old = 0;
+  delete h.aside.cafePost;
+  await h.work.deliver({ ...baseDeliver, publication: { ...publication, id: 'p4' }, body, execute: async () => { old++; return JSON.stringify({ status: 'done', submitted: true, resultUrl: posted }); } });
+  assert.equal(old, 1);
+});

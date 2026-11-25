@@ -1098,10 +1098,10 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
           if (['post', 'comment'].includes(publication.action) && state.lastPostAt) {
             const gapMs = loadSettings(root).postGapSeconds * 1000 - (Date.now() - state.lastPostAt);
             if (gapMs > 0) {
-              // AI 없이 직접 넣는 카페 댓글(Aside)은 기다리는 동안 준비를 미리 한다: 올리는 시각 사이의 간격은 그대로이고 건당 걸리는 시간만 줄어든다.
+              // AI 없이 직접 넣는 카페 글·댓글(Aside)은 기다리는 동안 준비를 미리 한다: 올리는 시각 사이의 간격은 그대로이고 건당 걸리는 시간만 줄어든다.
               // 그 밖의 글·댓글은 지금처럼 간격을 다 기다린 뒤 시작한다(직원이 언제 등록을 누를지 실행기가 정할 수 없다)
-              const overlap = engine === 'aside' && publication.action === 'comment' && publication.service === 'naver_cafe';
-              emit('flow.notice', { summary: overlap ? `계정 보호를 위해 다음 댓글은 ${Math.ceil(gapMs / 1000)}초 뒤에 등록합니다(그동안 미리 준비합니다).` : `계정 보호를 위해 다음 글·댓글까지 ${Math.ceil(gapMs / 1000)}초 기다립니다.` });
+              const overlap = engine === 'aside' && ['comment', 'post'].includes(publication.action) && publication.service === 'naver_cafe';
+              emit('flow.notice', { summary: overlap ? `계정 보호를 위해 다음 ${publication.action === 'post' ? '글' : '댓글'}은 ${Math.ceil(gapMs / 1000)}초 뒤에 등록합니다(그동안 미리 준비합니다).` : `계정 보호를 위해 다음 글·댓글까지 ${Math.ceil(gapMs / 1000)}초 기다립니다.` });
               if (overlap) { notBefore = Date.now() + gapMs; loginWaitMs += gapMs; }
               else {
                 const started = Date.now();
