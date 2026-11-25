@@ -16,8 +16,12 @@ const fail = (message) => { console.error(message); process.exit(1); };
 
 const configPath = path.join(__dirname, '설정.json');
 const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {};
-const origin = String(opt('erp') || config.erp || '').replace(/\/+$/, '');
-if (!/^https:\/\/[^/]+$/.test(origin)) fail('ERP 주소가 없습니다. --erp https://… 로 주거나 도구 폴더의 설정.json에 {"erp":"https://…"}를 넣어 주세요.');
+// 회사 구성을 받아 쓰는 PC는 처음 가져올 때 입력한 ERP 주소(작업 공간 .office/shared-org.json)를 쓴다
+const markerPath = path.join(__dirname, '..', '..', '..', '.office', 'shared-org.json');
+let marker = {};
+try { if (fs.existsSync(markerPath)) marker = JSON.parse(fs.readFileSync(markerPath, 'utf8')); } catch { marker = {}; }
+const origin = String(opt('erp') || config.erp || marker.erp || '').replace(/\/+$/, '');
+if (!/^https:\/\/[^/]+$/.test(origin)) fail('ERP 주소가 없습니다. 터미널 AI에게 "홍카페 ERP 주소 등록해줘"라고 하고 주소를 알려 주세요(대표 PC는 도구 폴더의 설정.json에 {"erp":"https://…"}).');
 const checkOnly = args.includes('--check');
 const out = opt('out');
 if (!out && !checkOnly) fail('--out <정리.json> 이 필요합니다.');
