@@ -48,8 +48,7 @@
     "active": true,
     "codexModel": "gpt-6.1-sol",
     "codexEffort": "medium",
-    "thoughts": [],
-    "engine": "aside"
+    "thoughts": []
   },
   {
     "id": "care-3",
@@ -65,8 +64,7 @@
     "active": true,
     "codexModel": "gpt-6.1-sol",
     "codexEffort": "medium",
-    "thoughts": [],
-    "engine": "aside"
+    "thoughts": []
   },
   {
     "id": "community-1",
@@ -97,8 +95,7 @@
     "active": true,
     "codexModel": "gpt-6.1-sol",
     "codexEffort": "medium",
-    "thoughts": [],
-    "engine": "aside"
+    "thoughts": []
   },
   {
     "id": "community-3",
