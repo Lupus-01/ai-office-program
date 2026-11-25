@@ -1261,7 +1261,10 @@ button.badge-reply:hover { background: color-mix(in srgb, var(--warn) 24%, trans
 .sb-lead { display: flex; align-items: center; gap: 10px; min-height: 56px; }
 .sb-lead-av { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: rgba(127, 127, 127, .3); color: var(--sb-strong); font-size: 15px; font-weight: 800; }
 .sb-lead-main { flex: 1; min-width: 0; display: grid; gap: 3px; }
-.sb-lead-sum { min-width: 0; overflow: hidden; text-overflow: ellipsis; opacity: .8; }
+.sb-lead .sb-conv-sub { min-width: 0; overflow: hidden; }
+.sb-lead-sum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .8; }
+.sb-fold { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin: -12px 0; padding: 0 4px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.sb-fold:focus-visible { outline: 2px solid var(--sb-strong); outline-offset: 2px; box-shadow: none; }
 .av-lead { background: #2f7d6b; }
 .ld-intro { display: flex; gap: 16px; margin-bottom: 24px; padding: 18px 20px; border: var(--border); border-radius: 14px; background: var(--panel-2); }
 .ld-av { flex: none; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 14px; background: #2f7d6b; color: #fff; font-size: 22px; font-weight: 800; }

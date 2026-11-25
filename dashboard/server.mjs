@@ -1117,7 +1117,8 @@ export async function startServer({
     // 지시창에서 온 단건은 예전처럼 지시문을 그대로 보여 주고 지시창의 모델 설정을 쓴다
     const options = item.options || {};
     const run = runner.start({ prompt, continuous: false, intent, model: options.model || null, engine: options.engine || null, effort: options.effort || null,
-      ...(item.source === 'command' ? {} : { display: item.title }) });
+      // 팀 지정·앞 업무 이어받기처럼 지시문 뒤에 안내를 덧붙인 건은 대표가 적은 말만 보여 준다
+      ...(item.source === 'command' ? (item.to || item.after ? { display: item.prompt } : {}) : { display: item.title }) });
     linkRun(item, run);
     scheduleBroadcast();
     return { run, intent };

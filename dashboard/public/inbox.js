@@ -175,6 +175,7 @@ export function createInbox(deps) {
     details: new Map(), results: new Map(), reports: new Map(), files: new Map(), reconcile: { items: [], loaded: false, count: -1 },
     queue: [], attached: [], submitKey: newSubmitKey(), pending: [], notices: [], sending: false, stick: true, ctx: undefined, seen: null, listTop: 0 };
   try { const saved = JSON.parse(store('ai-office-composer') || 'null'); if (saved && Array.isArray(saved.queue)) { ui.queue = saved.queue; ui.submitKey = saved.submitKey || ui.submitKey; } } catch { /* 새로 시작 */ }
+  ui.leadsFolded = store('ai-office-leads-folded') === '1';
   try { const seen = JSON.parse(store('ai-office-seen') || 'null'); if (seen && typeof seen === 'object') ui.seen = seen; } catch { /* 새로 시작 */ }
   const saveComposer = () => store('ai-office-composer', JSON.stringify({ queue: ui.queue, submitKey: ui.submitKey }));
 
@@ -245,7 +246,8 @@ export function createInbox(deps) {
       return `<button type="button" class="sb-conv sb-lead${unread ? ' is-unread' : ''}" data-lead="${esc(l.id)}" data-key="lead-${esc(l.id)}" aria-current="${l.id === hereLead ? 'page' : 'false'}"><span class="sb-lead-av" aria-hidden="true">${esc(initial(l))}</span>
         <span class="sb-lead-main"><span class="sb-conv-title">${esc(l.label)}</span><span class="sb-conv-sub">${needs ? `<span class="mark mark-needs">답변 필요 ${needs}</span>` : busy ? '<span class="mark mark-running">진행 중</span>' : `<span class="sb-lead-sum">${esc(l.summary || '말을 걸어 일을 맡기세요')}</span>`}${unread ? '<span class="sb-new-dot">새 소식</span>' : ''}</span></span></button>`;
     };
-    const leadRows = team.map(leadRow).join('');
+    const folded = ui.leadsFolded === true;
+    const leadRows = team.map((l) => (folded && !all.some((e) => e.item?.to === l.id && (ATTENTION.includes(e.status) || e.status === 'running' || e.status === 'waiting')) && l.id !== hereLead ? '' : leadRow(l))).join('');
     const conn = deps.connState?.() || 'connecting';
     const here = v === 'inbox' && ui.page === 'chat' ? ui.open : null;
     const rec = s.reconcilePending || 0;
@@ -262,7 +264,7 @@ export function createInbox(deps) {
           <button type="button" data-filter="needs" data-key="sb-f-needs" aria-pressed="${ui.filter === 'needs'}">답변 필요${attention.length ? ` <span class="sb-badge sb-badge-alert">${attention.length}</span>` : ''}</button></div></div>
       <nav class="sb-scroll" data-scroll="list" aria-label="대화 목록">
         ${rec ? `<button type="button" class="sb-conv sb-conv-alert" data-page="reconcile" data-key="sb-rec" aria-current="${v === 'inbox' && ui.page === 'reconcile' ? 'page' : 'false'}"><span class="sb-conv-title">발송 결과 확인</span><span class="sb-conv-sub"><span class="mark mark-needs">확인 필요 ${rec}건</span></span></button>` : ''}
-        ${leadRows ? `<h2 class="sb-title">팀장</h2>${leadRows}<h2 class="sb-title">대화</h2>` : ''}
+        ${team.length ? `<h2 class="sb-title"><button type="button" class="sb-fold" data-fold-leads data-key="sb-fold" aria-expanded="${!folded}">팀장 ${team.length}<span aria-hidden="true">${folded ? '▸' : '▾'}</span></button></h2>${leadRows}<h2 class="sb-title">대화</h2>` : ''}
         ${shown.map(row).join('') || `<p class="sb-empty">${ui.filter === 'needs' ? '답변을 기다리는 대화가 없습니다.' : '아직 대화가 없습니다. 맡길 일을 적어 보내면 여기에 쌓입니다.'}</p>`}
       </nav>
       <div class="sb-foot"><button type="button" class="sb-item" data-page="guides" data-key="sb-guides" aria-current="${v === 'inbox' && ['guides', 'guide'].includes(ui.page) ? 'page' : 'false'}"><span class="sb-ic" aria-hidden="true">?</span><span class="sb-label">가이드</span></button>
@@ -275,7 +277,7 @@ export function createInbox(deps) {
     const guide = ui.page === 'guide' ? ui.guides.list.find((g) => g.id === ui.guide) : null;
     const room = ui.page === 'lead' ? findLead(ui.lead) : null;
     const [title, sub] = ui.page === 'settings' ? ['설정', '']
-      : ui.page === 'lead' ? [room?.label || '팀장', room?.summary || '']
+      : ui.page === 'lead' ? [room?.label || '팀장', '']
       : ui.page === 'guides' ? ['가이드', '어떻게 맡기고 어떻게 말하면 되는지, 업무별로 볼 수 있습니다']
         : ui.page === 'guide' ? [guide?.title || '가이드', '']
           : ui.page === 'guidecheck' ? ['업무 예시 점검', '예시가 빠진 업무와 다시 볼 예시를 모았습니다. 여기서는 아무것도 실행하지 않습니다.']
@@ -800,6 +802,7 @@ export function createInbox(deps) {
     if (t.dataset.filter) { ui.filter = t.dataset.filter; store('ai-office-filter', ui.filter); return renderSidebar(); }
     if (t.dataset.page) return go({ page: t.dataset.page, ...(t.dataset.page === 'guides' ? { guideCtx: 'new' } : {}) }, { focus: true });
     if (t.dataset.lead) return go({ page: 'lead', lead: t.dataset.lead }, { focus: true });
+    if (t.dataset.foldLeads !== undefined) { ui.leadsFolded = !ui.leadsFolded; store('ai-office-leads-folded', ui.leadsFolded ? '1' : ''); return renderSidebar(); }
     if (t.dataset.guidesBack !== undefined) return (history.state?.depth || 0) > 1 ? history.back() : go({ page: 'guides' }, { focus: true });
     // 예시 상세는 기록에 한 칸 더 쌓는다(뒤로 가면 찾던 목록·검색어로 돌아온다)
     if (t.dataset.guide) return go({ page: 'guide', guide: t.dataset.guide, guideCtx: ui.page === 'chat' ? 'new' : ui.page === 'lead' ? `lead:${ui.lead}` : ui.guideCtx }, { focus: true, push: true });
