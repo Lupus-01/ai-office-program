@@ -103,6 +103,8 @@ export async function verifyLogin() {
     assert.equal(store.list()[0].status, 'connected');
     standalone = await chromium.launch();
     const page = await standalone.newPage();
+    // 예전 화면(관제 탭)의 회귀 검사다. 기본 화면이 업무함(2.0)이라 처음 한 번만 관제 탭에서 시작한다
+    await page.addInitScript(() => { try { if (!localStorage.getItem('ai-office-view')) localStorage.setItem('ai-office-view', 'control'); } catch { /* 저장 불가 환경 */ } });
     await page.route('**/*', (route) => route.fulfill({ contentType: 'text/html', body: '<input id="user_id"><input type="password"><button>로그인</button>' }));
     await page.goto('https://mail.worksmobile.com/fake-login');
     assert.equal(await automaticLogin({ page, provider: 'naverworks', credentials }), false);

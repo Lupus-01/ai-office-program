@@ -2,6 +2,7 @@
 // 순수 함수는 export 해서 Node 테스트에서 쓰고, DOM 코드는 브라우저에서만 실행한다.
 import { createOffice, avatarDataURL, ATTENTION_ICONS, meetingAttendees } from './office.js';
 import { installSelects } from './select.js';
+import { createInbox } from './inbox.js';
 
 export const RANKS = ['사원', '주임', '대리', '과장', '차장', '부장', '팀장'];
 export const TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch', 'NotebookEdit', 'TodoWrite'];
@@ -28,7 +29,8 @@ const KIND_LABEL = {
   'review.end': '리뷰 판정', 'task.start': '업무 등록', 'task.update': '업무 갱신', 'reply.wait': '답변 대기',
   'meeting.start': '회의 시작', 'meeting.end': '회의 종료', 'plan.set': '계획 확정',
 };
-export const VIEWS = ['control', 'office', 'org', 'outputs'];
+// inbox(업무함)가 기본 화면이다(2.0). 관제·사무실·조직·산출물은 보조 화면으로 그대로 둔다
+export const VIEWS = ['inbox', 'control', 'office', 'org', 'outputs'];
 const BASE_TITLE = 'AGENT HQ · AI Office';
 const ID_RE = /^[a-z][a-z0-9-]{1,47}$/;
 const NO_DESC_WARNING = '비서실장이 배정 기준으로 쓸 설명이 없습니다. 담당 업무나 호출 설명을 채워 주세요.';
@@ -168,6 +170,9 @@ export function normalizeState(raw = {}) {
     gaps: collectGaps(raw),
     tasks: Array.isArray(raw.tasks) ? raw.tasks : [],
     schedules: Array.isArray(raw.schedules) ? raw.schedules : [],
+    // 업무함(2.0): 접수한 묶음 요약과 대조가 필요한 발송 수
+    batches: Array.isArray(raw.batches) ? raw.batches : [],
+    reconcilePending: Number.isInteger(raw.reconcilePending) ? raw.reconcilePending : 0,
     presets: presetList(raw.presets),
     demo: !!raw.demo,
     tools: raw.tools && typeof raw.tools === 'object' ? raw.tools : {},
@@ -755,6 +760,7 @@ const ui = {
 };
 let S = normalizeState({});
 let office = null;
+let inbox = null;
 let token = '';
 let lastRaw = null;
 let chiefSaveQueue = Promise.resolve();
@@ -984,12 +990,17 @@ function render() {
   const empty = S.departments.length === 0;
   const v = ui.view;
   // 부서가 없으면 관제·사무실 자리에 온보딩을 보여준다. 조직·산출물 탭은 그대로 쓸 수 있다
-  const onboarding = empty && (v === 'control' || v === 'office');
+  const onboarding = empty && (v === 'control' || v === 'office' || v === 'inbox');
   $('viewOnboarding').hidden = !onboarding;
   $('viewControl').hidden = onboarding || v !== 'control';
   $('viewOffice').hidden = onboarding || v !== 'office';
   $('viewOrg').hidden = v !== 'org';
   $('viewOutputs').hidden = v !== 'outputs';
+  // 업무함은 화면 전체를 쓴다(조직도·실시간 피드 칸을 접는다). 다른 탭으로 가면 원래 3단으로 돌아온다
+  const inboxOn = v === 'inbox' && !onboarding;
+  $('viewInbox').hidden = !inboxOn;
+  document.querySelector('.layout').classList.toggle('is-inbox', inboxOn);
+  if (inboxOn) inbox?.render();
   if (onboarding) renderOnboarding();
   renderOrg();
   if (v === 'control') renderControl();
@@ -3339,6 +3350,9 @@ async function scheduleAction(event) {
 const completionQueue = [];
 function openNextCompletion() {
   if (document.querySelector('dialog[open]') || ui.completion) return;
+  // 업무함에서는 완료 창을 자동으로 띄우지 않는다(여러 건이 차례로 끝날 때마다 창이 조작을 가린다).
+  // 결과는 업무 스레드와 최종 보고에서 열고, 관제 탭의 확인 목록에서도 그대로 열 수 있다
+  if (ui.view === 'inbox') { completionQueue.length = 0; return; }
   while (completionQueue.length) {
     const id = completionQueue.shift();
     if (S.attention.some((item) => item.kind === 'complete' && item.task === id)) { openCompletion(id); break; }
@@ -3519,7 +3533,7 @@ async function deleteDept(id) {
 
 function setView(view) {
   const prev = ui.view;
-  ui.view = VIEWS.includes(view) ? view : 'control';
+  ui.view = VIEWS.includes(view) ? view : 'inbox';
   store('ai-office-view', ui.view);
   for (const tab of document.querySelectorAll('.view-tabs [role="tab"]')) {
     const on = tab.dataset.view === ui.view;
@@ -3555,7 +3569,9 @@ function tick() {
 function init() {
   token = document.querySelector('meta[name="office-token"]')?.content || '';
   setTheme(store('ai-office-theme') || 'neon');
-  ui.view = VIEWS.includes(store('ai-office-view')) ? store('ai-office-view') : 'control';
+  ui.view = VIEWS.includes(store('ai-office-view')) ? store('ai-office-view') : 'inbox';
+  inbox = createInbox({ api, authedGet, toast, esc, refresh, openThread, openCompletion, store, state: () => S,
+    upload: async (file) => (await api('POST', '/api/uploads', { name: file.name, data: await fileBase64(file) })).path });
   ui.feedDetail = store('ai-office-feed-detail') === '1';
   setNotify(store('ai-office-notify') === '1' && typeof Notification !== 'undefined' && Notification.permission === 'granted');
 

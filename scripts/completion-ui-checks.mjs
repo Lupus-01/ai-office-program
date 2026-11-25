@@ -42,6 +42,8 @@ export async function verifyCompletionUi({ browser, directory }) {
       throw new Error('브라우저 검증 상태 대기 초과');
     };
     context = await browser.newContext({ viewport: { width: 1366, height: 900 } });
+    // 예전 화면(관제 탭)의 회귀 검사다. 기본 화면이 업무함(2.0)이라 처음 한 번만 관제 탭에서 시작한다
+    await context.addInitScript(() => { try { if (!localStorage.getItem('ai-office-view')) localStorage.setItem('ai-office-view', 'control'); } catch { /* 저장 불가 환경 */ } });
     const page = await context.newPage();
     const errors = []; page.on('pageerror', (error) => errors.push(error.message));
     const shot = async (name) => { await page.screenshot({ path: join(directory, name), fullPage: false }); screenshots.push({ path: name, viewport: page.viewportSize() }); };

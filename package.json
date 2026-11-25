@@ -17,6 +17,7 @@
     "sync": "node scripts/sync-agents.mjs --write",
     "check": "node scripts/check.mjs",
     "verify:ui": "node scripts/verify-ui.mjs",
+    "verify:inbox": "node scripts/verify-inbox.mjs",
     "verify:browser": "node --test test/browser.integration.mjs",
     "verify:aside": "node scripts/aside-fixture-checks.mjs",
     "doctor": "node scripts/doctor.mjs",

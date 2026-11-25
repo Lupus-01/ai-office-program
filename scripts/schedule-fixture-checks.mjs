@@ -42,6 +42,8 @@ export async function verifySchedulesUi({ browser, directory }) {
     server = await startServer({ root, port: 0, quiet: true, env: fixture.env, scheduleNow: fixture.now, connectionBase: auth });
     const base = server.url.replace(/\/$/, ''), headers = { 'X-Office-Token': server.token, Origin: base, 'Content-Type': 'application/json' };
     page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
+    // 예전 화면(관제 탭)의 회귀 검사다. 기본 화면이 업무함(2.0)이라 처음 한 번만 관제 탭에서 시작한다
+    await page.addInitScript(() => { try { if (!localStorage.getItem('ai-office-view')) localStorage.setItem('ai-office-view', 'control'); } catch { /* 저장 불가 환경 */ } });
     page.setDefaultTimeout(15000);
     await page.goto(base);
     await page.locator('#companyBtn').click();

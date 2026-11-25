@@ -88,6 +88,9 @@ try {
   server = await startServer({ root, port: 0, quiet: true, env, connectionBase, browserOptions: { browser: accountBrowser, channel: null } });
   browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  // 이 검사는 예전 화면(관제·사무실·조직·산출물)의 회귀를 본다. 기본 화면이 업무함(2.0)으로 바뀌었으므로 처음 한 번만 관제 탭에서 시작하게 한다.
+  // 업무함은 scripts/verify-inbox.mjs가 본다
+  await page.addInitScript(() => { try { if (!localStorage.getItem('ai-office-view')) localStorage.setItem('ai-office-view', 'control'); } catch { /* 저장 불가 환경 */ } });
   page.on('pageerror', (error) => report.consoleErrors.push(error.message));
   page.on('console', (message) => { if (message.type() === 'error' && !message.location().url?.endsWith('/favicon.ico')) report.consoleErrors.push(message.text()); });
   page.on('response', (response) => { if (response.status() >= 400 && !response.url().endsWith('/favicon.ico')) report.networkErrors.push(`${response.status()} ${new URL(response.url()).pathname}`); });

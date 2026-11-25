@@ -603,7 +603,13 @@ export async function startServer({
     const latest = item.run ? runner.list().filter((r) => !r.phase && (r.rootId || r.id) === item.run).at(-1) : null;
     const folder = item.task && isTaskId(item.task) ? `outputs/${item.task}/` : null;
     const reportFile = folder && existsSync(join(root, 'outputs', ...item.task.split('/'), 'report.md')) ? `${folder}report.md` : null;
-    return { summary: latest?.summary ? redact(String(latest.summary).split('\n').find((line) => line.trim() && !line.startsWith('#')) || latest.summary, 160) : '', folder, files: reportFile ? [reportFile] : [] };
+    // 결과 한 줄: 보고서의 첫 본문 줄(제목 줄 제외). 보고서가 없으면 실행 요약에서 제목 표시를 떼고 쓴다
+    let line = '';
+    if (reportFile) {
+      try { line = readFileSync(join(root, 'outputs', ...item.task.split('/'), 'report.md'), 'utf8').split('\n').map((l) => l.trim()).find((l) => l && !l.startsWith('#')) || ''; } catch { line = ''; }
+    }
+    if (!line && latest?.summary) line = String(latest.summary).replace(/^#+\s*\S+\s*/, '').split(/\s##\s/)[0];
+    return { summary: redact(line, 160), folder, files: reportFile ? [reportFile] : [] };
   };
   const reportOf = (batch) => batchReport(batch, { waitingOn: (id) => sequencer.waitingOn(id), usageOf: usageOfItems, resultOf: resultOfItem, now: scheduleNow() });
   const reportCards = demo ? null : createReportCards({ root, write: writePrivate, read: readPrivate, now: scheduleNow });
@@ -683,6 +689,15 @@ export async function startServer({
       ...buildState({ org, events: visibleEvents, runs: allRuns(), tasks: visibleTasks, plans: new Map([...plans].filter(([id]) => !archived.has(id))), outputs: currentOutputStatus(plans), now: Date.now(), demo }),
       presets,
       schedules: schedules?.list() || [],
+      // 업무함(2.0): 최근 묶음의 요약(요청 원문 없음)과 대기 사유, 대조가 필요한 발송 수. 조회만 한다
+      batches: batches ? batches.list().slice(-60).map((batch) => {
+        const summary = batchSummary(batch);
+        return { ...summary, title: redact(summary.title, 80), ...(batch.budget ? { budget: { limitCalls: batch.budget.limitCalls, usedCalls: batchCalls(batch) } } : {}),
+          items: summary.items.map((item) => ({ ...item, title: redact(item.title, 80), ...(item.reason ? { reason: redact(item.reason, 200) } : {}),
+            ...(item.status === 'waiting' ? { waitingOn: sequencer.waitingOn(item.id) } : {}) })) };
+      }) : [],
+      // 아직 결정하지 않은 건만 센다(결정했지만 업무에 반영되기 전인 건은 확인할 일이 아니다)
+      reconcilePending: demo ? 0 : reconcile.list().filter((entry) => !entry.decision).length,
       demo,
       tools,
       settings,
