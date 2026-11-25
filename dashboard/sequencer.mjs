@@ -15,6 +15,7 @@ const fail = (status, message) => Object.assign(new Error(message), { status });
 
 export function createSequencer({ batches, startRun, replyRun, latestRun, taskStatus = () => null, onChange = () => {}, warn = () => {} }) {
   const starting = new Set(); // 시작 요청을 보내고 실행 정보를 아직 받지 못한 건
+  const startResults = new Map(); // 건 번호 → 시작 결과(실행 또는 오류)를 주는 Promise
   let pumping = false, again = false;
 
   const all = () => batches.items();
@@ -71,15 +72,30 @@ export function createSequencer({ batches, startRun, replyRun, latestRun, taskSt
       { type: resume ? 'resumed' : 'started', attempt: (item.attempt || 0) + 1 });
     if (!started) return false; // 저장하지 못하면 시작하지 않는다(다음 변화 때 다시 본다)
     starting.add(item.id);
-    Promise.resolve().then(() => (resume ? { run: replyRun(resume.runId, resume.body) } : startRun(started, batch))).then((result) => {
+    const work = Promise.resolve().then(() => (resume ? { run: replyRun(resume.runId, resume.body) } : startRun(started, batch))).then((result) => {
       const run = result?.run;
       if (!run?.id) throw new Error('실행을 시작하지 못했습니다.');
       save(item.id, (i) => { i.run = run.rootId || run.id; if (run.task) i.task = run.task; if (result.intent) i.intent = result.intent; });
+      return { run };
     }).catch((error) => {
       const reason = String(error?.message || '실행을 시작하지 못했습니다.').slice(0, 300);
       save(item.id, (i) => { i.status = S.failed; i.reason = reason; }, { type: S.failed, reason });
-    }).finally(() => { starting.delete(item.id); onChange(); pump(); });
+      throw error;
+    });
+    startResults.set(item.id, work);
+    work.catch(() => {}).finally(() => { starting.delete(item.id); startResults.delete(item.id); onChange(); pump(); });
     return true;
+  }
+
+  // 방금 접수한 건이 바로 시작됐으면 그 실행을, 앞에 진행 중인 건이 있으면 대기 정보를 돌려준다(지시창 단건용).
+  // 시작이 실패하면 그 오류를 그대로 던진다
+  async function started(itemId) {
+    pump();
+    const work = startResults.get(itemId);
+    if (work) return work;
+    const found = find(itemId);
+    const ahead = running()[0];
+    return { queued: true, item: itemId, batch: found?.batch.id || null, ahead: ahead ? { id: ahead.item.id, title: ahead.item.title } : null };
   }
 
   // 자리가 비어 있으면 다음 건을 시작한다. 여러 번 불려도 건마다 시작은 한 번이다
@@ -162,5 +178,5 @@ export function createSequencer({ batches, startRun, replyRun, latestRun, taskSt
     return ahead ? { kind: 'slot', item: ahead.item.id, title: ahead.item.title } : { kind: 'slot' };
   }
 
-  return { pump, reply, cancel, recover, waitingOn, itemOfRun: (rootId) => byRun(rootId)?.item.id || null };
+  return { pump, started, reply, cancel, recover, waitingOn, itemOfRun: (rootId) => byRun(rootId)?.item.id || null };
 }

@@ -2135,6 +2135,9 @@ export function chiefResultMessage(result) {
     const skipped = result.skipped?.length ? ` 이어가지 못한 ${result.skipped.length}건: ${result.skipped.map((s) => s.reason).join(' / ')}` : '';
     return (n ? `일시정지·중단됐던 업무 ${n}건을 이어서 시작했어요. 완료한 단계는 건너뜁니다.` : '이어서 할 일시정지 업무가 없어요.') + skipped;
   }
+  // 앞선 업무가 진행 중이면 접수만 하고 순번대로 시작한다(2.0 순번 실행)
+  if (result.queued) return `업무를 접수했어요(${result.item}). ${result.ahead ? `앞선 업무 "${result.ahead.title}"` : '앞선 업무'}가 끝나면 자동으로 시작합니다. 다시 지시하지 않아도 됩니다.`;
+  if (result.resumeQueued) return `답장을 접수했어요. ${result.ahead ? `진행 중인 업무 "${result.ahead.title}"` : '진행 중인 업무'}가 끝나면 이 업무를 이어서 진행합니다.`;
   return '비서실장에게 업무를 전달했어요. 업무를 나눠 직원들에게 배정합니다.';
 }
 
@@ -2443,7 +2446,7 @@ async function submitThread(ev) {
     const effort = $('threadEffort').value;
     const sent = await api('POST', `/api/runs/${encodeURIComponent(latest.id)}/reply`, { prompt, ...(model ? { model } : {}), ...(effort ? { effort } : {}) });
     $('threadPrompt').value = '';
-    toast(sent?.historyCleared || sent?.taskClosed ? chiefResultMessage(sent) : `${runWho(latest)}에게 답장을 보냈어요.`);
+    toast(sent?.historyCleared || sent?.taskClosed || sent?.resumeQueued ? chiefResultMessage(sent) : `${runWho(latest)}에게 답장을 보냈어요.`);
     await refresh();
   } catch (e) {
     $('threadError').textContent = e.message; $('threadError').hidden = false;

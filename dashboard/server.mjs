@@ -43,6 +43,7 @@ import { ensureVault } from '../lib/vault.mjs';
 import { UPLOAD_MAX_BYTES, saveUpload } from '../lib/uploads.mjs';
 import { BATCH_ID, SUBMIT_KEY, batchSummary, createBatches, itemPrompt } from '../lib/batches.mjs';
 import { createSequencer } from './sequencer.mjs';
+import { continuousRequest } from '../lib/continuous.mjs';
 import { buildState } from './state.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -896,8 +897,19 @@ export async function startServer({
     const continuous = body.continuous !== undefined ? body.continuous : intent.source === 'ai' ? (intent.continuous || false) : undefined;
     // 지시에 적은 저장 위치는 업무를 시작하기 전에 검사한다(끝난 뒤에 저장 실패로 알게 되지 않게)
     if (intent.outputDir) { try { customOutputDirectory(root, intent.outputDir); } catch (err) { throw new HttpError(400, `저장 위치를 쓸 수 없습니다: ${err.message}`); } }
-    const run = await callRunner(() => runner.start({ prompt, model, engine: body.engine || null, effort: body.effort || null,
-      continuous, intent: { actions: intent.actions, delegated: intent.delegated, outputDir: intent.outputDir || null, source: intent.source, quick: intent.quick === true, quickEdit: intent.quickEdit === true, quickEditFile: intent.quickEditFile || '', quickAgent: intent.quickAgent || '', recipe: intent.recipe || '' } }), '작업을 시작하지 못했습니다.');
+    const runIntent = { actions: intent.actions, delegated: intent.delegated, outputDir: intent.outputDir || null, source: intent.source, quick: intent.quick === true, quickEdit: intent.quickEdit === true, quickEditFile: intent.quickEditFile || '', quickAgent: intent.quickAgent || '', recipe: intent.recipe || '' };
+    // 유한한 새 업무는 한 건짜리 묶음으로 접수해 순번을 따른다(2.0, 대표 결정 D2). 앞에 진행 중인 건이 없으면 예전처럼 바로 시작한다.
+    // 상시 감시(업무 자리를 차지하지 않는다)와 빠른 조회·간단한 수정은 예전처럼 즉시 실행한다
+    let monitor;
+    try { monitor = Boolean(continuousRequest(prompt, continuous)); } catch { monitor = true; /* 형식 오류는 실행기가 예전 문구로 알린다 */ }
+    if (!monitor && !runIntent.quick && !runIntent.quickEdit) {
+      const { batch } = await callRunner(() => batches.submit({ submitKey: randomBytes(24).toString('hex'), items: [{ prompt }] },
+        { source: 'command', intent: runIntent, options: { model, engine: body.engine || null, effort: body.effort || null } }), '작업을 접수하지 못했습니다.');
+      const result = await callRunner(() => sequencer.started(batch.items[0].id), '작업을 시작하지 못했습니다.');
+      scheduleBroadcast();
+      return result.run || result;
+    }
+    const run = await callRunner(() => runner.start({ prompt, model, engine: body.engine || null, effort: body.effort || null, continuous, intent: runIntent }), '작업을 시작하지 못했습니다.');
     scheduleBroadcast();
     return run;
   }
@@ -945,7 +957,10 @@ export async function startServer({
         quickEdit: judged.quickEdit === true, quickEditFile: judged.quickEditFile || '', quickAgent: judged.quickAgent || '', recipe: judged.recipe || '' };
     }
     if (intent.outputDir) { try { customOutputDirectory(root, intent.outputDir); } catch (err) { throw new Error(`저장 위치를 쓸 수 없습니다: ${err.message}`); } }
-    const run = runner.start({ prompt, continuous: false, intent, display: item.title });
+    // 지시창에서 온 단건은 예전처럼 지시문을 그대로 보여 주고 지시창의 모델 설정을 쓴다
+    const options = item.options || {};
+    const run = runner.start({ prompt, continuous: false, intent, model: options.model || null, engine: options.engine || null, effort: options.effort || null,
+      ...(item.source === 'command' ? {} : { display: item.title }) });
     scheduleBroadcast();
     return { run, intent };
   }

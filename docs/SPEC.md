@@ -413,7 +413,8 @@ test/                     node:test
 - **답장·재개(`POST /api/runs/:id/reply`):** 접수된 건의 대화면 순번 실행기를 거친다. 자리가 비어 있으면 바로 같은 대화를 이어 가고, 다른 건이 진행 중이면 끼어들지 않고 재개를 예약한다(응답 `{resumeQueued, item, ahead}`, 건은 `waiting`으로 돌아가 원래 접수 순번을 따른다). 같은 답장을 여러 번 보내도 재개는 한 번이다. 중지·실패한 건은 답장 전까지 스스로 다시 움직이지 않는다.
 - **취소(`POST /api/batches/:id/items/:no/cancel`):** 대기·확인 필요·실패·중지 건을 `canceled`로 바꾼다. 진행 중이면 409(먼저 중지), 완료면 409. 대화에서 "이 업무 끝내"로 닫은 건도 취소로 적는다. 취소한 건은 다시 깨우지 않는다.
 - **시작 계기:** 접수, 실행 상태 변화(실행기 `onChange`), 서버 시작(`recover`). 여러 번 불려도 건마다 시작은 한 번이다. 서버가 꺼지는 동안에는 다음 건을 시작하지 않는다. 다시 켜면 끊긴 건은 `needs`로 두고 다음 건을 이어 간다.
-- **아직 순번 밖인 것:** 지시창 단건 지시, 예약 회차, 감시가 만든 후속 업무는 지금처럼 바로 시작한다(뒤 단계에서 같은 순번으로 넣는다). "이어서 해줘" 일괄 재개로 다시 움직인 건은 있는 그대로 `running`으로 적는다.
+- **지시창 단건(`POST /api/runs`):** 판별 결과가 유한한 새 업무면 한 건짜리 묶음으로 접수해 같은 순번을 따른다(건에 `source: "command"`, 판별 결과 `intent`, 지시창 모델 설정 `options`를 남기고 다시 판별하지 않는다). 앞에 진행 중인 건이 없으면 예전처럼 실행을 돌려주고, 있으면 `{queued, item, batch, ahead}`(202)를 돌려준 뒤 차례가 오면 스스로 시작한다. 일시정지·재개·추가 지시·예약 등록·내역 정리, 상시 감시, 빠른 조회·간단한 수정은 순번을 타지 않고 예전처럼 즉시 처리한다.
+- **아직 순번 밖인 것:** 예약 회차와 감시가 만든 후속 업무는 지금처럼 바로 시작한다(복구 단계에서 같은 순번으로 넣는다). "이어서 해줘" 일괄 재개로 다시 움직인 건은 있는 그대로 `running`으로 적는다.
 ## 5. 외부 작업
 
 ### 계정 연결
@@ -788,7 +789,7 @@ node scripts/codex-review.mjs --target outputs/<날짜>/<slug> [--reviewers <id�
 - `dashboard/orchestrator.mjs`: `orchestrate({root, run, prompt, execute, signal, maxParallel, resume, onDecision, outbound, intent, judge})`, `checkpointFile`.
 - `lib/final-outputs.mjs`: `finalOutputSettings`, `customOutputDirectory`, `collectFinalOutputs`, `resolveFinalOutput`.
 - `lib/batches.mjs`: `createBatches({root, now, write})` → `submit(body)`, `get(id)`, `findByKey(key)`, `list()`. `items()`, `patch(itemId, fn, event)`. `normalizeSubmission`, `batchSummary`, `itemPrompt`, `BATCH_LIMITS`, `ITEM_STATUS`.
-- `dashboard/sequencer.mjs`: `createSequencer({batches, startRun, replyRun, latestRun, taskStatus, onChange})` → `pump()`, `reply(rootId, runId, body)`, `cancel(itemId)`, `recover()`, `waitingOn(itemId)`, `itemOfRun(rootId)`.
+- `dashboard/sequencer.mjs`: `createSequencer({batches, startRun, replyRun, latestRun, taskStatus, onChange})` → `pump()`, `started(itemId)`, `reply(rootId, runId, body)`, `cancel(itemId)`, `recover()`, `waitingOn(itemId)`, `itemOfRun(rootId)`.
 
 ### HTTP API (`dashboard/server.mjs`, 기본 127.0.0.1:4777)
 
@@ -801,12 +802,12 @@ node scripts/codex-review.mjs --target outputs/<날짜>/<slug> [--reviewers <id�
 | GET /api/agents/:id/preview | 생성될 지침 전문(토큰) |
 | GET/PUT /api/company | 회사 규칙·설정·작업 공간·최종산출물 위치(토큰) |
 | PUT /api/settings | mode·chief·budget 저장 |
-| POST /api/runs | 비서실장 지시. `agentId`가 있으면 400 |
+| POST /api/runs | 비서실장 지시. `agentId`가 있으면 400. 유한한 새 업무는 순번을 따른다(앞선 건이 진행 중이면 `{queued, item, batch, ahead}`) |
 | POST /api/batches | 묶음 접수(2.0) `{submitKey, title?, items:[{title?, prompt, attachments?, done?, dependsOn?}]}`. 저장만 하고 실행하지 않는다(AI 호출 0회). 새 접수 201, 같은 `submitKey` 재전송은 원래 번호로 200 `{duplicate, batch}`, 같은 키에 다른 내용 409, 저장 실패 500(접수 0건) |
 | POST /api/batches/:id/items/:no/cancel | 접수된 건 취소(진행 중·완료는 409) |
 | GET /api/batches[?key=], /api/batches/:id | 묶음 요약 목록(원문 없음, `?key=`는 제출 키로 접수 여부 확인), 묶음 상세(요청 원문 포함)(토큰) |
 | POST /api/uploads | 지시창 파일 올리기 `{name, data(base64)}` → `보관함/업로드/<날짜>/`, 201 `{path, name, size}`(25MB, 허용 형식 밖 415, 너무 큼 413) |
-| POST /api/runs/:id/stop, /reply | 중지, 이어서 답하기 |
+| POST /api/runs/:id/stop, /reply | 중지, 이어서 답하기(접수된 건이고 다른 건이 진행 중이면 `{resumeQueued, item, ahead}`) |
 | GET /api/runs/:id/log, /result | 로그 마지막 64KB, 답변 전문(`X-Result-Source`, `X-Session-Id`)(토큰) |
 | POST /api/tasks/:id/seen | 완료 결과 읽음 기록 |
 | POST /api/tasks/:id/approve, /reject | review 상태 업무 전용(예전 클라이언트 호환) |

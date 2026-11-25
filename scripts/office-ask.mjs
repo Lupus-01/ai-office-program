@@ -85,6 +85,8 @@ async function main(argv) {
     if (result.followUp) return console.log(`진행 중인 업무에 추가 지시를 전달했습니다. 실행 id: ${result.id}`);
     if (result.historyCleared) return console.log(`끝난 업무와 실행 내역을 지웠습니다. 최종 산출물·계정과 진행 중인 업무는 그대로 있습니다.${result.keptWaiting ? ` 답변을 기다리는 업무 ${result.keptWaiting}건은 남겼습니다.` : ''}`);
     if (result.pauseRequested || result.resumeRequested) return console.log(`${result.pauseRequested ? '진행 중인 업무를 일시정지했습니다' : '멈춘 업무를 이어서 시작했습니다'}.\n${JSON.stringify(result, null, 2)}`);
+    // 앞선 업무가 진행 중이면 접수만 되고 순번대로 시작한다. 아직 실행 id가 없다
+    if (result.queued) return console.log(`업무를 접수했습니다(접수 번호 ${result.item}). ${result.ahead ? `앞선 업무 "${result.ahead.title}"` : '앞선 업무'}가 끝나면 자동으로 시작합니다. 다시 지시하지 마세요.\n시작 확인: node scripts/office-ask.mjs status\n대시보드: ${access.url}`);
     return console.log(`비서실장에게 지시했습니다. 실행 id: ${result.id}\n진행 확인: node scripts/office-ask.mjs wait ${result.id}\n대시보드: ${access.url}`);
   }
   if (command === 'reply') {
@@ -92,6 +94,7 @@ async function main(argv) {
     const prompt = words.join(' ').trim();
     if (!id || !prompt) throw new Error(USAGE);
     const run = await client.reply(id, prompt);
+    if (run.resumeQueued) return console.log(`답장을 접수했습니다. ${run.ahead ? `진행 중인 업무 "${run.ahead.title}"` : '진행 중인 업무'}가 끝나면 이 업무를 이어서 진행합니다. 같은 답장을 다시 넣지 마세요.\n시작 확인: node scripts/office-ask.mjs status`);
     return console.log(`답장을 넣었습니다. 이어지는 실행 id: ${run.id}\n진행 확인: node scripts/office-ask.mjs wait ${run.id}`);
   }
   if (command === 'status' && !args[0]) {

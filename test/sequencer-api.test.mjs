@@ -123,3 +123,53 @@ test('HTTP: 3건 접수 → 1번 질문으로 보류 → 독립인 3번 진행 �
   // 업무는 정확히 3개(누락·중복 0)
   assert.equal((await get('/api/state')).tasks.length, 3);
 });
+
+test('HTTP: 지시창 단건도 순번을 따른다 — 첫 지시는 바로 시작, 진행 중에 온 둘째 지시는 접수만 되고 앞 업무가 끝나면 스스로 시작', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'office-seq-cmd-'));
+  mkdirSync(join(root, 'org'));
+  writeFileSync(join(root, 'org/departments.json'), JSON.stringify([{ id: 'research', name: '리서치부', engine: 'codex', codexRole: 'exec' }]));
+  writeFileSync(join(root, 'org/roster.json'), JSON.stringify([{ id: 'research-1', name: '김대리', department: 'research' }]));
+  const bin = join(root, 'fake.mjs'); writeFileSync(bin, FAKE);
+  const logFile = join(root, 'calls.jsonl');
+  const previous = { codex: process.env.CODEX_BIN, claude: process.env.CLAUDE_BIN };
+  process.env.CODEX_BIN = join(root, 'must-not-run-global.mjs'); process.env.CLAUDE_BIN = process.env.CODEX_BIN;
+  let server;
+  t.after(async () => {
+    await server?.close();
+    for (const [name, key] of [['CODEX_BIN', 'codex'], ['CLAUDE_BIN', 'claude']]) { if (previous[key] === undefined) delete process.env[name]; else process.env[name] = previous[key]; }
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  });
+  server = await startServer({ root, port: 0, quiet: true, env: { ...process.env, CLAUDE_BIN: join(root, 'no-claude.mjs'), CODEX_BIN: bin, FIXTURE_LOG: logFile } });
+  const base = `http://127.0.0.1:${server.port}`;
+  const headers = { 'X-Office-Token': server.token, Origin: base, 'Content-Type': 'application/json' };
+  const post = async (path, body) => {
+    const response = await fetch(base + path, { method: 'POST', headers, body: JSON.stringify(body) });
+    const json = await response.json(); assert.equal(response.status, 202, json.error); return json;
+  };
+  const get = async (path) => (await fetch(base + path, { headers })).json();
+
+  const first = await post('/api/runs', { prompt: '배너 이월대기 현황을 정리해 줘.' });
+  assert.ok(first.id, '앞에 진행 중인 건이 없으면 예전처럼 실행을 돌려준다');
+  assert.equal(first.request, '배너 이월대기 현황을 정리해 줘.');
+  const second = await post('/api/runs', { prompt: '회신 현황 집계표를 만들어 줘.' });
+  assert.equal(second.queued, true);
+  assert.equal(second.id, undefined);
+  assert.equal(second.ahead.title, '배너 이월대기 현황을 정리해 줘.');
+  assert.equal((await get('/api/state')).tasks.length, 1, '둘째 지시는 아직 업무를 만들지 않았다');
+
+  const deadline = Date.now() + 30000;
+  let batches;
+  while (Date.now() < deadline) {
+    batches = (await get('/api/batches')).batches;
+    if (batches.length === 2 && batches.every((b) => b.counts.done === 1)) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.deepEqual(batches.map((b) => b.counts), [{ done: 1 }, { done: 1 }]);
+  assert.equal(batches[1].items[0].id, second.item);
+  const state = await get('/api/state');
+  assert.equal(state.tasks.length, 2);
+  // 둘째 업무의 AI 호출은 첫 업무의 마지막 호출 뒤에 시작됐다
+  const order = readFileSync(logFile, 'utf8').trim().split('\n').map((line) => JSON.parse(line).task).filter(Boolean);
+  const [a, b] = batches.map((x) => x.items[0].task);
+  assert.ok(order.lastIndexOf(a) < order.indexOf(b), order.join(' '));
+});
