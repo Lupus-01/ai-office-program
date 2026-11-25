@@ -38,6 +38,11 @@ export function createSequencer({ batches, startRun, replyRun, latestRun, taskSt
   // 끝난 실행을 건 상태로 옮긴다. 완료는 업무가 실제로 전달까지 끝났을 때만 센다
   function settle(item, run) {
     let status, reason = '';
+    // 결과 증거를 먼저 본다: 실행이 끊기거나 실패로 남았어도 업무가 이미 전달까지 끝났으면 완료다(다시 실행하지 않는다)
+    if (run.status !== 'done' && run.task && taskStatus(run.task) === 'done') {
+      save(item.id, (i) => { i.status = S.done; i.reason = ''; i.task = run.task; }, { type: S.done, run: run.id, recovered: true });
+      return;
+    }
     if (run.status === 'done') {
       if (run.needsReply) { status = S.needs; reason = '대표 답변이 필요합니다.'; }
       else if (!run.task || taskStatus(run.task) === 'done') status = S.done;
@@ -68,7 +73,7 @@ export function createSequencer({ batches, startRun, replyRun, latestRun, taskSt
 
   function begin({ batch, item }) {
     const resume = item.pendingReply || null;
-    const started = save(item.id, (i) => { i.status = S.running; i.reason = ''; i.attempt = (i.attempt || 0) + 1; delete i.pendingReply; },
+    const started = save(item.id, (i) => { i.status = S.running; i.reason = ''; i.attempt = (i.attempt || 0) + 1; delete i.pendingReply; delete i.paused; },
       { type: resume ? 'resumed' : 'started', attempt: (item.attempt || 0) + 1 });
     if (!started) return false; // 저장하지 못하면 시작하지 않는다(다음 변화 때 다시 본다)
     starting.add(item.id);
@@ -128,12 +133,12 @@ export function createSequencer({ batches, startRun, replyRun, latestRun, taskSt
     if (!RESUMABLE.has(item.status)) return null; // 진행 중(실행기가 409로 거부)·완료(완료된 업무의 후속 대화)는 예전 길
     const others = running().filter((r) => r.item.id !== item.id);
     if (others.length) {
-      save(item.id, (i) => { i.status = S.waiting; i.reason = ''; i.pendingReply = { runId, body }; }, { type: 'resume-queued', ahead: others[0].item.id });
+      save(item.id, (i) => { i.status = S.waiting; i.reason = ''; i.pendingReply = { runId, body }; delete i.paused; }, { type: 'resume-queued', ahead: others[0].item.id });
       onChange();
       return { queued: true, item: item.id, ahead: { id: others[0].item.id, title: others[0].item.title } };
     }
     const previous = { status: item.status, reason: item.reason || '' };
-    save(item.id, (i) => { i.status = S.running; i.reason = ''; i.attempt = (i.attempt || 0) + 1; }, { type: 'resumed', attempt: (item.attempt || 0) + 1 });
+    save(item.id, (i) => { i.status = S.running; i.reason = ''; i.attempt = (i.attempt || 0) + 1; delete i.paused; }, { type: 'resumed', attempt: (item.attempt || 0) + 1 });
     // 새 실행이 등록되기 전에는 이 대화의 마지막 실행이 아직 "끝난 실행"이라, 그 사이의 반영(sync)을 막는다
     starting.add(item.id);
     try {
@@ -168,6 +173,57 @@ export function createSequencer({ batches, startRun, replyRun, latestRun, taskSt
     pump();
   }
 
+  // "하던 작업 멈추고 정리해 둬": 차례를 기다리던 건도 함께 일시정지한다(진행 중인 건이 멈춘 자리에 다음 건이 시작되지 않게).
+  // 실행기의 일시정지보다 먼저 부른다. 일시정지 뒤에 새로 접수한 건은 평소대로 진행한다
+  function pauseWaiting() {
+    const paused = [];
+    for (const { item } of all()) {
+      if (item.status !== S.waiting) continue;
+      if (save(item.id, (i) => { i.status = S.stopped; i.paused = true; i.reason = '일시정지했습니다.'; }, { type: 'paused' })) paused.push({ item: item.id, title: item.title });
+    }
+    onChange();
+    return paused;
+  }
+
+  // "이어서 해줘": 시작 전에 일시정지된 건(또는 재개가 예약돼 있던 건)을 원래 순번의 대기로 되돌린다.
+  // 실행하다 멈춘 건은 실행기의 일괄 재개가 답장(reply)으로 이어 간다
+  function resumePaused() {
+    const resumed = [];
+    for (const { item } of all()) {
+      if (item.status !== S.stopped || !item.paused || (item.run && !item.pendingReply)) continue;
+      if (save(item.id, (i) => { i.status = S.waiting; i.reason = ''; delete i.paused; }, { type: 'unpaused' })) resumed.push({ item: item.id, title: item.title });
+    }
+    pump();
+    return resumed;
+  }
+
+  // 예약 회차·감시 후속 업무처럼 시스템이 만든 유한 업무를 한 건짜리 묶음으로 접수한다(판별 없이 start 인자 그대로 시작한다).
+  // 접수하지 못하면 null(부른 쪽이 예전처럼 바로 시작한다). origin: 같은 사건이 다시 와도 한 번만 접수하려는 식별값
+  function enqueue({ prompt, ...start }, { source, title = '', origin = null }) {
+    try {
+      const key = `${source}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`.padEnd(16, '0');
+      const { batch } = batches.submit({ submitKey: key, ...(title ? { title } : {}), items: [{ ...(title ? { title } : {}), prompt }] }, { source, start, ...(origin ? { origin } : {}) });
+      Promise.resolve().then(pump);
+      return { queued: true, item: batch.items[0].id };
+    } catch (error) { warn(`${source} 업무를 접수하지 못해 바로 시작합니다`, error); return null; }
+  }
+
+  // 같은 사건(origin)으로 이미 접수돼 아직 실행 전인 건
+  function findOrigin(match) {
+    const found = all().find(({ item }) => item.origin && !item.run && (item.status === S.waiting || item.status === S.running) && match(item.origin));
+    return found ? found.item.id : null;
+  }
+
+  // 접수표(건 번호)의 지금 상태. 실행이 생겼으면 { runId, task }, 아직이면 { status: 'queued' }.
+  // 실행 없이 끝난 건(시작 실패·취소)은 자동으로 다시 시작시키지 않도록 사용자가 멈춘 것으로 알린다
+  function ticket(itemId) {
+    const item = find(itemId)?.item;
+    if (!item) return null;
+    if (item.run) return { runId: item.run, task: item.task || null };
+    if (item.status === S.waiting || item.status === S.running) return { status: 'queued' };
+    return { status: item.status === S.canceled ? 'stopped' : 'failed', userStopped: true, summary: item.reason || '' };
+  }
+
   // 화면용: 대기 중인 건이 무엇을 기다리는지(조회만, 상태를 바꾸지 않는다)
   function waitingOn(itemId) {
     const found = find(itemId);
@@ -178,5 +234,5 @@ export function createSequencer({ batches, startRun, replyRun, latestRun, taskSt
     return ahead ? { kind: 'slot', item: ahead.item.id, title: ahead.item.title } : { kind: 'slot' };
   }
 
-  return { pump, started, reply, cancel, recover, waitingOn, itemOfRun: (rootId) => byRun(rootId)?.item.id || null };
+  return { pump, started, reply, cancel, recover, waitingOn, pauseWaiting, resumePaused, enqueue, findOrigin, ticket, itemOfRun: (rootId) => byRun(rootId)?.item.id || null };
 }

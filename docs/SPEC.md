@@ -414,7 +414,12 @@ test/                     node:test
 - **취소(`POST /api/batches/:id/items/:no/cancel`):** 대기·확인 필요·실패·중지 건을 `canceled`로 바꾼다. 진행 중이면 409(먼저 중지), 완료면 409. 대화에서 "이 업무 끝내"로 닫은 건도 취소로 적는다. 취소한 건은 다시 깨우지 않는다.
 - **시작 계기:** 접수, 실행 상태 변화(실행기 `onChange`), 서버 시작(`recover`). 여러 번 불려도 건마다 시작은 한 번이다. 서버가 꺼지는 동안에는 다음 건을 시작하지 않는다. 다시 켜면 끊긴 건은 `needs`로 두고 다음 건을 이어 간다.
 - **지시창 단건(`POST /api/runs`):** 판별 결과가 유한한 새 업무면 한 건짜리 묶음으로 접수해 같은 순번을 따른다(건에 `source: "command"`, 판별 결과 `intent`, 지시창 모델 설정 `options`를 남기고 다시 판별하지 않는다). 앞에 진행 중인 건이 없으면 예전처럼 실행을 돌려주고, 있으면 `{queued, item, batch, ahead}`(202)를 돌려준 뒤 차례가 오면 스스로 시작한다. 일시정지·재개·추가 지시·예약 등록·내역 정리, 상시 감시, 빠른 조회·간단한 수정은 순번을 타지 않고 예전처럼 즉시 처리한다.
-- **아직 순번 밖인 것:** 예약 회차와 감시가 만든 후속 업무는 지금처럼 바로 시작한다(복구 단계에서 같은 순번으로 넣는다). "이어서 해줘" 일괄 재개로 다시 움직인 건은 있는 그대로 `running`으로 적는다.
+- **예약 회차:** 예약 규칙이 허용한 회차마다 한 번만 접수하고(`source: "schedule"`) 순번을 따른다. 예약은 실행 대신 접수표(건 번호)를 `lastRun.item`에 적고 상태를 `queued`로 두며, 차례가 와 실행이 생기면 그 실행으로 잇는다. 앞 회차가 아직 차례를 기다리면 다음 회차는 건너뛴다. 예약 시각은 건의 `accepted`, 실제 시작은 `started` 사건이다.
+- **감시 후속 업무:** 상시 감시 부모 실행은 순번 밖이라 업무 자리를 차지하지 않는다. 새 자료로 생긴 유한 후속 업무만 접수한다(`source: "monitor"`, `origin: {monitorId, deliveryKey}`). 같은 자료 키로 실행 전인 건이 있으면 새로 만들지 않는다. 감시 체크포인트에는 실행 id 자리에 접수표(`item:<건 번호>`)를 적고 실행기가 실제 실행으로 풀어 본다. 실행 없이 끝난 접수표(시작 실패·취소)는 자동으로 다시 시작하지 않는다.
+- 예약 회차·감시 후속 업무는 접수할 때 정한 시작 인자(`start`) 그대로, 의도 판별 없이 시작한다(예전과 같다). 접수 한도를 넘어 접수하지 못하면 예전처럼 바로 시작한다.
+- **일시정지·재개:** "하던 작업 멈추고 정리해 둬"는 차례를 기다리던 건도 `stopped`(`paused`)로 멈춘 뒤 실행을 멈춘다(멈춘 자리에 다음 건이 시작되지 않는다). 그 뒤 새로 접수한 건은 평소대로 진행한다. "이어서 해줘"는 실행하다 멈춘 건을 답장으로 잇고(순번을 거친다 — 한 건만 바로, 나머지는 재개 예약) 시작 전에 멈춘 건을 대기로 되돌린다.
+- **복구(결과 증거 우선):** 실행이 끊기거나 실패로 남았어도 업무가 이미 전달까지 끝났으면(`tasks` 상태 `done`) 완료로 적고 다시 실행하지 않는다. 결과 없이 끊긴 건은 `needs`로 두고 자동으로 다시 실행하지 않는다(대표가 답장·"이어서 해줘"로 재개). 건은 그 대화의 마지막 실행만 보므로 옛 실행의 늦은 변화가 새 시도를 덮지 않는다.
+- **업데이트(`npm run office:update`)**의 진행 중 업무 확인은 차례를 기다리는 건도 센다(`waitingItems`). 선행 업무가 취소·실패·중지돼 스스로 시작할 수 없는 건은 세지 않는다.
 ## 5. 외부 작업
 
 ### 계정 연결
@@ -789,7 +794,7 @@ node scripts/codex-review.mjs --target outputs/<날짜>/<slug> [--reviewers <id�
 - `dashboard/orchestrator.mjs`: `orchestrate({root, run, prompt, execute, signal, maxParallel, resume, onDecision, outbound, intent, judge})`, `checkpointFile`.
 - `lib/final-outputs.mjs`: `finalOutputSettings`, `customOutputDirectory`, `collectFinalOutputs`, `resolveFinalOutput`.
 - `lib/batches.mjs`: `createBatches({root, now, write})` → `submit(body)`, `get(id)`, `findByKey(key)`, `list()`. `items()`, `patch(itemId, fn, event)`. `normalizeSubmission`, `batchSummary`, `itemPrompt`, `BATCH_LIMITS`, `ITEM_STATUS`.
-- `dashboard/sequencer.mjs`: `createSequencer({batches, startRun, replyRun, latestRun, taskStatus, onChange})` → `pump()`, `started(itemId)`, `reply(rootId, runId, body)`, `cancel(itemId)`, `recover()`, `waitingOn(itemId)`, `itemOfRun(rootId)`.
+- `dashboard/sequencer.mjs`: `createSequencer({batches, startRun, replyRun, latestRun, taskStatus, onChange})` → `pump()`, `started(itemId)`, `reply(rootId, runId, body)`, `cancel(itemId)`, `recover()`, `waitingOn(itemId)`, `itemOfRun(rootId)`, `pauseWaiting()`, `resumePaused()`, `enqueue(request, {source, title, origin})`, `findOrigin(match)`, `ticket(itemId)`.
 
 ### HTTP API (`dashboard/server.mjs`, 기본 127.0.0.1:4777)
 

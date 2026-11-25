@@ -7,6 +7,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createBatches, itemPrompt } from '../lib/batches.mjs';
 import { createSequencer } from '../dashboard/sequencer.mjs';
+import { createSchedules } from '../lib/schedules.mjs';
+import { waitingItems } from '../lib/updates.mjs';
+import { batchSummary } from '../lib/batches.mjs';
 
 const KEY = (n) => `submit-key-${String(n).padStart(8, '0')}`;
 const tick = () => new Promise((resolve) => setImmediate(resolve));
@@ -21,9 +24,10 @@ function setup(t, { startFails = () => false } = {}) {
   const sequencer = createSequencer({ batches,
     startRun: async (item, batch) => {
       calls.start.push(item.id);
-      if (!item.intent) calls.judge++;
+      if (!item.intent && !item.start) calls.judge++; // 서버와 같게: 예약·감시 후속 업무는 판별하지 않는다
       if (startFails(item)) throw new Error('로그인된 도구가 없습니다.');
-      const run = addRun({ task: `2026-11-25/${item.id.toLowerCase()}`, prompt: itemPrompt(item, batch) });
+      const run = addRun({ task: `2026-11-25/${item.id.toLowerCase()}`, prompt: itemPrompt(item, batch), start: item.start || null });
+      calls.maxBusy = Math.max(calls.maxBusy || 0, runs.filter((r) => r.status === 'running').length);
       return { run, intent: item.intent || { actions: [], delegated: false } };
     },
     replyRun: (runId, body) => {
@@ -183,4 +187,140 @@ test('서버 재시작: 시작 전에 꺼진 건은 대기로 되돌리고, 끊�
   assert.deepEqual(s.status(b), ['needs', 'running', 'waiting', 'waiting']);
   assert.match(s.item(`${b}-1`).reason, /끊겼습니다/);
   assert.deepEqual(s.calls.start, [`${b}-1`, `${b}-2`]);
+});
+
+// ---- S3: 복구와 중복 방지 ----
+
+test('리허설 4(결과 확정 직후 중단): 실행은 끊겼지만 업무가 이미 전달까지 끝났으면 완료로 적고 다시 실행하지 않는다', async (t) => {
+  const s = setup(t);
+  const b = await s.submit(1, AD());
+  // 1번: 결과 확정 직후 서버가 꺼졌다(실행 기록은 끊김, 업무는 완료) / 재시작 뒤 복구
+  const run = s.current(`${b}-1`);
+  Object.assign(run, { status: 'failed', interrupted: true });
+  await s.finish(`${b}-1`, 'done'); // 업무 상태를 완료로 둔다
+  Object.assign(run, { status: 'failed', interrupted: true });
+  s.sequencer.recover();
+  await tick();
+  assert.equal(s.item(`${b}-1`).status, 'done');
+  assert.equal(s.calls.reply.length, 0, '완료된 업무를 재개하지 않는다');
+  assert.deepEqual(s.calls.start.filter((id) => id === `${b}-1`).length, 1, '완료된 업무를 다시 시작하지 않는다');
+
+  // 2번: 실행 중 중단(결과 없음) → 확인 필요로 두고 3번이 이어 간다. 자동 재실행은 없다
+  Object.assign(s.current(`${b}-2`), { status: 'failed', interrupted: true });
+  s.sequencer.recover();
+  await tick();
+  assert.deepEqual(s.status(b), ['done', 'needs', 'running', 'waiting']);
+  assert.equal(s.item(`${b}-2`).events.at(-1).type, 'needs');
+  // 끊긴 실행의 늦은 변화(옛 실행 기록이 뒤늦게 바뀜)가 새 상태를 덮지 않는다: 건은 그 대화의 마지막 실행만 본다
+  const old = s.current(`${b}-2`).id, root = s.item(`${b}-2`).run;
+  await s.finish(`${b}-3`); await s.finish(`${b}-4`);
+  s.sequencer.reply(root, old, { prompt: '이어서 재개' });
+  assert.equal(s.item(`${b}-2`).status, 'running');
+  s.runs.find((r) => r.id === old).status = 'done';
+  s.sequencer.pump(); await tick();
+  assert.equal(s.item(`${b}-2`).status, 'running', '옛 실행의 변화로 진행 중인 새 시도를 끝내지 않는다');
+});
+
+test('일시정지·재개: 차례를 기다리던 건도 함께 멈추고, 재개하면 원래 순서대로 이어 간다. 그 사이의 새 접수는 평소대로 진행한다', async (t) => {
+  const s = setup(t);
+  const b = await s.submit(1, AD().slice(0, 3));
+  assert.deepEqual(s.sequencer.pauseWaiting().map((x) => x.item), [`${b}-2`, `${b}-3`]);
+  const run = s.current(`${b}-1`);
+  Object.assign(run, { status: 'stopped', paused: true });
+  s.sequencer.pump(); await tick();
+  assert.deepEqual(s.status(b), ['stopped', 'stopped', 'stopped'], '진행 중인 건이 멈춘 자리에 다음 건이 시작되지 않는다');
+  assert.deepEqual(s.calls.start, [`${b}-1`]);
+  // 일시정지 뒤 새로 접수한 건은 바로 진행한다
+  const b2 = await s.submit(2, [{ title: 'N', prompt: 'N' }]);
+  assert.deepEqual(s.status(b2), ['running']);
+  // "이어서 해줘": 실행하다 멈춘 1번은 답장으로(다른 건이 진행 중이라 재개 예약), 시작 전이던 2·3번은 대기로
+  assert.equal(s.sequencer.reply(s.item(`${b}-1`).run, run.id, { prompt: '이어서 재개' }).queued, true);
+  assert.deepEqual(s.sequencer.resumePaused().map((x) => x.item), [`${b}-2`, `${b}-3`]);
+  assert.deepEqual(s.status(b), ['waiting', 'waiting', 'waiting']);
+  await s.finish(`${b2}-1`);
+  assert.deepEqual(s.status(b), ['running', 'waiting', 'waiting'], '원래 접수 순서의 맨 앞부터');
+  assert.deepEqual(s.calls.reply, [{ runId: run.id, prompt: '이어서 재개' }]);
+  await s.finish(`${b}-1`); await s.finish(`${b}-2`); await s.finish(`${b}-3`);
+  assert.deepEqual(s.status(b), ['done', 'done', 'done']);
+  assert.equal(s.calls.maxBusy, 1);
+});
+
+test('리허설 7: 수동 4건에 예약 회차·감시 후속 업무가 겹쳐도 한 번에 한 건이고, 같은 자료 키의 후속 업무는 한 건이다', async (t) => {
+  const s = setup(t);
+  const b = await s.submit(1, AD());
+  // 감시 부모는 순번 밖이라 업무 자리를 차지하지 않는다. 감시가 새 자료 키 하나로 후속 업무를 세 번 요청한다(중복 도착)
+  const match = (o) => o.monitorId === 'run-monitor' && o.deliveryKey === 'key-1';
+  const dispatch = () => s.sequencer.findOrigin(match) || s.sequencer.enqueue({ prompt: '새 자료 보고', continuous: false, monitorId: 'run-monitor', deliveryKey: 'key-1' },
+    { source: 'monitor', title: '지속 감시 새 자료 보고: a.json', origin: { monitorId: 'run-monitor', deliveryKey: 'key-1' } }).item;
+  const follow = dispatch();
+  assert.equal(dispatch(), follow);
+  assert.equal(dispatch(), follow);
+  // 예약 회차 하나
+  const sched = s.sequencer.enqueue({ prompt: '아침 브리핑', continuous: false, schedule: { id: 'abc', slot: '2026-11-25' } }, { source: 'schedule' }).item;
+  await tick();
+  assert.equal(s.batches.list().length, 3, '묶음은 수동 1 + 감시 후속 1 + 예약 1');
+  assert.deepEqual(s.sequencer.ticket(follow), { status: 'queued' });
+  for (const n of [1, 2, 3, 4]) await s.finish(`${b}-${n}`);
+  // 수동 4건 뒤에 접수 순서대로: 감시 후속 → 예약
+  assert.equal(s.item(follow).status, 'running');
+  assert.equal(s.item(sched).status, 'waiting');
+  assert.deepEqual(s.current(follow).start, { continuous: false, monitorId: 'run-monitor', deliveryKey: 'key-1' }, '접수할 때 정한 인자 그대로 시작한다');
+  assert.equal(s.sequencer.ticket(follow).runId, s.item(follow).run);
+  assert.equal(s.sequencer.findOrigin(match), null, '실행이 생긴 뒤에는 실행 기록으로 중복을 막는다');
+  await s.finish(follow);
+  await s.finish(sched);
+  assert.equal(s.calls.start.length, 6);
+  assert.equal(s.calls.judge, 4, '예약·감시 후속 업무는 판별 호출이 없다');
+  assert.equal(s.calls.maxBusy, 1);
+  // 실행 없이 끝난 접수표는 자동으로 다시 시작시키지 않도록 "사용자가 멈춤"으로 알린다
+  await s.submit(9, [{ prompt: '자리 차지' }]);
+  const extra = s.sequencer.enqueue({ prompt: 'x', continuous: false }, { source: 'monitor', origin: { monitorId: 'm', deliveryKey: 'k2' } }).item;
+  await tick();
+  assert.equal(s.item(extra).status, 'waiting');
+  s.sequencer.cancel(extra);
+  assert.deepEqual(s.sequencer.ticket(extra), { status: 'stopped', userStopped: true, summary: '대표가 취소했습니다.' });
+  assert.equal(s.sequencer.ticket('B999999-001-1'), null);
+});
+test('예약: 회차는 한 번만 접수되고, 접수표가 실행으로 이어지며, 앞 회차가 아직 차례를 기다리면 다음 회차를 건너뛴다', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'office-seq-sched-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  let now = Date.parse('2026-11-24T23:59:30Z'); // 한국 시각 25일 08:59:30
+  const started = [], runs = [];
+  let state = { status: 'queued' };
+  const schedules = createSchedules({ root, now: () => now, runs: () => runs, ticket: () => state,
+    start: (request) => { started.push(request); return { queued: true, item: `B261125-00${started.length}-1` }; } });
+  schedules.add({ prompt: '아침 브리핑 만들어 줘', time: '09:00' });
+  now += 40_000; // 09:00:10
+  schedules.tick(); schedules.tick(); schedules.tick();
+  assert.equal(started.length, 1, '같은 회차는 한 번만 접수한다');
+  assert.equal(started[0].continuous, false);
+  assert.equal(schedules.list()[0].lastRun.status, 'queued');
+  assert.equal(schedules.list()[0].lastRun.item, 'B261125-001-1');
+  // 다음 날 회차: 앞 회차가 아직 차례를 기다린다 → 건너뛴다
+  now += 86400e3;
+  schedules.tick();
+  assert.equal(started.length, 1);
+  assert.match(schedules.list()[0].lastSkipped.reason, /차례를 기다리고/);
+  // 차례가 와서 실행이 생기면 그 실행으로 잇는다
+  runs.push({ id: 'run-7', rootId: 'run-7', status: 'done', needsReply: false, task: '2026-11-26/x', schedule: { id: schedules.list()[0].id }, summary: '끝' });
+  state = { runId: 'run-7', task: '2026-11-26/x' };
+  const item = schedules.list()[0];
+  assert.equal(item.lastRun.id, 'run-7');
+  assert.equal(item.lastRun.status, 'done');
+  now += 86400e3;
+  schedules.tick();
+  assert.equal(started.length, 2, '앞 회차가 끝났으면 다음 회차를 접수한다');
+});
+
+test('업데이트의 진행 중 업무 확인: 차례를 기다리는 건을 세고, 선행 업무가 취소·실패해 스스로 시작할 수 없는 건은 세지 않는다', async (t) => {
+  const s = setup(t);
+  const items = AD(); items[3].dependsOn = [3];
+  const b = await s.submit(1, items);
+  const count = () => waitingItems(s.batches.list().map(batchSummary));
+  assert.equal(count(), 3);
+  s.sequencer.cancel(`${b}-3`);
+  assert.equal(count(), 1, '2번만 센다(3번은 취소, 4번은 취소된 3번에 의존)');
+  await s.finish(`${b}-1`); await s.finish(`${b}-2`);
+  assert.equal(count(), 0);
+  assert.equal(waitingItems(undefined), 0);
 });

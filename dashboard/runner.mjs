@@ -33,6 +33,8 @@ const MAX_KEPT_RUNS = 200;
 export const SESSION_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RUN_ID_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 const BUSY = new Set(['running', 'queued']);
+// 감시 체크포인트가 실행 id 자리에 적는 접수표 표시(순번을 기다리는 후속 업무)
+const TICKET = 'item:';
 // 조직도를 명령 인자(--append-system-prompt)로 바로 넘기는 최대 길이. 더 길거나 Windows .cmd shim(셸 경유)이면
 // 줄바꿈·길이 제한(cmd.exe 8191자) 때문에 .office/orgmap.md 파일로 쓰고 --append-system-prompt-file 로 넘긴다
 // (claude 2.1.312 --help 의 --append-system-prompt[-file] 확인)
@@ -78,7 +80,10 @@ function groupAlive(pid) {
   }
 }
 
-export function createRunner({ root, onChange, judge = null, maxConcurrent = 4, spawnImpl = child_process.spawn, killGraceMs = 5000, outbound = null, keepAwake = null, env = process.env, toolStatus = () => null, aside = null, platform = process.platform }) {
+// followUp: 순번 실행기 연결(2.0). 감시가 만든 후속 업무를 바로 시작하지 않고 접수표를 받아 순번을 따르게 한다
+//   { find(monitorId, key) → 접수표 id | null, start(request) → { id: 접수표 id } | null, state(접수표 id) → { runId, task } | { status, … } | null }
+// replyVia(runId, body): "이어서 해줘" 일괄 재개가 답장을 보낼 때 거치는 길(없으면 바로 reply). 대기로 접수되면 { queued: true }를 돌려준다
+export function createRunner({ root, onChange, judge = null, followUp = null, replyVia = null, maxConcurrent = 4, spawnImpl = child_process.spawn, killGraceMs = 5000, outbound = null, keepAwake = null, env = process.env, toolStatus = () => null, aside = null, platform = process.platform }) {
   // Aside 직원 실행의 세션 정리(CLI를 끝내도 Aside 세션은 계속 돌기 때문)
   const asideTools = aside || createAside({ env, spawnImpl });
   const officeDir = join(root, '.office');
@@ -735,6 +740,13 @@ export function createRunner({ root, onChange, judge = null, maxConcurrent = 4, 
             signal: controller.signal, onDecision: () => { spec.needsDecision = true; },
             progress: (monitor) => { run.monitor = monitor; changed(run); },
             deliveryState: (id, taskId) => {
+              // 접수표(아직 차례를 기다리는 후속 업무)면 순번 실행기에 묻는다. 실행이 생겼으면 그 실행으로 이어서 본다
+              if (followUp && String(id).startsWith(TICKET)) {
+                const ticket = followUp.state(String(id).slice(TICKET.length));
+                if (!ticket) return null;
+                if (!ticket.runId) return ticket;
+                id = ticket.runId; taskId = taskId || ticket.task;
+              }
               const original = runs.find((r) => r.id === id);
               const conversation = original?.rootId || id;
               const previous = runs.filter((r) => !r.phase && (r.id === id || r.rootId === conversation || taskId && r.task === taskId)).at(-1);
@@ -747,8 +759,15 @@ export function createRunner({ root, onChange, judge = null, maxConcurrent = 4, 
                 if (['failed', 'stopped'].includes(previous.status)) return reply(previous.id, { prompt: '이어서 재개' });
                 return publicRun(previous);
               }
-              return start({ prompt, continuous: false, monitorId: run.rootId, deliveryKey: key,
-                display: `지속 감시 새 자료 보고: ${path.split('/').at(-1)}` });
+              const request = { prompt, continuous: false, monitorId: run.rootId, deliveryKey: key, display: `지속 감시 새 자료 보고: ${path.split('/').at(-1)}` };
+              // 같은 자료 키로 이미 접수돼 차례를 기다리는 건이 있으면 새로 만들지 않는다(자료 키당 후속 업무 1건)
+              if (followUp) {
+                const waiting = followUp.find(run.rootId, key);
+                if (waiting) return { id: TICKET + waiting, task: null };
+                const ticket = followUp.start(request);
+                if (ticket) return { id: TICKET + ticket.id, task: null };
+              }
+              return start(request);
             } });
         } else text = await orchestrate({ root, run, prompt: spec.input, execute, signal: controller.signal, intent: spec.intent || null, recipe: spec.recipe || null, judge,
           maxParallel: maxConcurrent, resume: spec.resumeOrchestration, onDecision: () => { spec.needsDecision = true; }, outbound, notes: entry.notes, engineOf, platform });
@@ -929,8 +948,8 @@ export function createRunner({ root, onChange, judge = null, maxConcurrent = 4, 
       try {
         const prompt = run.orchestration ? RESUME_PROMPT
           : `${RESUME_PROMPT}: 일시정지 전까지 작업한 내용과 저장 위치의 파일을 확인하고 남은 작업을 끝내세요.`;
-        const next = reply(run.id, { prompt, display: RESUME_PROMPT });
-        resumed.push({ id: next.id, from: run.id, task: run.task, request: run.request });
+        const next = (replyVia || reply)(run.id, { prompt, display: RESUME_PROMPT });
+        resumed.push({ id: next.id ?? null, from: run.id, task: run.task, request: run.request, ...(next.queued ? { queued: true } : {}) });
       } catch (err) {
         skipped.push({ id: run.id, request: run.request, reason: err.message });
       }

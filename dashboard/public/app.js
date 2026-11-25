@@ -2124,6 +2124,9 @@ export function chiefResultMessage(result) {
   if (result.scheduled) return `업무를 예약했어요: ${scheduleLabel(result.schedule)}. 상단 ‘예약’에서 관리할 수 있습니다.`;
   if (result.pauseRequested) {
     const n = result.paused?.length || 0;
+    // 차례를 기다리던 접수 건도 함께 멈춘다(2.0 순번 실행)
+    const w = result.pausedWaiting?.length || 0;
+    if (w) return `진행 중이던 업무 ${n}건과 차례를 기다리던 업무 ${w}건을 일시정지했어요. 다음에 "이어서 해줘"라고 쓰면 원래 순서대로 다시 시작합니다.`;
     return n ? `진행 중이던 업무 ${n}건을 일시정지하고 업무 폴더마다 정리 노트(pause-note.md)를 남겼어요. 서버를 꺼도 되고, 다음에 "이어서 해줘"라고 쓰면 다시 시작합니다.`
       : '지금 진행 중인 업무가 없어 일시정지할 것이 없어요.';
   }
@@ -2133,6 +2136,9 @@ export function chiefResultMessage(result) {
   if (result.resumeRequested) {
     const n = result.resumed?.length || 0;
     const skipped = result.skipped?.length ? ` 이어가지 못한 ${result.skipped.length}건: ${result.skipped.map((s) => s.reason).join(' / ')}` : '';
+    const w = result.resumedWaiting?.length || 0;
+    const q = result.resumed?.filter((r) => r.queued).length || 0;
+    if (w || q) return `일시정지·중단됐던 업무 ${n + w}건을 다시 접수했어요. 원래 순서대로 한 건씩 이어서 진행합니다. 완료한 단계는 건너뜁니다.${skipped}`;
     return (n ? `일시정지·중단됐던 업무 ${n}건을 이어서 시작했어요. 완료한 단계는 건너뜁니다.` : '이어서 할 일시정지 업무가 없어요.') + skipped;
   }
   // 앞선 업무가 진행 중이면 접수만 하고 순번대로 시작한다(2.0 순번 실행)

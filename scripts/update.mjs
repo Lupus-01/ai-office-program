@@ -11,7 +11,7 @@ import { insideOfficeRun, readDashboardAccess } from '../lib/dashboard-access.mj
 import { programRoot, workspaceRoot } from '../lib/paths.mjs';
 import { runningServer } from '../lib/server-lock.mjs';
 import { sharedOrgStatus } from '../lib/shared-org.mjs';
-import { gitRunner, updateProgram } from '../lib/updates.mjs';
+import { gitRunner, updateProgram, waitingItems } from '../lib/updates.mjs';
 import { createClient } from './office-ask.mjs';
 
 const ACTIVE = new Set(['running', 'queued']);
@@ -36,8 +36,13 @@ async function busyRuns(root) {
   if (!runningServer(root)) return 0;
   const access = readDashboardAccess(root);
   if (!access) return 0;
-  const state = await createClient(access).state();
-  return (state.runs || []).filter((r) => !r.phase && r.target !== 'review' && !r.continuous && !r.monitorId && ACTIVE.has(r.status)).length;
+  const client = createClient(access);
+  const state = await client.state();
+  const running = (state.runs || []).filter((r) => !r.phase && r.target !== 'review' && !r.continuous && !r.monitorId && ACTIVE.has(r.status)).length;
+  // 접수돼 차례를 기다리는 업무도 센다(서버를 끄면 그 사이 순번이 멈춘다). 예전 서버에는 이 조회가 없다
+  let waiting = 0;
+  try { waiting = waitingItems((await client.batches()).batches); } catch { waiting = 0; }
+  return running + waiting;
 }
 
 // 지난번 설치가 끝나지 않았거나(npm ci는 시작할 때 node_modules를 지운다) lock 파일보다 오래됐는가

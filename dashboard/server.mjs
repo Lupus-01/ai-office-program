@@ -527,9 +527,25 @@ export async function startServer({
   // 지시·답장 의도 판별(짧은 AI 호출). 로그인된 도구가 없으면 규칙 판별로 대신한다
   const judge = demo ? null : createJudge({ env, engine: () => tools.claude?.loggedIn === true ? 'claude' : tools.codex?.loggedIn === true ? 'codex' : null });
   let sequenceSoon = () => {};
-  const runner = demo ? null : createRunner({ root, env, judge, toolStatus: async () => { await toolProbe; return tools; }, onChange: () => { scheduleBroadcast(); sequenceSoon(); }, outbound: browserWork, keepAwake: createKeepAwake(), aside });
+  // 순번 실행기 연결(실행기보다 뒤에 만들어지므로 부를 때 찾는다)
+  // 감시가 만든 후속 업무: 자료 키당 한 건만 접수하고 차례에 시작한다. 감시 부모 실행은 업무 자리를 차지하지 않는다
+  const followUp = {
+    find: (monitorId, key) => sequencer.findOrigin((o) => o.monitorId === monitorId && o.deliveryKey === key),
+    start: (request) => { const t = sequencer.enqueue(request, { source: 'monitor', title: request.display, origin: { monitorId: request.monitorId, deliveryKey: request.deliveryKey } }); return t ? { id: t.item } : null; },
+    state: (itemId) => sequencer.ticket(itemId),
+  };
+  // "이어서 해줘" 일괄 재개도 순번을 따른다: 접수된 건의 대화면 순번 실행기가 바로 잇거나 재개를 예약한다
+  const replyVia = (runId, body) => {
+    const origin = runner.list().find((r) => r.id === runId);
+    const sequenced = origin ? sequencer.reply(origin.rootId || origin.id, runId, body) : null;
+    if (sequenced?.queued) return { queued: true };
+    return sequenced?.run || runner.reply(runId, body);
+  };
+  const runner = demo ? null : createRunner({ root, env, judge, followUp, replyVia, toolStatus: async () => { await toolProbe; return tools; }, onChange: () => { scheduleBroadcast(); sequenceSoon(); }, outbound: browserWork, keepAwake: createKeepAwake(), aside });
   const schedules = demo ? null : createSchedules({ root, now: scheduleNow, runs: () => runner.list(),
-    start: (request) => runner.start(request), onChange: () => scheduleBroadcast() });
+    // 예약 회차는 회차당 한 번 접수하고 순번을 따른다(예약 시각과 실제 시작 시각이 다를 수 있다). 접수하지 못하면 예전처럼 바로 시작한다
+    start: (request) => sequencer.enqueue(request, { source: 'schedule' }) || runner.start(request),
+    ticket: (itemId) => sequencer.ticket(itemId), onChange: () => scheduleBroadcast() });
 
   // 묶음 접수 저장소(2.0): 저장·조회만 한다
   const batches = demo ? null : createBatches({ root, now: scheduleNow, ...(batchWrite ? { write: batchWrite } : {}) });
@@ -870,14 +886,18 @@ export async function startServer({
     const intent = await judgeCommand(prompt, { judge, now: scheduleNow(), staff: quickCandidates(loadOrg(root)), active: runner.activeOrchestrations(), recipes: recipeChoices(root) });
     // "하던 작업 멈추고 정리해 둬"/"이어서 해줘"는 새 업무가 아니라 일시정지·일괄 재개다
     if (intent.kind === 'pause') {
+      // 차례를 기다리던 건을 먼저 멈춘다(진행 중인 건이 멈춘 자리에 다음 건이 시작되지 않게)
+      const waiting = sequencer.pauseWaiting();
       const result = runner.pause();
       scheduleBroadcast();
-      return { pauseRequested: true, ...result };
+      return { pauseRequested: true, ...result, ...(waiting.length ? { pausedWaiting: waiting } : {}) };
     }
     if (intent.kind === 'resume') {
+      // 실행하다 멈춘 건을 먼저 잇고(원래 순번이 앞선다), 시작 전에 멈춘 건은 대기로 되돌린다
       const result = runner.resumeAll();
+      const waiting = sequencer.resumePaused();
       scheduleBroadcast();
-      return { resumeRequested: true, ...result };
+      return { resumeRequested: true, ...result, ...(waiting.length ? { resumedWaiting: waiting } : {}) };
     }
     // 진행 중인 업무에 덧붙이는 말은 새 업무를 만들지 않고 그 업무에 전달한다. 그새 끝났으면 새 업무로 처리한다
     if (intent.kind === 'follow_up' && runner.addNote(intent.followUpRun, prompt)) {
@@ -948,6 +968,8 @@ export async function startServer({
   // 순번 실행기가 차례가 온 건을 시작할 때 부른다. 의도 판별은 여기서 한 번만 하고 결과를 건에 남긴다(재시도·재시작 때 다시 묻지 않는다).
   // 묶음의 건은 항상 유한한 새 업무다. 예약·상시 감시·일시정지 같은 지시는 지시창에서 한다
   async function startBatchItem(item, batch) {
+    // 예약 회차·감시 후속 업무: 접수할 때 정해 둔 인자 그대로 시작한다(예전에도 판별 없이 시작하던 실행이다)
+    if (item.start) { const run = runner.start({ ...item.start, prompt: item.prompt }); scheduleBroadcast(); return { run }; }
     const prompt = itemPrompt(item, batch);
     await toolProbe;
     let intent = item.intent || null;

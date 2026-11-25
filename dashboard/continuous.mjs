@@ -90,6 +90,8 @@ export async function runContinuous({ root, run, prompt, options, execute, dispa
       if (!flush && state.batches.some((b) => b.runId && deliveryState(b.runId)?.needsReply)) return;
       for (const batch of state.batches) {
         const previous = batch.runId && deliveryState(batch.runId, batch.task);
+        // 순번을 기다리다 시작한 후속 업무는 업무 id를 나중에 알게 된다
+        if (previous?.task && !batch.task) batch.task = previous.task;
         if (previous && ['failed', 'stopped'].includes(previous.status) && !previous.userStopped && previous.taskStatus !== 'done') {
           batch.runId = null; if (!state.pending.includes(batch.key)) state.pending.push(batch.key);
         }
