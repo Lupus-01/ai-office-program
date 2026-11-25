@@ -546,12 +546,12 @@ export async function startServer({
   const batchCalls = (batch) => ledger.callsFor({ roots: batch.items.map((i) => i.run), items: batch.items.map((i) => i.id) }).length;
   const batchBudgetLeft = (batch) => (batch.budget ? batch.budget.limitCalls - batchCalls(batch) - (reservedCalls.get(batch.id) || 0) : Infinity);
   const batchBudget = {
-    reserve(rootId) {
+    reserve(rootId, { force = false } = {}) {
       const itemId = sequencer.itemOfRun(rootId);
       const batch = itemId ? batches.get(itemId.replace(/-\d+$/, '')) : null;
       if (!batch?.budget) return () => {};
       const left = batchBudgetLeft(batch);
-      if (left <= 0) throw Object.assign(new Error(`묶음 예산을 모두 썼습니다(${batch.id}: AI 호출 ${batch.budget.limitCalls}회). 묶음 예산을 늘린 뒤 이 업무에 "이어서 재개"라고 답해 주세요.`), { budget: 'batch' });
+      if (left <= 0 && !force) throw Object.assign(new Error(`묶음 예산을 모두 썼습니다(${batch.id}: AI 호출 ${batch.budget.limitCalls}회). 묶음 예산을 늘린 뒤 이 업무에 "이어서 재개"라고 답해 주세요.`), { budget: 'batch' });
       reservedCalls.set(batch.id, (reservedCalls.get(batch.id) || 0) + 1);
       // 80%를 넘는 순간 한 번만 알린다
       if (!batch.budget.warned && left - 1 <= batch.budget.limitCalls * (1 - BUDGET_WARN_RATIO)) {
@@ -982,6 +982,11 @@ export async function startServer({
       if (typeof body.after !== 'string' || !/^\d{4}-\d{2}-\d{2}\/[A-Za-z0-9._-]{1,120}$/.test(body.after) || !tasks.some((t) => t.id === body.after)) throw new HttpError(400, '이어받을 앞 업무를 찾을 수 없습니다. 새 대화로 맡겨 주세요.');
       to = { ...(to || {}), after: body.after };
     }
+    // noteFor: 대화 화면에서 진행 중인 그 대화에 덧붙인 말. 판별에 맡기지 않고 그 실행에만 전한다(다른 업무에 붙지 않게)
+    if (body.noteFor !== undefined && body.noteFor !== null) {
+      if (typeof body.noteFor === 'string' && runner.addNote(body.noteFor, prompt)) { scheduleBroadcast(); return { followUp: true, id: body.noteFor }; }
+      throw new HttpError(409, '그 업무는 지금 진행 중이 아니라 덧붙일 수 없습니다. 화면을 확인한 뒤 다시 보내 주세요.');
+    }
     // 의도는 비서실장(AI)이 판별하고, 권한이 되는 판단은 대표 원문 근거가 있을 때만 쓴다(실패하면 규칙 판별)
     await toolProbe;
     // 접수 전 판별 호출도 원장에 남기고, 업무로 접수되면 그 건에 귀속한다
@@ -1003,7 +1008,7 @@ export async function startServer({
       return { resumeRequested: true, ...result, ...(waiting.length ? { resumedWaiting: waiting } : {}) };
     }
     // 진행 중인 업무에 덧붙이는 말은 새 업무를 만들지 않고 그 업무에 전달한다. 그새 끝났으면 새 업무로 처리한다
-    if (intent.kind === 'follow_up' && runner.addNote(intent.followUpRun, prompt)) {
+    if (intent.kind === 'follow_up' && !to && runner.addNote(intent.followUpRun, prompt)) {
       scheduleBroadcast();
       return { followUp: true, id: intent.followUpRun };
     }
@@ -1012,7 +1017,7 @@ export async function startServer({
       const requested = intent.source === 'ai' ? intent.schedule : await callRunner(() => scheduleRequest(prompt, scheduleNow()), '예약 시각을 확인해 주세요.');
       if (requested) {
         const defaults = loadSettings(root).chief;
-        const schedule = await callRunner(() => schedules.add({ prompt, ...requested, recipe: intent.recipe || '',
+        const schedule = await callRunner(() => schedules.add({ prompt: to ? itemPrompt({ prompt, ...to, attachments: [] }, { items: [] }) : prompt, ...requested, recipe: intent.recipe || '',
           chief: { engine: body.engine || defaults.engine, model: model || defaults.model, effort: body.effort || defaults.effort } }), '예약을 저장하지 못했습니다.');
         return { scheduled: true, schedule };
       }
@@ -1035,7 +1040,7 @@ export async function startServer({
       scheduleBroadcast();
       return result.run || result;
     }
-    const run = await callRunner(() => runner.start({ prompt, model, engine: body.engine || null, effort: body.effort || null, continuous, intent: runIntent }), '작업을 시작하지 못했습니다.');
+    const run = await callRunner(() => runner.start({ prompt: to ? itemPrompt({ prompt, ...to, attachments: [] }, { items: [] }) : prompt, ...(to ? { display: prompt } : {}), model, engine: body.engine || null, effort: body.effort || null, continuous, intent: runIntent }), '작업을 시작하지 못했습니다.');
     scheduleBroadcast();
     return run;
   }
@@ -1224,8 +1229,15 @@ export async function startServer({
     writePrivate(join(officePath, 'sessions.json'), sessions);
     // 활성 프로세스도 쓰는 이벤트 파일은 덮어쓰지 않고 표시 기준 시각을 저장한다.
     writePrivate(join(officePath, 'history.json'), { clearedAt: now });
+    let removedBatches = 0;
+    for (const batch of batches?.list() || []) {
+      if (!batch.items.every((item) => ['done', 'canceled', 'failed', 'stopped'].includes(item.status))) continue;
+      // 실행 기록이 아직 남아 있는 건(답을 기다리는 대화 등)이 있으면 남긴다
+      if (batch.items.some((item) => item.run && runner.list().some((run) => (run.rootId || run.id) === item.run))) continue;
+      try { if (batches.remove(batch.id)) removedBatches++; } catch (error) { warn('끝난 접수 묶음을 지우지 못했습니다', error); }
+    }
     loadTasks(); scheduleBroadcast();
-    return { ok: true, removedRuns: cleared.runIds.length, removedTasks: cleared.taskIds.length, keptWaiting: waiting };
+    return { ok: true, removedRuns: cleared.runIds.length, removedTasks: cleared.taskIds.length, keptWaiting: waiting, removedBatches };
   }
 
   // 그 업무에 연결된 세션(.office/sessions.json: 세션 → 업무)
@@ -1752,6 +1764,7 @@ export async function startServer({
     // 두 기기가 동시에 결정해도 먼저 온 하나만 반영되고 나머지는 409와 최신 상태를 받는다
     if (resource === 'reconcile' && method === 'POST' && parts.length === 3) {
       if (demo) throw new HttpError(409, '데모 모드에서는 결정을 기록할 수 없습니다.');
+      if (body.decision !== 'hold') { const live = reconcile.get(id); if (live && reconcileView(live).busy) throw new HttpError(409, '이 발송의 업무가 아직 진행 중입니다. 끝난 뒤 결과를 확인하고 결정해 주세요.'); }
       let entry;
       try { entry = reconcile.decide(id, { decision: body.decision, basis: body.basis, attempt: Number.isInteger(body.attempt) ? body.attempt : null, by: remote ? 'remote' : 'local' }); }
       catch (error) {

@@ -673,7 +673,7 @@ export function createRunner({ root, onChange, judge = null, followUp = null, re
     const execute = async ({ agentId = null, prompt, phase, readOnly = false, deadlineAt = null, browser = null, model = null, effort = null }) => {
       controller.signal.throwIfAborted();
       // 묶음 예산: 기다림(await) 없이 바로 잔량을 잡는다. 동시에 들어온 호출이 남은 한 자리를 함께 쓰지 못한다
-      const release = budget ? budget.reserve(run.rootId) : null;
+      const release = budget ? budget.reserve(run.rootId, { force: phase === 'publish' }) : null;
       try { return await executeReserved({ agentId, prompt, phase, readOnly, deadlineAt, browser, model, effort }, release); }
       catch (error) { release?.(); throw error; }
     };

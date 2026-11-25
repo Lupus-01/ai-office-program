@@ -117,7 +117,8 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
   // 호출을 시작하기 전에 잔량을 먼저 깎는다(선점). 한도를 다 쓰면 새 AI 호출을 시작하지 않는다 —
   // 병렬 단계가 남은 한 자리를 함께 쓰지 못한다. 묶음 예산은 실행기(runAI)가 같은 방식으로 따로 막는다
   const execute = (args) => {
-    if (state.budget.calls >= state.budget.limitCalls) throw Object.assign(new Error('업무 예산의 AI 호출 수를 모두 썼습니다.'), { budget: 'task' });
+    // 외부 작업(발송·게시) 도중에는 끊지 않는다: 여러 통 가운데 일부만 나가거나, 시작도 안 한 발송이 "결과 불확실"로 남는 것을 막는다. 호출 수는 그대로 센다
+    if (args?.phase !== 'publish' && state.budget.calls >= state.budget.limitCalls) throw Object.assign(new Error('업무 예산의 AI 호출 수를 모두 썼습니다.'), { budget: 'task' });
     state.budget.calls++;
     return runAI(args);
   };
@@ -524,6 +525,7 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
         break;
       } catch (err) {
         checkStop();
+        if (err.budget) throw err; // 예산 소진은 계획 오류가 아니다(예산 질문으로 간다)
         error = `계획 검사가 실패했습니다. 다음 오류를 고쳐 다시 응답하세요:\n${err.message}`;
         if (attempt === 1) return blocked(error);
       }
@@ -905,7 +907,7 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
           throw new Error('진행할 수 있는 계획 단계가 없습니다.');
         }
         // 남은 호출 수보다 많은 단계를 한꺼번에 시작하지 않는다(잔여 1회면 한 단계만)
-        const results = await Promise.all(ready.slice(0, Math.max(1, Math.min(maxParallel, state.budget.limitCalls - state.budget.calls))).map((s) => executeStage(s, state.rejectionReasons?.[s.id] || state.rejectionReason || '')));
+        const results = await Promise.all(ready.slice(0, Math.max(1, Math.min(maxParallel, Math.floor((state.budget.limitCalls - state.budget.calls) / 2)))).map((s) => executeStage(s, state.rejectionReasons?.[s.id] || state.rejectionReason || '')));
         for (const { stage, result } of results) {
           if (result.status === 'done') continue;
           // 질문/이관/분담은 완료 이벤트를 만들지 않는다.
@@ -917,6 +919,7 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
             else waiting.set(stage.id, { phase: 'stage', stage: stage.id, question: result.question?.trim() || '진행에 필요한 결정을 알려 주세요.' });
           } catch (err) {
             checkStop();
+            if (err.budget) throw err; // 예산 소진은 예산 질문으로 간다
             waiting.set(stage.id, { phase: 'plan', stage: stage.id, question: err.message });
           }
         }
@@ -936,6 +939,7 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
           // 재작업 중에는 고칠 내용이 이미 정해져 있고 최종 검토가 다시 보므로 점검을 건너뛴다
           if (!state.rejects) try { decision = await progress(finished); } catch (err) {
             checkStop();
+            if (err.budget) throw err;
             note({ skipped: redactContext(err.message).slice(0, 300) });
           }
           if (decision?.action === 'question' && decision.question?.trim()) return ask([{ phase: 'progress', question: decision.question }]);

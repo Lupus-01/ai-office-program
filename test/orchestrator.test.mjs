@@ -1441,3 +1441,26 @@ test('리허설 6: 같은 외부 문안 형식 오류가 고친 뒤에도 되풀
   assert.ok(f.calls.length < 15, `예산(기본 40회)을 다 쓰기 전에 멈춘다: ${f.calls.length}회`);
   assert.equal(loadTasks(f.root)[0].status, 'blocked');
 });
+
+test('교차검증: 업무 예산이 바닥나도 외부 작업(게시) 도중에는 끊지 않고, 끝난 뒤의 호출 수는 그대로 센다', async (t) => {
+  // 같은 업무를 두 번 돌린다: 처음에는 넉넉한 예산으로 게시 직전까지 쓴 호출 수를 재고, 다음에는 그 수를 한도로 둔다(게시 호출이 한도를 넘는 첫 호출이 된다)
+  const once = async (budget) => {
+    const seen = { at: null, published: 0, error: null };
+    const f = fixture(t, { publication: true,
+      outbound: { connections: () => [{ id: 'naver-1', label: '네이버', provider: 'naver', status: 'connected' }],
+        async deliver({ execute }) { seen.at = f.calls.length; try { await execute({ permissionsFile: join(f.root, 'publish-permissions.json') }); } catch (error) { seen.error = error; throw error; } seen.published++; return { status: 'confirmed', resultUrl: 'https://blog.naver.com/fixture/1' }; } } });
+    if (budget) saveSettings(f.root, { budget: { calls: budget, minutes: 60 } });
+    const run = f.runner.start({ prompt: '자료를 정리하고 블로그에 게시해 줘. 끝까지 자동으로 진행해.', schedule: { id: 'daily-1', slot: '2026-11-25' } });
+    await f.final(run);
+    return { f, run, seen };
+  };
+  const free = await once(null);
+  assert.equal(free.seen.published, 1, `넉넉한 예산에서는 게시된다: ${free.f.runner.result(free.run.id).text.slice(0, 300)}`);
+  assert.ok(free.seen.at >= 5, `게시 전까지 쓴 호출 수: ${free.seen.at}`);
+  const tight = await once(free.seen.at);
+  assert.equal(tight.seen.error, null, `게시 호출이 예산 오류로 막히지 않는다: ${tight.seen.error?.message}`);
+  assert.equal(tight.seen.published, 1, `한도에 닿은 상태에서도 게시를 끝낸다: ${tight.f.runner.result(tight.run.id).text.slice(0, 300)}`);
+  assert.doesNotMatch(tight.f.runner.result(tight.run.id).text, /외부 작업을 이어가기 위한 확인이 필요합니다/);
+  const checkpoint = JSON.parse(readFileSync(join(tight.f.root, '.office', 'orchestrations', `${tight.run.rootId}.json`)));
+  assert.ok(checkpoint.budget.calls > free.seen.at, `게시 호출도 센다: ${checkpoint.budget.calls}`);
+});

@@ -127,8 +127,14 @@ export function createSequencer({ batches, startRun, replyRun, latestRun, taskSt
     if (!found) return null;
     sync();
     const item = find(found.item.id).item;
+    // 취소한 건은 답장·일괄 재개로 되살리지 않는다(순번 밖에서 다시 도는 것을 막는다)
+    if (item.status === S.canceled) throw fail(409, '취소한 업무입니다. 다시 하려면 새 업무로 맡겨 주세요.');
     if (item.status === S.waiting && item.pendingReply) {
-      if (item.pendingReply.body?.prompt !== body.prompt) save(item.id, (i) => { i.pendingReply = { runId, body }; }, { type: 'resume-queued', updated: true });
+      // 차례를 기다리는 동안 답장을 더 보내면 앞의 답장 뒤에 이어 붙인다(같은 답장을 다시 보낸 것은 한 번만)
+      const before = String(item.pendingReply.body?.prompt || '');
+      if (before !== body.prompt && !before.split('\n\n').includes(body.prompt)) {
+        save(item.id, (i) => { i.pendingReply = { runId: i.pendingReply.runId, body: { ...i.pendingReply.body, ...body, prompt: before ? `${before}\n\n${body.prompt}` : body.prompt } }; }, { type: 'resume-queued', updated: true });
+      }
       return { queued: true, item: item.id };
     }
     if (!RESUMABLE.has(item.status)) return null; // 진행 중(실행기가 409로 거부)·완료(완료된 업무의 후속 대화)는 예전 길

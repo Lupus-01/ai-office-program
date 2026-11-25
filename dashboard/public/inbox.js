@@ -173,7 +173,7 @@ export function createInbox(deps) {
   const ui = { page: 'chat', open: store('ai-office-open') || null, report: null, lead: null, guide: null, guideCtx: 'new', guideQ: store('ai-office-guide-q') || '', guides: { list: [], teams: [], coverage: null, problems: [], exists: false, loaded: false, at: 0 }, teamGuide: null,
     pane: 'list', filter: store('ai-office-filter') === 'needs' ? 'needs' : 'all',
     details: new Map(), results: new Map(), reports: new Map(), files: new Map(), reconcile: { items: [], loaded: false, count: -1 },
-    queue: [], attached: [], submitKey: newSubmitKey(), pending: [], notices: [], sending: false, stick: true, ctx: undefined, seen: null, listTop: 0 };
+    queue: [], attached: [], attachedBy: new Map(), typing: null, submitKey: newSubmitKey(), pending: [], notices: [], sending: false, stick: true, ctx: undefined, seen: null, listTop: 0 };
   try { const saved = JSON.parse(store('ai-office-composer') || 'null'); if (saved && Array.isArray(saved.queue)) { ui.queue = saved.queue; ui.submitKey = saved.submitKey || ui.submitKey; } } catch { /* 새로 시작 */ }
   ui.leadsFolded = store('ai-office-leads-folded') === '1';
   try { const seen = JSON.parse(store('ai-office-seen') || 'null'); if (seen && typeof seen === 'object') ui.seen = seen; } catch { /* 새로 시작 */ }
@@ -206,6 +206,7 @@ export function createInbox(deps) {
   const leadOf = (entry) => (entry?.item?.to ? findLead(entry.item.to) : null);
   const leadEntries = (id) => entries().filter((e) => e.item?.to === id);
   const initial = (lead) => [...lead.name][0] || '팀';
+  const leadShown = (id) => { const mine = leadEntries(id), tail = new Set(mine.slice(-15)); return mine.filter((e) => tail.has(e) || ATTENTION.includes(e.status)); };
   const entries = () => streamEntries(state());
   const findEntry = (id) => entries().find((e) => e.id === id) || null;
   const convRuns = (entry) => (entry?.run ? state().runs.filter((r) => !r.phase && r.target !== 'review' && rootOf(r) === entry.run) : []);
@@ -222,7 +223,7 @@ export function createInbox(deps) {
   }
   function syncSeen(all) {
     // 처음 쓰는 브라우저에서는 이미 있던 대화를 모두 읽은 것으로 둔다
-    if (!ui.seen) { if (!state().runs) return; ui.seen = Object.fromEntries(all.map((e) => [e.id, sigOf(e)])); store('ai-office-seen', JSON.stringify(ui.seen)); return; }
+    if (!ui.seen) { if (!all.length) return; ui.seen = Object.fromEntries(all.map((e) => [e.id, sigOf(e)])); store('ai-office-seen', JSON.stringify(ui.seen)); return; }
     const ids = new Set(all.map((e) => e.id));
     let dropped = false;
     for (const id of Object.keys(ui.seen)) if (all.length && !ids.has(id)) { delete ui.seen[id]; dropped = true; }
@@ -239,9 +240,10 @@ export function createInbox(deps) {
     const general = (list) => list.filter((e) => !teamIds.has(e.item?.to));
     const shown = general(ui.filter === 'needs' ? attention : all).slice().reverse();
     const hereLead = v === 'inbox' && ui.page === 'lead' ? ui.lead : null;
+    const viewing = !narrow() || ui.pane === 'main'; // 지금 본문을 보고 있는가(좁은 화면의 목록에서는 아니다)
     const leadRow = (l) => {
       const mine = all.filter((e) => e.item?.to === l.id), needs = mine.filter((e) => ATTENTION.includes(e.status)).length, busy = mine.some((e) => e.status === 'running' || e.status === 'waiting');
-      const unread = l.id !== hereLead && mine.some((e) => isUnread(e, sigOf(e), ui.seen));
+      const unread = (l.id !== hereLead || !viewing) && mine.some((e) => isUnread(e, sigOf(e), ui.seen));
       if (ui.filter === 'needs' && !needs) return '';
       return `<button type="button" class="sb-conv sb-lead${unread ? ' is-unread' : ''}" data-lead="${esc(l.id)}" data-key="lead-${esc(l.id)}" aria-current="${l.id === hereLead ? 'page' : 'false'}"><span class="sb-lead-av" aria-hidden="true">${esc(initial(l))}</span>
         <span class="sb-lead-main"><span class="sb-conv-title">${esc(l.label)}</span><span class="sb-conv-sub">${needs ? `<span class="mark mark-needs">답변 필요 ${needs}</span>` : busy ? '<span class="mark mark-running">진행 중</span>' : `<span class="sb-lead-sum">${esc(l.summary || '말을 걸어 일을 맡기세요')}</span>`}${unread ? '<span class="sb-new-dot">새 소식</span>' : ''}</span></span></button>`;
@@ -252,7 +254,7 @@ export function createInbox(deps) {
     const here = v === 'inbox' && ui.page === 'chat' ? ui.open : null;
     const rec = s.reconcilePending || 0;
     const row = (e) => {
-      const unread = e.id !== here && isUnread(e, sigOf(e), ui.seen);
+      const unread = (e.id !== here || !viewing) && isUnread(e, sigOf(e), ui.seen);
       return `<button type="button" class="sb-conv${unread ? ' is-unread' : ''}" data-open-entry="${esc(e.id)}" data-key="conv-${esc(e.id)}" aria-current="${e.id === here ? 'page' : 'false'}">
         <span class="sb-conv-title">${esc(e.title)}</span>
         <span class="sb-conv-sub"><span class="mark mark-${esc(e.status)}">${esc(ITEM_LABEL[e.status] || e.status)}</span><time>${esc(time(e.at))}</time>${e.item?.via === 'terminal' ? '<span class="sb-via" title="터미널의 Claude·Codex에게 말해서 맡긴 업무">터미널에서 맡김</span>' : ''}${unread ? '<span class="sb-new-dot">새 소식</span>' : ''}</span></button>`;
@@ -300,7 +302,7 @@ export function createInbox(deps) {
     setHTML($('chActions'), actions);
     const s = state();
     const ready = s.tools?.claude?.loggedIn === true || s.tools?.codex?.loggedIn === true;
-    const probing = !s.tools || s.tools?.claude?.installed === null || s.tools?.codex?.installed === null;
+    const probing = !s.tools?.claude || !s.tools?.codex || s.tools.claude.installed === null || s.tools.codex.installed === null;
     const noTeam = Array.isArray(s.departments) && s.departments.length === 0 && !s.demo;
     const notice = !['chat', 'lead'].includes(ui.page) || s.demo || probing ? '' : !ready ? '로그인된 AI 도구가 없어 업무를 시작할 수 없습니다. 터미널에서 Claude 또는 Codex에 로그인한 뒤 서버를 다시 켜 주세요.'
       : noTeam ? '일을 맡을 직원 구성이 아직 없습니다. <button type="button" class="link" data-view="team" data-key="notice-team">설정 › 직원 구성</button>에서 먼저 추가해 주세요.' : '';
@@ -322,9 +324,13 @@ export function createInbox(deps) {
     for (const run of convRuns(entry)) {
       if (BUSY.includes(run.status)) continue;
       const key = `${run.id}:${run.status}:${run.endedAt || ''}`;
-      if (ui.results.get(run.id)?.key === key) continue;
-      try { const res = await authedGet(`/api/runs/${encodeURIComponent(run.id)}/result`); ui.results.set(run.id, { key, text: res.ok ? (await res.text()).trim() : '' }); loaded = true; }
-      catch { ui.results.set(run.id, { key, text: '' }); }
+      const cached = ui.results.get(run.id);
+      if (cached?.key === key || cached?.retryAt > Date.now()) continue;
+      try {
+        const res = await authedGet(`/api/runs/${encodeURIComponent(run.id)}/result`);
+        if (!res.ok && res.status !== 404) throw new Error(String(res.status));
+        ui.results.set(run.id, { key, text: res.ok ? (await res.text()).trim() : '' }); loaded = true;
+      } catch { ui.results.set(run.id, { key: null, text: cached?.text || '', retryAt: Date.now() + 10000 }); }
     }
     return loaded;
   }
@@ -333,12 +339,14 @@ export function createInbox(deps) {
     const latest = convRuns(entry).at(-1), task = latest?.task || entry.task;
     if (entry.status !== 'done' || !task) return false;
     const key = `${latest?.id || ''}:${latest?.endedAt || ''}`;
-    if (ui.files.get(task)?.key === key) return false;
+    const had = ui.files.get(task);
+    if (had?.key === key || had?.retryAt > Date.now()) return false;
     try {
       const res = await authedGet(`/api/outputs/${encodeURIComponent(task)}/files`, 'application/json');
-      const data = res.ok ? await res.json() : null;
+      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
       ui.files.set(task, { key, list: (data?.final?.files || []).filter((f) => !(f.name.startsWith('비서실장-보고') && f.name.endsWith('.md'))) });
-    } catch { ui.files.set(task, { key, list: [] }); }
+    } catch { ui.files.set(task, { key: null, list: had?.list || [], retryAt: Date.now() + 10000 }); }
     return true;
   }
   const fileCards = (task) => {
@@ -353,7 +361,7 @@ export function createInbox(deps) {
       ${m.deliver ? fileCards(convRuns(entry).at(-1)?.task || entry.task) : ''}</div></article>`;
   const pendingHTML = (ctx) => ui.pending.filter((p) => p.ctx === ctx).map((p) => `<article class="wm wm-me is-pending">${avatar('me')}<div class="wm-main"><header class="wm-head"><strong>나</strong><time>${esc(time(p.at))}</time></header><div class="wm-text">${esc(p.text)}</div>
       <p class="wm-sending${p.error ? ' is-error' : ''}" role="status">${p.error ? esc(p.error) : `<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> ${ctx === 'new' ? 'AI 비서가 확인하고 있습니다…' : ctx.startsWith('lead:') ? '전달하고 있습니다…' : '보내는 중…'}`}</p></div></article>`).join('');
-  const noticeHTML = (ctx) => ui.notices.filter((n) => n.ctx === ctx).map((n) => `<article class="wm wm-ai">${avatar('ai')}<div class="wm-main"><header class="wm-head"><strong>${AI_NAME}</strong><time>${esc(time(n.at))}</time></header><div class="wm-text">${esc(n.text)}</div></div></article>`).join('');
+  const noticeHTML = (ctx) => ui.notices.filter((n) => n.ctx === ctx && Date.now() - Date.parse(n.at) < 600000).map((n) => `<article class="wm wm-ai">${avatar('ai')}<div class="wm-main"><header class="wm-head"><strong>${AI_NAME}</strong><time>${esc(time(n.at))}</time></header><div class="wm-text">${esc(n.text)}</div></div></article>`).join('');
   const EVENT_LABEL = { accepted: '접수', started: '시작', resumed: '재개', needs: '답변 필요로 보류', stopped: '중지', paused: '일시정지', failed: '실패', done: '완료', canceled: '취소', 'resume-queued': '답글 접수(재개 예약)', unpaused: '일시정지 해제', requeued: '대기로 복귀', 'wait-alert': '대기 알림' };
   function chatHTML(entry, detail) {
     const full = detail?.items?.find((i) => i.id === entry.id) || null;
@@ -373,7 +381,7 @@ export function createInbox(deps) {
         ${latest ? `<button type="button" class="btn btn-sm btn-ghost" data-thread="${esc(latest.id)}" data-key="cv-log">실행 기록 보기</button>` : ''}</details>` : ''}
     </div>`;
   }
-  const newChatHTML = () => (ui.pending.some((p) => p.ctx === 'new') || ui.notices.some((n) => n.ctx === 'new')
+  const newChatHTML = () => (ui.pending.some((p) => p.ctx === 'new') || ui.notices.some((n) => n.ctx === 'new' && Date.now() - Date.parse(n.at) < 600000)
     ? `<div class="cv">${noticeHTML('new')}${pendingHTML('new')}</div>`
     : `<div class="cv"><div class="ch-empty"><p class="ch-empty-title">어떤 일을 맡기시겠어요?</p><p>아래에 맡길 일을 적어 보내면 대화가 하나 생깁니다. 진행 상황과 완료 보고, 만든 파일을 그 대화에서 바로 받습니다.</p>
         <p class="ch-empty-sub">여러 건은 <em>＋ 업무 추가</em>로 담아 한 번에 보내면 순서대로 한 건씩 처리합니다.</p></div>${ui.guides.list.length ? guideListHTML() : ''}</div>`);
@@ -530,7 +538,7 @@ export function createInbox(deps) {
 
   // ── 팀장 방: 그 팀에 맡긴 업무가 한 대화로 이어진다 ──
   function leadHTML(lead) {
-    const mine = leadEntries(lead.id).slice(-15), ctx = `lead:${lead.id}`;
+    const mine = leadShown(lead.id), ctx = `lead:${lead.id}`;
     const results = Object.fromEntries([...ui.results].map(([id, r]) => [id, r.text]));
     const cards = ui.guides.list.filter((g) => g.dept?.id === lead.id);
     return `<div class="cv">
@@ -651,8 +659,8 @@ export function createInbox(deps) {
       if (!lead) return paint('<div class="cv"><p class="cv-line">이 팀을 찾지 못했습니다. 설정 › 직원 구성에서 확인해 주세요.</p></div>');
       loadGuides();
       paint(leadHTML(lead), true);
-      const mine = leadEntries(lead.id).slice(-15);
-      if (view() === 'inbox' && (!narrow() || ui.pane === 'main') && !document.hidden) mine.forEach(markSeen);
+      const mine = leadShown(lead.id);
+      if (view() === 'inbox' && (!narrow() || ui.pane === 'main') && !document.hidden) leadEntries(lead.id).forEach(markSeen);
       const loaded = (await Promise.all(mine.flatMap((e) => [loadDetail(e), loadResults(e), loadFiles(e)]))).some(Boolean);
       if (loaded && ui.page === 'lead' && ui.lead === lead.id) paint(leadHTML(lead), true);
       ui.stick = false;
@@ -686,6 +694,7 @@ export function createInbox(deps) {
         if (ask && latest && latest.canReply !== false) return { ctx: `lead:${lead.id}`, lead, entry: ask, latest, mode: 'reply', hint: '답하면 방금 그 업무로 이어서 진행합니다', placeholder: '답변을 적어 보내세요' };
         return { ctx: `lead:${lead.id}`, lead, entry: null, latest: null, mode: 'lead', hint: 'Enter로 보내기 · Shift+Enter로 줄바꿈', placeholder: `${lead.label}에게 맡길 일을 적어 보내세요 — 예: 오늘은 이 일부터 진행해 줘` };
       }
+      return { ctx: `lead:${ui.lead}`, lead: null, entry: null, latest: null, mode: 'off', hint: '이 팀을 찾지 못했습니다. 새 대화로 맡겨 주세요.' };
     }
     const entry = current(), latest = convRuns(entry).at(-1);
     return { ctx: entry?.id || 'new', lead: null, entry, latest, ...composeMode(entry, latest) };
@@ -696,8 +705,9 @@ export function createInbox(deps) {
     if (form.hidden) return;
     const mode = where(), ctx = mode.ctx, fresh = ['new', 'lead'].includes(mode.mode);
     if (ui.ctx !== ctx) {
-      if (ui.ctx !== undefined) store(`ai-office-draft-${ui.ctx}`, text.value);
+      if (ui.ctx !== undefined) { store(`ai-office-draft-${ui.ctx}`, text.value); ui.attachedBy.set(ui.ctx, ui.attached); }
       ui.ctx = ctx; text.value = store(`ai-office-draft-${ctx}`) || ''; autoGrow(text);
+      ui.attached = ui.attachedBy.get(ctx) || []; ui.typing = null;
     }
     form.dataset.mode = mode.mode;
     text.disabled = mode.mode === 'off'; text.placeholder = mode.mode === 'off' ? mode.hint : mode.placeholder || '';
@@ -735,9 +745,14 @@ export function createInbox(deps) {
   function landRun(result, ctx) {
     if (result?.followUp) { ui.notices.push({ ctx, at: new Date().toISOString(), text: '진행 중인 업무에 전달했습니다.' }); return; }
     const made = result?.id ? entries().find((e) => e.run === (result.rootId || result.id)) : result?.queued ? findEntry(result.item) : null;
-    if (made) { go({ page: 'chat', open: made.id }, { replace: true }); return; }
+    if (made) { if (ui.ctx === ctx) go({ page: 'chat', open: made.id }, { replace: true }); else toast('업무를 접수했어요. 대화 목록에서 볼 수 있습니다.'); return; }
     ui.notices.push({ ctx, at: new Date().toISOString(), text: resultMessage(result) });
   }
+  // 입력하는 사이 입력창의 뜻이 바뀌었으면(진행 중 → 답변 필요, 새 업무 → 답글 등) 그대로 보내지 않고 한 번 알린다
+  const FLIP = { reply: '그사이 이 업무가 답변을 기다리게 됐습니다. 지금 보내면 그 질문의 답으로 들어갑니다. 맞으면 한 번 더 보내 주세요.',
+    follow: '그사이 업무가 끝났습니다. 지금 보내면 이 결과를 이어받는 새 업무가 됩니다. 맞으면 한 번 더 보내 주세요.',
+    lead: '그사이 상태가 바뀌었습니다. 지금 보내면 이 팀에 새 업무로 맡깁니다. 맞으면 한 번 더 보내 주세요.' };
+  const stamp = (w) => ({ ctx: w.ctx, mode: w.mode, target: w.latest?.id || null });
   async function send(ev) {
     ev?.preventDefault();
     if (ui.sending) return;
@@ -745,6 +760,15 @@ export function createInbox(deps) {
     const text = $('composerText').value.trim();
     if (mode === 'off') return;
     if (!text && !(mode === 'new' && ui.queue.length)) { $('composerText').focus(); return; }
+    const typed = ui.typing, now = stamp({ ctx, mode, latest });
+    if (typed && typed.ctx === ctx && (typed.mode !== mode || typed.target !== now.target)) {
+      ui.typing = now; syncComposer();
+      toast(FLIP[mode] || '그사이 상태가 바뀌었습니다. 입력창 안내를 확인하고 한 번 더 보내 주세요.', { type: 'warn' });
+      return;
+    }
+    ui.typing = null;
+    ui.notices = ui.notices.filter((n) => n.ctx !== ctx);
+    const sentAt = Date.now();
     ui.sending = true; $('composerSend').disabled = true;
     const many = mode === 'new' && ui.queue.length > 0;
     const items = many ? [...ui.queue, ...(text ? [{ text, files: ui.attached, dep: false }] : [])] : [{ text, files: fresh ? ui.attached : [] }];
@@ -781,16 +805,31 @@ export function createInbox(deps) {
         // 끝난 업무에서 보낸 말은 그 결과를 이어받는 새 업무다. 팀장에게 맡겼던 업무면 같은 팀에 맡긴다
         // after: 이어받을 앞 업무. 서버가 건에 남기고 실행 지시문 뒤에 그 산출물 위치를 덧붙인다(대화에는 대표가 적은 말만 보인다)
         const body = mode === 'follow' ? { prompt: text, ...(latest?.task || entry?.task ? { after: latest?.task || entry.task } : {}), ...(leadOf(entry) ? { to: entry.item.to } : {}) }
-          : { prompt: withUploads(text, fresh ? sentFiles.map((f) => f.path) : []), ...(lead ? { to: lead.id } : {}) };
-        const result = await api('POST', '/api/runs', body);
+          : { prompt: withUploads(text, fresh ? sentFiles.map((f) => f.path) : []), ...(lead ? { to: lead.id } : {}), ...(mode === 'note' && latest ? { noteFor: latest.id } : {}) };
+        let result;
+        try { result = await api('POST', '/api/runs', body); }
+        catch (error) {
+          if (error.status || mode === 'note') throw error;
+          // 응답만 잃었을 수 있다. 방금 접수된 같은 업무가 있으면 다시 보내게 하지 않는다(두 번 접수 방지)
+          await refresh().catch(() => {});
+          const got = entries().find((e) => e.kind === 'item' && e.title.startsWith(text.split('\n')[0].slice(0, 60)) && Date.parse(e.at) >= sentAt - 3000);
+          if (!got) throw error;
+          result = got.run ? { id: got.run, rootId: got.run } : { queued: true, item: got.id };
+        }
         ui.pending = ui.pending.filter((p) => p !== pending);
         await refresh();
         if (!lead) landRun(result, ctx);
+        else if (result?.followUp) ui.notices.push({ ctx, at: new Date().toISOString(), text: '진행 중인 업무에 전달했습니다.' });
         else if (!result?.id && !result?.queued) ui.notices.push({ ctx, at: new Date().toISOString(), text: resultMessage(result) });
       }
     } catch (error) {
       pending.error = `보내지 못했어요: ${error.message}`;
-      if (!many && ui.ctx === ctx) { $('composerText').value = text; if (fresh) ui.attached = sentFiles; autoGrow($('composerText')); }
+      if (text) {
+        const back = (cur) => (String(cur || '').trim() ? `${text}\n${cur}` : text);
+        if (ui.ctx === ctx) { const box = $('composerText'); box.value = back(box.value); store(`ai-office-draft-${ctx}`, box.value); autoGrow(box); }
+        else store(`ai-office-draft-${ctx}`, back(store(`ai-office-draft-${ctx}`)));
+      }
+      if (fresh && sentFiles.length) { if (ui.ctx === ctx) ui.attached = [...sentFiles, ...ui.attached]; else ui.attachedBy.set(ctx, [...sentFiles, ...(ui.attachedBy.get(ctx) || [])]); }
       setTimeout(() => { ui.pending = ui.pending.filter((p) => p !== pending); render(); }, 8000);
     } finally { ui.sending = false; ui.stick = true; render(); if (!narrow()) $('composerText').focus(); }
   }
@@ -798,14 +837,16 @@ export function createInbox(deps) {
   // ── 이동 ──
   // 좁은 화면에서는 목록 → 대화를 한 화면씩 보여 주고, 브라우저 뒤로 가기로 목록에 돌아온다
   const snapshot = () => ({ aiOffice: true, page: ui.page, open: ui.open, report: ui.report, lead: ui.lead, guide: ui.guide, guideCtx: ui.guideCtx, teamGuide: ui.teamGuide, pane: ui.pane, depth: ui.depth || 0 });
-  function go(next, { replace = false, focus = false, push = false } = {}) {
+  function go(next, { focus = false, push = false } = {}) {
     if (ui.pane === 'list') ui.listTop = $('sidebar').querySelector('[data-scroll="list"]')?.scrollTop || 0;
     const wasMain = ui.pane === 'main' && history.state?.pane === 'main';
+    const from = `${ui.page}|${ui.open}|${ui.lead}`;
     Object.assign(ui, { report: null }, next, { pane: 'main' });
+    if (from !== `${ui.page}|${ui.open}|${ui.lead}`) ui.notices = ui.notices.filter((n) => n.ctx === (ui.page === 'lead' ? `lead:${ui.lead}` : ui.page === 'chat' ? ui.open : null));
     if (ui.page === 'chat') store('ai-office-open', ui.open || '');
     ui.stick = true;
     // depth: 목록 위에 쌓인 화면 수. ‹ 버튼은 이만큼 한 번에 되돌아가 목록에 닿는다
-    const pushing = push || !(replace || wasMain);
+    const pushing = push || !wasMain; // 목록 상태의 기록은 덮어쓰지 않는다(replace는 본문 위에서만 뜻이 있다)
     ui.depth = wasMain ? (ui.depth || 1) + (pushing ? 1 : 0) : 1;
     try { if (pushing) history.pushState(snapshot(), ''); else history.replaceState(snapshot(), ''); } catch { /* 기록을 쓸 수 없는 환경 */ }
     if (view() !== 'inbox') setView('inbox'); else render();
@@ -898,7 +939,8 @@ export function createInbox(deps) {
     $('composer').addEventListener('submit', send);
     // Enter로 보내고 Shift+Enter로 줄바꿈(한글 조합 중에는 보내지 않는다). 휴대폰 자판의 Enter는 줄바꿈으로 둔다
     text.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && ev.keyCode !== 229 && !window.matchMedia('(pointer: coarse)').matches) { ev.preventDefault(); send(); } });
-    text.addEventListener('input', () => { autoGrow(text); if (ui.ctx !== undefined) store(`ai-office-draft-${ui.ctx}`, text.value); if (ui.queue.length) syncComposer(); });
+    text.addEventListener('input', () => { autoGrow(text);
+      if (!text.value.trim()) ui.typing = null; else if (!ui.typing || ui.typing.ctx !== ui.ctx) { const w = where(); ui.typing = stamp(w); } if (ui.ctx !== undefined) store(`ai-office-draft-${ui.ctx}`, text.value); if (ui.queue.length) syncComposer(); });
     $('composerAdd').addEventListener('click', queueCurrent);
     $('composerAttach').addEventListener('click', () => { $('composerFile').value = ''; $('composerFile').click(); });
     $('composerFile').addEventListener('change', (ev) => attach([...ev.target.files]));
