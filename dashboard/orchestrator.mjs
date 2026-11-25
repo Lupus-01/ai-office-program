@@ -1092,18 +1092,26 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
           if (state.webDecision === 'declined' && needsConfirm({ publication })) { publications.push(`- ${publication.action === 'web' ? '웹사이트 작업' : `${publication.service} ${publication.action}`} ${publication.target}: 대표 결정으로 실행하지 않음`); continue; }
           if (!outbound) return ask([{ phase: 'plan', question: '외부 작업을 위해 계정 연결을 먼저 완료해 주세요.' }]);
           // 글·댓글을 연달아 올리면 계정 보호 조치를 부를 수 있어 간격을 둔다(대기 시간은 예산에 세지 않는다)
+          const engine = engineFor(publication.agent);
+          // notBefore: 이 시각 전에는 등록 버튼을 누르지 않는다(앞 글·댓글과의 간격). 0이면 제한 없음
+          let notBefore = 0;
           if (['post', 'comment'].includes(publication.action) && state.lastPostAt) {
             const gapMs = loadSettings(root).postGapSeconds * 1000 - (Date.now() - state.lastPostAt);
             if (gapMs > 0) {
-              emit('flow.notice', { summary: `계정 보호를 위해 다음 글·댓글까지 ${Math.ceil(gapMs / 1000)}초 기다립니다.` });
-              const started = Date.now();
-              try { await wait(gapMs, signal); } finally { loginWaitMs += Date.now() - started; }
-              checkStop();
+              // AI 없이 직접 넣는 카페 댓글(Aside)은 기다리는 동안 준비를 미리 한다: 올리는 시각 사이의 간격은 그대로이고 건당 걸리는 시간만 줄어든다.
+              // 그 밖의 글·댓글은 지금처럼 간격을 다 기다린 뒤 시작한다(직원이 언제 등록을 누를지 실행기가 정할 수 없다)
+              const overlap = engine === 'aside' && publication.action === 'comment' && publication.service === 'naver_cafe';
+              emit('flow.notice', { summary: overlap ? `계정 보호를 위해 다음 댓글은 ${Math.ceil(gapMs / 1000)}초 뒤에 등록합니다(그동안 미리 준비합니다).` : `계정 보호를 위해 다음 글·댓글까지 ${Math.ceil(gapMs / 1000)}초 기다립니다.` });
+              if (overlap) { notBefore = Date.now() + gapMs; loginWaitMs += gapMs; }
+              else {
+                const started = Date.now();
+                try { await wait(gapMs, signal); } finally { loginWaitMs += Date.now() - started; }
+                checkStop();
+              }
             }
           }
           mark('publish');
           const instance = `${run.id}-publish-${publication.id || publications.length}`;
-          const engine = engineFor(publication.agent);
           emit('agent.start', { engine, agent: publication.agent, instance, summary: engine === 'aside' ? '검토된 원문의 외부 작업을 Aside 직원이 시작합니다.' : '검토된 원문의 외부 작업을 시작합니다.' });
           try {
             const web = publication.action === 'web';
@@ -1111,7 +1119,7 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
             const asideMailHtml = engine === 'aside' && isMail(job) ? mailHtml(body) || '' : '';
             const attachments = isMail(job) ? mailFiles(publication) : files.map((f) => ({ name: basename(f), path: safeOutput(f) }));
             const result = await outbound.deliver({ scope: run.rootId, publication, body, allowedActions: allowedActions(), instructionKey: instructionKey(), ...policy(), schedule: videoPolicy, signal,
-              files: attachments, evidenceDir: join(taskDir, 'evidence'), engine,
+              files: attachments, evidenceDir: join(taskDir, 'evidence'), engine, notBefore,
               execute: async (browser, extra = {}) => {
                 const text = await execute({ phase: 'publish', agentId: publication.agent, browser,
                 prompt: engine === 'aside' ? asidePublishPrompt({ publication, body, web, files: extra.files || [], html: asideMailHtml.length <= 16000 ? asideMailHtml : '' })

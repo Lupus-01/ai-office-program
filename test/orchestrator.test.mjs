@@ -1464,3 +1464,43 @@ test('교차검증: 업무 예산이 바닥나도 외부 작업(게시) 도중�
   const checkpoint = JSON.parse(readFileSync(join(tight.f.root, '.office', 'orchestrations', `${tight.run.rootId}.json`)));
   assert.ok(checkpoint.budget.calls > free.seen.at, `게시 호출도 센다: ${checkpoint.budget.calls}`);
 });
+
+test('카페 댓글(Aside 직원): 간격을 통째로 기다리지 않고 등록 가능 시각만 넘긴다. 다른 직원의 댓글은 예전처럼 기다린다', async (t) => {
+  const { orchestrate } = await import('../dashboard/orchestrator.mjs');
+  const once = async (engine) => {
+    const root = mkdtempSync(join(tmpdir(), 'office-gap-aside-'));
+    t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }));
+    mkdirSync(join(root, 'org'));
+    writeFileSync(join(root, 'org', 'departments.json'), JSON.stringify([{ id: 'biz', name: '제휴', engine: 'claude' }]));
+    writeFileSync(join(root, 'org', 'roster.json'), JSON.stringify([{ id: 'biz-1', name: '김대리', department: 'biz' }, { id: 'biz-2', name: '이대리', department: 'biz', ...(engine ? { engine } : {}) }]));
+    saveSettings(root, { postGapSeconds: 90 });
+    const task = '2026-11-05/run-gap-aside';
+    mkdirSync(join(root, 'outputs', ...task.split('/')), { recursive: true });
+    const output = `outputs/${task}/biz/biz-1-a.json`;
+    const article = (n) => `https://cafe.naver.com/f-e/cafes/1/articles/${n}`;
+    const plan = { version: 1, task, goal: '댓글', deliverables: [], review: { by: 'chief', criteria: '확인' }, gaps: [],
+      publications: [{ id: 'c', action: 'comment', service: 'naver_cafe', connection: engine === 'aside' ? 'aside' : 'n1', agent: 'biz-2', target: 'https://cafe.naver.com/f-e/cafes/1/menus/44', recipients: [], subject: '', content: 'a', instructions: '', files: [], attachments: [] }],
+      stages: [{ id: 'a', title: '문안', dept: 'biz', agent: 'biz-1', inputs: [], output, done: '작성', dependsOn: [], connection: '', target: '' }] };
+    const comments = [1, 2, 3].map((n) => ({ target: article(n), body: `댓글 ${n}`, subject: `글 ${n}`, author: '회원' }));
+    const waits = [], seen = [];
+    const execute = async ({ phase }) => {
+      if (phase === 'plan') return JSON.stringify({ plan, question: '', needsMeeting: false, requestedActions: [] });
+      if (phase === 'review') return JSON.stringify({ verdict: 'pass', stages: [], reason: '', report: '# 결과\n\n확인했습니다.', question: '' });
+      mkdirSync(join(root, dirname(output)), { recursive: true }); writeFileSync(join(root, output), JSON.stringify({ comments, skipped: [] }));
+      return JSON.stringify({ status: 'done', summary: '작성' });
+    };
+    const outbound = { connections: () => [{ id: 'n1', label: '네이버', provider: 'naver', status: 'connected' }], async deliver(args) { seen.push({ at: Date.now(), notBefore: args.notBefore, engine: args.engine }); return { status: 'confirmed', resultUrl: args.publication.target }; } };
+    const text = await orchestrate({ root, run: { id: 'run-gap-aside', rootId: 'run-gap-aside', engine: 'claude', task }, prompt: '글마다 댓글 달아줘. 끝까지 자동으로', intent: { actions: ['comment'], delegated: true, source: 'ai' }, execute, signal: new AbortController().signal, outbound,
+      sourceCheck: async () => ({ checked: 0, broken: [], mismatched: [], unknown: [], skipped: 0 }), wait: async (ms) => { waits.push(ms); } });
+    return { text, waits, seen };
+  };
+  const aside = await once('aside');
+  assert.equal(aside.seen.length, 3, aside.text);
+  assert.equal(aside.waits.length, 0, 'Aside 직접 댓글은 실행기가 간격을 통째로 기다리지 않는다');
+  assert.equal(aside.seen[0].notBefore, 0, '첫 댓글은 제한이 없다');
+  for (const s of aside.seen.slice(1)) assert.ok(s.notBefore - s.at > 85000 && s.notBefore - s.at <= 90000, `등록 가능 시각을 간격만큼 뒤로 넘긴다: ${s.notBefore - s.at}`);
+  const other = await once(null);
+  assert.equal(other.seen.length, 3, other.text);
+  assert.equal(other.waits.length, 2, '다른 직원의 댓글은 예전처럼 간격을 기다린 뒤 시작한다');
+  assert.ok(other.seen.every((s) => s.notBefore === 0));
+});

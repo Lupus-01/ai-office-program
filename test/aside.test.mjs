@@ -415,3 +415,32 @@ test('카페 댓글 직접 등록: 눌렀는지 모르면 직원에게 다시 �
   const done = await g.work.deliver({ ...baseDeliver, publication: { id: 'd4', action: 'comment', service: 'naver_cafe', connection: ASIDE_CONNECTION, target, recipients: [], subject: '' }, body: '안녕하세요', execute: async () => { throw new Error('실행되면 안 됨'); } });
   assert.equal(done.status, 'confirmed');
 });
+
+test('카페 댓글 간격: 등록 가능 시각(notBefore)을 직접 등록 스크립트에 넘겨 준비를 미리 하고, 직원에게 넘길 때는 그 시각까지 기다린 뒤 시작한다', async (t) => {
+  const target = 'https://cafe.naver.com/f-e/cafes/1/articles/31';
+  // 직접 등록: 화면 읽기(준비)가 끝난 뒤에야 스크립트가 불리고, 스크립트는 notBefore를 그대로 받는다(누르는 시각은 스크립트가 지킨다)
+  const f = asideWork(t, { pages: { [target]: (n) => n === 1 ? '댓글 하나' : '댓글 하나 반가워요' } });
+  const notBefore = Date.now() + 60000;
+  let got = null;
+  f.aside.cafeComment = async (url, body, options) => { got = options; return { submitted: true, url: target }; };
+  const publication = { id: 'g1', action: 'comment', service: 'naver_cafe', connection: ASIDE_CONNECTION, target, recipients: [], subject: '' };
+  const started = Date.now();
+  const result = await f.work.deliver({ ...baseDeliver, publication, body: '반가워요', notBefore, execute: async () => { throw new Error('직원 실행은 없어야 한다'); } });
+  assert.equal(result.status, 'confirmed');
+  assert.deepEqual(got, { notBefore });
+  assert.ok(Date.now() - started < 5000, '실행기는 간격을 통째로 기다리지 않는다(준비는 바로 시작한다)');
+  // 직원에게 넘어가는 경우(직접 등록이 누르기 전에 막힘): 등록 가능 시각 전에는 직원을 시작하지 않는다
+  const target2 = 'https://cafe.naver.com/f-e/cafes/1/articles/32';
+  const g = asideWork(t, { pages: { [target2]: (n) => n === 1 ? '댓글 없음' : '댓글 없음 잘 봤어요' } });
+  g.aside.cafeComment = async () => ({ submitted: false, reason: '댓글 입력칸을 찾지 못했습니다' });
+  const allowedAt = Date.now() + 400;
+  let ranAt = 0;
+  await g.work.deliver({ ...baseDeliver, publication: { ...publication, id: 'g2', target: target2 }, body: '잘 봤어요', notBefore: allowedAt, execute: async () => { ranAt = Date.now(); return '{"status":"done","submitted":true}'; } });
+  assert.ok(ranAt >= allowedAt - 5, `직원 실행은 등록 가능 시각 뒤에 시작한다(${ranAt - allowedAt}ms)`);
+  // 간격이 없으면(notBefore 0) 예전과 같다
+  const h = asideWork(t, { pages: { [target]: (n) => n === 1 ? '댓글 하나' : '댓글 하나 반가워요' } });
+  let plain = null;
+  h.aside.cafeComment = async (url, body, options) => { plain = options; return { submitted: true, url: target }; };
+  await h.work.deliver({ ...baseDeliver, publication: { ...publication, id: 'g3' }, body: '반가워요', execute: async () => '' });
+  assert.deepEqual(plain, { notBefore: 0 });
+});
