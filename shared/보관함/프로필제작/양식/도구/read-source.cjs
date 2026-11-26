@@ -1,4 +1,4 @@
-// 상담사 원문 읽기: 워드(.docx)의 문단과 표 칸 글자를 순서대로 보여 준다(.txt·.md는 그대로)
+// 상담사 원문 읽기: 워드(.docx)·한글(.hwp·.hwpx)의 문단과 표 칸 글자를 순서대로 보여 준다(.txt·.md는 그대로)
 // 사용: node read-source.cjs <원문 파일>
 // 연락처·계좌도 그대로 보이므로 결과를 보고서·로그에 옮겨 적지 않는다(내용 JSON의 연락처 칸에만 쓴다)
 'use strict';
@@ -9,7 +9,9 @@ const { fs, path, all, textOf, loadZip } = require('./profile-lib.cjs');
   if (!file) throw new Error('사용법: node read-source.cjs <원문 파일>');
   const ext = path.extname(file).toLowerCase();
   if (ext === '.txt' || ext === '.md') { process.stdout.write(fs.readFileSync(file, 'utf8')); return; }
-  if (ext !== '.docx') throw new Error(`${ext || '확장자 없음'} 파일은 읽지 못합니다. 워드(.docx)로 저장해 달라고 하세요(.doc·.hwp는 한글/워드에서 .docx로 다시 저장).`);
+  // 한글 문서: 문단을 순서대로, 표의 칸이 바뀌는 곳은 빈 줄로 보여 준다
+  if (ext === '.hwp' || ext === '.hwpx') { console.log((await require('./hwp-text.cjs').hwpLines(file)).join('\n')); return; }
+  if (ext !== '.docx') throw new Error(`${ext || '확장자 없음'} 파일은 읽지 못합니다. 워드(.docx)나 한글(.hwp)로 저장해 달라고 하세요(.doc는 워드에서 .docx로 다시 저장).`);
   const xml = await (await loadZip(file)).file('word/document.xml').async('string');
   const body = xml.slice(xml.indexOf('<w:body>'), xml.lastIndexOf('</w:body>'));
   // 표 밖 문단과 표를 문서 순서대로 보여 준다

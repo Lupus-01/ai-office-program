@@ -39,6 +39,12 @@ function checkData(d) {
   lineRule('워드 리딩 정보', list(d.리딩), 2, 5);
   const intro = list(d.특징), introLen = len(intro.join(' ')), introSent = sentences(intro).length;
   range(introLen, 250, 400) && range(introSent, 4, 7) ? ok(`특징과 강점(소개글): ${introSent}문장, ${introLen}자`) : bad(`특징과 강점(소개글): ${introSent}문장, ${introLen}자(기준 4~7문장, 250~400자)`);
+  // PPT 소개글 칸은 줄을 자동으로 바꾸지 않는다(폭 470pt, 9pt 글자, 6줄). 줄마다 폭을 어림해 넘칠 줄을 미리 알려 준다(직접 재지 않아도 되게)
+  const width = (s) => [...String(s)].reduce((a, c) => a + (/[ᄀ-ᇿ　-鿿가-힣＀-￯]/.test(c) ? 9 : c === ' ' ? 2.7 : /[0-9A-Za-z]/.test(c) ? 5 : 3.2), 0);
+  const wide = intro.filter((l) => width(l) > 470);
+  const widest = intro.reduce((a, l) => Math.max(a, width(l)), 0);
+  intro.length <= 6 && !wide.length ? ok(`PPT 소개글 칸(어림): ${intro.length}줄(칸 6줄), 가장 긴 줄 약 ${Math.round(widest)}pt(칸 470pt) → 폭은 따로 계산하지 말고 그림으로만 확인하세요.`)
+    : warn(`PPT 소개글 칸을 넘칠 수 있습니다(어림): ${intro.length}줄(칸 6줄)${wide.length ? `, 칸 폭 470pt를 넘는 줄: ${wide.map((l) => `"${l.slice(0, 12)}…"(약 ${Math.round(width(l))}pt)`).join(' ')}` : ''} → "특징"의 줄을 문장·쉼표에서 나눠 한 줄을 한글 50자 안팎으로 맞추고 6줄을 넘지 않게 하세요.`);
   const p = d.PPT || {};
   const sub = (label, lines, source, lo, hi) => {
     const missing = lines.filter((l) => !source.includes(l));
@@ -143,7 +149,7 @@ async function checkSource(d) {
   if (!source) { bad(`원문 파일을 찾지 못했습니다: ${d.원문}`); return; }
   // 양식의 고정 문구(안내문·예시 목록)는 상담사가 쓴 말이 아니므로 뺀다(예: 안내문의 "신내림/제자 이력")
   const formLines = new Set((await fileTexts(path.join(TEMPLATE_DIR, '상담사프로필_틀.docx'))).map(norm).filter(Boolean));
-  const lines = (/\.docx$/i.test(source) ? await fileTexts(source) : fs.readFileSync(source, 'utf8').split(/\r?\n/)).filter((l) => !formLines.has(norm(l)));
+  const lines = (/\.docx$/i.test(source) ? await fileTexts(source) : /\.hwpx?$/i.test(source) ? await require('./hwp-text.cjs').hwpLines(source) : fs.readFileSync(source, 'utf8').split(/\r?\n/)).filter((l) => !formLines.has(norm(l)));
   const src = lines.join('\n'), srcNorm = norm(src);
   const free = [d.한줄카피, ...list(d.약력), ...list(d.리딩), ...list(d.특징), ...list(d.PPT?.코멘트), ...list(d.PPT?.추천)].map((s) => String(s || '')).join(' ');
   const srcNums = new Set(src.match(/\d+/g) || []);

@@ -17,7 +17,7 @@ import { BUDGET_WARN_RATIO, MAX_MAILS_PER_RUN, MAX_PLAN_REVISIONS, MAX_PROGRESS_
 import { mailKey, preparePublications, splitMailBatch } from '../lib/publications.mjs';
 import { mailPreviewHtml, writeMailPreview } from '../lib/mail-preview.mjs';
 import { mailHtml } from '../lib/mail-format.mjs';
-import { recipePlan, recipePreflight } from '../lib/recipes.mjs';
+import { fillFrom, recipePlan, recipePreflight, recipeTemplates, recipeToolStage, runRecipeTool } from '../lib/recipes.mjs';
 import { attachmentQuestion, attachmentRef, blockedReason, pickChoices, resolveAttachments } from '../lib/attachments.mjs';
 import { collectFinalOutputs } from '../lib/final-outputs.mjs';
 import { checkSources, sourceProblemReason } from '../lib/source-check.mjs';
@@ -680,6 +680,26 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
     }
     let text;
     let issue = '';
+    // 고정 절차의 도구 단계: 정해진 도구 하나만 돌리면 되는 단계는 AI를 부르지 않고 실행기가 바로 실행한다(호출 예산을 쓰지 않는다)
+    const toolSpec = state.recipe ? recipeToolStage(root, state.recipe, stage, task) : null;
+    if (toolSpec) {
+      checkStop();
+      if (toolSpec.error) throw new Error(`${stage.title}: ${toolSpec.error}`);
+      safeOutput(stage.output, true);
+      const ran = await runRecipeTool(root, toolSpec, { signal });
+      checkStop();
+      const tail = redactContext(String(ran.out || '').trim().split('\n').filter(Boolean).slice(-6).join('\n')).slice(0, 800);
+      const hash = ran.code === 0 ? fingerprint(stage) : null;
+      if (!hash) {
+        emit('agent.pause', { engine, agent: stage.agent, instance: `${run.id}-${stage.id}`, summary: redact(tail || '도구 실행 실패') });
+        throw new Error(`${stage.title}: 도구 실행에 실패했습니다(${toolSpec.script.split('/').at(-1)}). ${tail || '산출물이 없습니다.'}`);
+      }
+      state.outputNotes = { ...(state.outputNotes || {}), [stage.id]: [] };
+      state.completed[stage.id] = hash;
+      persist();
+      emit('agent.stop', { engine, agent: stage.agent, instance: `${run.id}-${stage.id}`, summary: redact(`도구 실행(AI 호출 없음): ${tail}`), files: [relative(root, safeOutput(stage.output)).replace(/\\/g, '/')] });
+      return { stage, result: { status: 'done' } };
+    }
     const site = typeof stage.connection === 'string' && stage.connection.trim();
     // 사이트 조회 단계는 연결 계정 브라우저(읽기 전용)를 붙여 실행한다
     const publicWeb = stage.connection === PUBLIC_CONNECTION;
@@ -925,6 +945,20 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
         }
         // 남은 단계가 있으면 비서실장이 결과를 보고 다음 행동을 정한다(마지막 묶음 뒤는 최종 검토가 맡음)
         const finished = results.filter((r) => r.result.status === 'done').map((r) => r.stage);
+        // 고정 절차의 이름 자리({{from:단계:키}}): 방금 끝난 단계의 JSON 산출물 값으로 업무 이름과 남은 단계 제목(전달 파일 이름)을 채운다
+        if (state.recipe && finished.length) {
+          const templates = recipeTemplates(root, state.recipe, { task, request: state.originalRequest });
+          if (templates) {
+            const read = (id) => {
+              const source = plan.stages.find((s) => s.id === id);
+              if (!source || !state.completed[id] || !/\.json$/i.test(source.output)) return null;
+              try { const data = JSON.parse(readFileSync(safeOutput(source.output), 'utf8')); return data && typeof data === 'object' && !Array.isArray(data) ? data : null; } catch { return null; }
+            };
+            const renamed = { ...plan, goal: templates.goal ? fillFrom(templates.goal, read) : plan.goal,
+              stages: plan.stages.map((s) => templates.titles[s.id] && !state.completed[s.id] ? { ...s, title: fillFrom(templates.titles[s.id], read) } : s) };
+            if (JSON.stringify(renamed) !== JSON.stringify(plan)) { try { savePlan(renamed); } catch { /* 이름을 못 채워도 계획대로 진행한다 */ } }
+          }
+        }
         if (finished.length && !waiting.size && plan.stages.some((s) => !state.completed[s.id])) {
           // 뒤 단계가 쓸 자료의 깨진 출처는 뒤 단계를 돌리기 전에 고친다(편집이 끝난 뒤 되돌리면 편집을 또 해야 한다)
           if (!state.sourceRetried && !state.quick && sourceCheckAllowed()) {
@@ -937,7 +971,8 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
           if (stop) return stop;
           let decision = null;
           // 재작업 중에는 고칠 내용이 이미 정해져 있고 최종 검토가 다시 보므로 점검을 건너뛴다
-          if (!state.rejects) try { decision = await progress(finished); } catch (err) {
+          // 고정 절차는 검증해 둔 계획이라 단계 사이 점검을 하지 않는다(직원이 못 끝낸 단계는 위에서 처리되고, 결과는 최종 검토가 본다)
+          if (!state.rejects && !state.recipe) try { decision = await progress(finished); } catch (err) {
             checkStop();
             if (err.budget) throw err;
             note({ skipped: redactContext(err.message).slice(0, 300) });
