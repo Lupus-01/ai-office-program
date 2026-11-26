@@ -1,0 +1,586 @@
+{
+  "version": 1,
+  "recipes": [
+    {
+      "id": "care-mail-prepare",
+      "when": "상담사관리부의 월간 상담사 활동 리포트(분석) 메일을 준비만 하라는 지시. 발송·보내라는 말이 없어야 한다. 인원이나 예명을 정한 경우도 해당한다. 예: \"상담사 메일 준비해줘\", \"이번 달 상담사 메일 3명만 시험으로 준비해줘\"",
+      "preflight": [
+        {
+          "tool": "보관함/상담사관리/도구/erp-collect.cjs"
+        }
+      ],
+      "plan": {
+        "goal": "상담사 활동 리포트 메일 준비",
+        "stages": [
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [],
+            "inputs": [],
+            "id": "s1",
+            "title": "상담사 메일 자료 수집",
+            "dept": "care",
+            "agent": "care-2",
+            "output": "outputs/{{task}}/care/care-2-상담사메일-자료.json",
+            "done": "대표 지시: \"{{request}}\". Bash로 node 보관함/상담사관리/도구/erp-collect.cjs --out outputs/{{task}}/care/care-2-상담사메일-자료.json 를 한 번 실행한다(Bash timeout 300000). 대표 지시에 인원이 있으면 --limit <수>, 예명이 있으면 --names 예명,예명 을 붙이고, 없으면 전원이다. 도구가 쓴 JSON을 고치지 않는다. 보고에는 도구 출력 줄(대상 수, 메일 주소 없음, 기간, 걸린 시간)을 그대로 옮긴다. \"ERP 로그인이 필요합니다\"나 \"ERP 주소가 없습니다\"가 나오면 그 문장을 그대로 보고하고 멈추며, 다시 실행하거나 다른 방법으로 조회하지 않는다. Bash 실행이 권한 문제로 거부되면 거부 문장을 그대로 보고하고 멈춘다. 보고에서 상담사는 예명으로만 쓴다."
+          },
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [
+              "s1"
+            ],
+            "inputs": [
+              "s1"
+            ],
+            "id": "s2",
+            "title": "상담사 활동 리포트 메일 문안",
+            "dept": "care",
+            "agent": "care-3",
+            "output": "outputs/{{task}}/care/care-3-상담사메일-문안.json",
+            "done": "수집 파일의 대상 전원 문안을 JSON 파일 하나에 {\"messages\":[{\"recipients\":[\"메일 주소\"],\"subject\":\"제목\",\"body\":\"본문\"}],\"skipped\":[\"보내지 않는 대상과 사유\"]} 형식으로 쓴다. 대상 전원이 messages 또는 skipped에 정확히 한 번씩 있어야 한다. 한 상담사에 한 통이며 recipients는 수집 파일의 \"메일주소\"만 쓰고, 주소가 없으면 skipped에 예명과 사유를 적는다. 부서 지침 [상담사 분석 메일 작성 기준] 1)~13)을 그대로 따른다(값의 뜻은 수집 파일의 \"설명\"). 인사는 2줄, 단골 구획에는 단골·위험·주의 고객 수를 빠짐없이 적고, 지난달 비교는 \"같은기간비교\" 값과 \"기준\"의 기간만 쓴다. 발송하지 않는다. 보고에는 대상 수·문안 수·보내지 않는 대상과 사유를 적고 마지막에 \"미리보기를 확인한 뒤 '준비한 상담사 메일 보내줘'라고 하면 발송합니다. 뺄 분이 있으면 함께 말씀해 주세요.\"를 적는다."
+          },
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [
+              "s2"
+            ],
+            "inputs": [
+              "s1",
+              "s2"
+            ],
+            "id": "s3",
+            "title": "상담사 메일 문안 검수",
+            "dept": "quality",
+            "agent": "quality-2",
+            "output": "outputs/{{task}}/quality/quality-2-상담사메일-검수.md",
+            "done": "수집 파일의 대상 전원이 문안 JSON의 messages 또는 skipped에 한 번씩 있는지 세어 \"대상 n · 문안 n · 제외 n\"으로 적는다. 통마다 받는 주소·예명·\"한눈에 보기\" 수치와 지난달 같은 기간 비교 값·기간을 수집 파일과 대조하고, 금지 항목(고객 이름·닉네임·전화번호, 다른 상담사 정보, 단골 고객께 연락·안부 인사 권유, 후기가 없는데 답글 권유)을 점검해 FIX가 있는 통만 표로 쓴다. 문체·줄 수·표현 취향은 FIX로 하지 않고 \"참고\"로만 적는다. 원본 파일은 고치지 않고 상담사는 예명으로만 쓴다."
+          }
+        ],
+        "deliverables": [
+          "s2"
+        ],
+        "publications": [],
+        "review": {
+          "by": "chief",
+          "criteria": "다 등급(품질검수 1회, 독립검증 없음, 반려 최대 1회). 수집 대상 전원이 messages 또는 skipped에 한 번씩 있고, 받는 주소·예명·수치가 수집 파일과 일치하며 금지 항목이 없는지, 발송 없이 초안으로 끝났는지 확인한다. 문체·줄 수·표현 취향은 반려하지 않고 확인 필요에 적는다."
+        }
+      }
+    },
+    {
+      "id": "care-mail-collect",
+      "when": "상담사 메일에 쓸 ERP 자료만 수집하라는 지시(문안 작성·발송 없음). 예: \"상담사 메일 자료만 수집해줘\"",
+      "preflight": [
+        {
+          "tool": "보관함/상담사관리/도구/erp-collect.cjs"
+        }
+      ],
+      "plan": {
+        "goal": "상담사 메일 자료 수집",
+        "stages": [
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [],
+            "inputs": [],
+            "id": "s1",
+            "title": "상담사 메일 자료 수집",
+            "dept": "care",
+            "agent": "care-2",
+            "output": "outputs/{{task}}/care/care-2-상담사메일-자료.json",
+            "done": "대표 지시: \"{{request}}\". Bash로 node 보관함/상담사관리/도구/erp-collect.cjs --out outputs/{{task}}/care/care-2-상담사메일-자료.json 를 한 번 실행한다(Bash timeout 300000). 대표 지시에 인원이 있으면 --limit <수>, 예명이 있으면 --names 예명,예명 을 붙이고, 없으면 전원이다. 도구가 쓴 JSON을 고치지 않는다. 보고에는 도구 출력 줄(대상 수, 메일 주소 없음, 기간, 걸린 시간)을 그대로 옮긴다. \"ERP 로그인이 필요합니다\"나 \"ERP 주소가 없습니다\"가 나오면 그 문장을 그대로 보고하고 멈추며, 다시 실행하거나 다른 방법으로 조회하지 않는다. Bash 실행이 권한 문제로 거부되면 거부 문장을 그대로 보고하고 멈춘다. 보고에서 상담사는 예명으로만 쓴다."
+          }
+        ],
+        "deliverables": [
+          "s1"
+        ],
+        "publications": [],
+        "review": {
+          "by": "chief",
+          "criteria": "가 등급. 도구 출력과 수집 JSON 파일이 있는지만 확인한다."
+        }
+      }
+    },
+    {
+      "id": "care-mail-send",
+      "when": "이미 준비해 둔 상담사 활동 리포트 메일을 보내라는 지시. 전원 발송, 일부 제외, 대표 본인에게 먼저 한 통 시험 발송(주소 포함) 모두 해당한다. 새로 조회·작성하라는 말이 없어야 한다. 예: \"준비한 상담사 메일 보내줘\", \"준비한 상담사 메일 중 한 통만 나한테 먼저 보내줘. 주소는 …\"",
+      "plan": {
+        "goal": "준비한 상담사 메일 발송",
+        "stages": [
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [],
+            "inputs": [
+              "{{latest:outputs/**/care/care-3-상담사메일-문안.json}}"
+            ],
+            "id": "s1",
+            "title": "상담사 메일 발송 문안 확정",
+            "dept": "care",
+            "agent": "care-3",
+            "output": "outputs/{{task}}/care/care-3-상담사메일-발송문안.json",
+            "done": "대표 지시: \"{{request}}\". 입력 문안 JSON(가장 최근에 준비한 상담사 메일 문안)을 다시 쓰지 않고 그대로 옮겨 outputs/{{task}}/care/care-3-상담사메일-발송문안.json 에 같은 형식({\"messages\":[...],\"skipped\":[...]})으로 쓴다. 대표가 뺄 사람을 말했으면 그 사람만 messages에서 빼 skipped에 \"대표 지시로 제외\"로 적고, 고칠 점을 말했으면 그 부분만 고친다. 그 밖의 글자는 바꾸지 않는다. 대표가 본인에게 먼저 한 통 보내라고 하며 주소를 줬으면 messages는 첫 번째 통 하나만 두고 recipients에는 대표가 준 주소 하나만(철자 그대로) 넣으며 제목 앞에 \"[시험] \"을 붙이고, 나머지 상담사는 skipped에 \"시험 발송 대상 아님\"으로 적는다. 이때 상담사 메일 주소는 파일 어디에도 넣지 않는다. 시험 발송인데 주소가 없으면 주소를 묻는다. 보고에는 보낼 통 수, 제외한 사람과 사유를 적는다."
+          }
+        ],
+        "deliverables": [],
+        "publications": [
+          {
+            "id": "p1",
+            "action": "mail",
+            "service": "naverworks_mail",
+            "connection": "{{connection:naverworks}}",
+            "agent": "care-3",
+            "target": "https://mail.worksmobile.com/",
+            "recipients": [],
+            "subject": "상담사 활동 리포트",
+            "content": "s1",
+            "instructions": "",
+            "files": [],
+            "attachments": []
+          }
+        ],
+        "review": {
+          "by": "chief",
+          "criteria": "발송 문안이 준비한 문안과 같은지(대표가 말한 제외·수정·시험 발송만 반영), 시험 발송이면 받는 사람이 대표가 준 주소 하나뿐이고 상담사 주소가 없는지 확인한다. 문체는 반려하지 않는다."
+        }
+      }
+    },
+    {
+      "id": "kkoribyeol-posts-comments",
+      "when": "꼬리별 관측소 카페에 글(수다방 숏츠 소개·핫플레이스 장소 소개)과 댓글을 정한 개수만큼 올리라는 지시(글과 댓글 둘 다 있어야 한다). 예: \"꼬리별 관측소 글 10개 댓글 20개 작업 부탁해\", \"꼬리별 관측소에 글 1개 댓글 2개 올려줘\"",
+      "preflight": [
+        {
+          "tool": "보관함/꼬리별/도구/cafe-ledger.cjs"
+        }
+      ],
+      "plan": {
+        "goal": "꼬리별 관측소 글·댓글 게시",
+        "deliverables": [],
+        "stages": [
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [],
+            "inputs": [],
+            "id": "s1",
+            "title": "꼬리별 게시 장부와 댓글 대상",
+            "dept": "community",
+            "agent": "community-2",
+            "output": "outputs/{{task}}/community/community-2-ledger.json",
+            "done": "대표 지시: \"{{request}}\". Bash로 node 보관함/꼬리별/도구/cafe-ledger.cjs --out outputs/{{task}}/community/community-2-ledger.json --targets <대표가 말한 댓글 수> --style 아이스베어 를 한 번 실행한다(Bash timeout 300000). 도구가 쓴 JSON을 고치지 않는다. 보고에는 도구 출력 줄을 그대로 옮긴다. \"네이버 카페 로그인이 필요합니다\"가 나오면 그 문장을 그대로 보고하고 멈추며 다른 방법으로 조회하지 않는다. 화면을 직접 열어 조회하지 않는다."
+          },
+          {
+            "parallelGroup": "write",
+            "connection": "",
+            "target": "",
+            "dependsOn": [
+              "s1"
+            ],
+            "inputs": [
+              "s1",
+              "outputs/2026-11-05/run-mw2x04kf-6ec1da/community/community-2-style-and-targets.md"
+            ],
+            "id": "s2",
+            "title": "수다방 반려동물 숏츠 소개글",
+            "dept": "community",
+            "agent": "community-2",
+            "output": "outputs/{{task}}/community/community-2-shorts-posts.json",
+            "done": "개수는 대표 지시(\"{{request}}\")를 따른다. 글 수가 4개 이상이면 10개 중 3개 비율(반올림)로 핫플 글, 나머지는 숏츠 글로 나누고, 글 수가 3개 이하면 전부 숏츠 글이다. 공개 웹에서 반려동물 유튜브 숏츠 영상을 숏츠 글 수만큼 찾아 글을 쓰고, 채우면 바로 끝낸다. 형식은 {posts:[{subject,body,target,sourceTitle,sourceChannel,verification}],skipped:[]} JSON이고 target은 모두 https://cafe.naver.com/f-e/cafes/31520563/menus/44 이다. 영상 ID가 장부(s1)의 \"영상ID\"와 겹치지 않고 서로도 다르다(주소 형식이 달라도 같은 영상은 1건). 영상 페이지를 직접 열어 삭제·비공개가 아닌지와 제목·채널명을 확인하고 sourceTitle은 영상 제목 원문 그대로 쓴다. subject는 아이스베어 제목 말투로 짧게 쓰고 오타가 없게 쓴다(의도한 구어체 표기는 허용). 말투는 장부(s1)의 \"말투참고\"에서 \"자동게시\"가 false인 것(아이스베어가 직접 쓴 글·댓글)을 가장 먼저 따른다. 제목·문장 길이, 끝맺음(예: ~네용, ~네욬ㅋㅋ, ~아시나영?), 자주 쓰는 말을 닮게 쓰되 문장을 그대로 베끼지 않는다. \"자동게시\"가 true인 것은 말투 기준으로 삼지 않고 겹치는 표현을 피하는 데만 쓴다. 직접 쓴 수다방 글은 제목이 짧은 한마디 반응이므로 제목을 길게 설명하지 않는다. body는 유튜브 링크 한 줄만 쓴다(대표 결정 2026-11-25: 아이스베어가 직접 쓴 글처럼 본문은 링크만). 소개 문장·확인 메모·조회수를 body에 넣지 않는다. 영상에 대한 반응은 subject 한마디로만 쓴다. [제목 규칙] subject에 나오는 동물·행동·상황은 sourceTitle에 적힌 것만 쓴다. sourceTitle에 없는 장면·순서·결과를 덧붙이지 않는다(예: sourceTitle이 \"집사 손 끌어다 만져달라고 하는 고양이\"인데 \"손 멈추면 바로 끌어가네용\"처럼 \"멈추면\"·\"바로\"라는 순서를 지어내면 안 된다). 글쓴이가 직접 해 봤거나 겪은 것처럼 읽히는 표현(\"~했더니\", \"~해봤는데\", \"우리 집 ~도\")을 쓰지 않는다(예: \"못 본 척 했더니 냥이가 어땠을까용?\" 대신 \"고양이를 못 본 척하면 어떨까용~\"). 끝내기 전에 제목마다 sourceTitle과 나란히 놓고 이 두 가지를 다시 확인해 어긋난 제목은 고친 뒤 저장한다. 같은 끝맺음을 이번 제목끼리 되풀이하지 않는다. 못 채우면 실제 건수와 부족 사유를 skipped에 적는다."
+          },
+          {
+            "parallelGroup": "write",
+            "connection": "public",
+            "target": "https://map.naver.com/",
+            "dependsOn": [
+              "s1"
+            ],
+            "inputs": [
+              "s1",
+              "outputs/2026-11-06/run-mw4rjpdo-362be4/community/community-2-board-and-tone.md",
+              "outputs/2026-11-06/run-mw4s3pzx-c6cdb5/community/community-2-notice61-format.md"
+            ],
+            "id": "s3",
+            "title": "핫플레이스 강아지 동반 장소 소개글",
+            "dept": "community",
+            "agent": "community-2",
+            "output": "outputs/{{task}}/community/community-2-hotplace-posts.json",
+            "done": "개수는 대표 지시(\"{{request}}\")를 따른다. 글 수가 4개 이상이면 10개 중 3개 비율(반올림)로 핫플 글, 나머지는 숏츠 글로 나누고, 글 수가 3개 이하면 전부 숏츠 글이다. 핫플 글 수가 0이면 조회하지 않고 {\"posts\":[],\"skipped\":[\"핫플 글 없음(글 수 3개 이하)\"]}만 쓰고 끝낸다. 핫플 글이 있으면 강아지와 같이 가기 좋은 장소를 그 수만큼 고른다. 종류는 강아지와 같이 가면 좋은 카페(반려견 동반이 되는 일반 카페·브런치 카페·베이커리 카페), 애견카페, 글램핑·펜션, 반려견 놀이터, 산책 장소이고 수도권과 전국을 섞는다. 핫플 글이 2건 이상이면 그중 1건은 \"같이 가면 좋은 카페\"로 한다(대표 지시 2026-11-24). 같이 가면 좋은 카페는 플레이스 편의 항목·소개·방문자 리뷰에서 반려동물 동반이 확인되는 곳만 쓰고, 동반 조건(실내 동반·테라스만·소형견만 등)이 플레이스에 적혀 있으면 reviewCheck에 적는다. 후보는 장소당 한 번만 네이버 지도 플레이스를 열어 확인하고, 조건에 안 맞으면 다음 후보로 넘어가되 확인하는 후보는 핫플 글 수의 3배까지다. 쓸 수 있는 조건: 최근 2개월 안의 방문자 리뷰가 있고(방문자 리뷰 탭이 없을 때만 블로그 리뷰 작성일로 대신하고 reviewCheck에 \"대체 기준: 블로그 리뷰\"), 반려견 동반이 플레이스에서 확인되고, 검색 결과에 \"광고\" 표기가 없고, 장부(s1)의 \"쓴장소\"와 \"핫플최근글\" 제목에 나온 장소가 아니다. 형식은 {posts:[{subject,body,target,kind:\"info\",placeName,placeUrl,reviewCheck}],skipped:[]}이고 target은 모두 https://cafe.naver.com/f-e/cafes/31520563/menus/24?viewType=L 이다. 제목은 입력 notice61-format.md의 공지 61번 형식([말머리] [지역/장소종류] 제목)이며 [광고]를 붙이지 않는다. 본문은 아이스베어 말투로, 말투는 장부(s1)의 \"말투참고\"에서 \"자동게시\"가 false인 것(아이스베어가 직접 쓴 글·댓글)을 가장 먼저 따른다. 제목·문장 길이, 끝맺음(예: ~네용, ~네욬ㅋㅋ, ~아시나영?), 자주 쓰는 말을 닮게 쓰되 문장을 그대로 베끼지 않는다. \"자동게시\"가 true인 것은 말투 기준으로 삼지 않고 겹치는 표현을 피하는 데만 쓴다. \"말투참고\"의 게시판이 핫플레이스인 직접 쓴 글을 먼저 본다(없으면 입력 board-and-tone.md). 다녀오지 않은 사람이 가볍게 소개하는 한두 문장이고 플레이스 등록명을 넣는다. 본문 뒤 빈 줄 하나를 띄운 뒤 맨 아래에 네이버 플레이스 링크(https://map.naver.com/p/entry/place/숫자)만 있는 줄을 둔다. 날짜가 지나면 틀리는 문구, 블로그 후기에만 있는 운영 조건, 다녀온 후기체, 출처·확인일 줄, 유튜브 링크, 업체 사진은 넣지 않는다. reviewCheck에는 직접 본 가장 최근 방문일(연도까지), 반려견 동반 확인 위치, 광고 표기 여부를 적는다. 못 채우면 실제 건수로 끝내고 부족 사유와 뺀 장소·사유를 skipped에 적는다."
+          },
+          {
+            "parallelGroup": "write",
+            "connection": "",
+            "target": "",
+            "dependsOn": [
+              "s1"
+            ],
+            "inputs": [
+              "s1",
+              "outputs/2026-11-05/run-mw2x04kf-6ec1da/community/community-2-style-and-targets.md"
+            ],
+            "id": "s4",
+            "title": "수다방 댓글",
+            "dept": "community",
+            "agent": "community-2",
+            "output": "outputs/{{task}}/community/community-2-comments.json",
+            "done": "장부(s1)의 \"댓글대상\" 글마다 댓글 1건을 쓴다(대표가 말한 댓글 수만큼. 대상이 모자라면 있는 만큼). 형식은 {comments:[{target,body,subject,author}],skipped:[]} JSON이다. target은 장부의 \"주소\", subject는 \"제목\" 원문, author는 \"작성자\"(댓글을 달 대상 글의 작성자 닉네임)를 그대로 옮긴다. 브라우저 조회는 하지 않고 장부만 쓴다. body는 \"본문요약\"·제목에서 확인한 내용에 반응하는 짧은 한 문장(길어도 두 문장)이다. 말투는 장부(s1)의 \"말투참고\"에서 \"자동게시\"가 false인 것(아이스베어가 직접 쓴 글·댓글)을 가장 먼저 따른다. 제목·문장 길이, 끝맺음(예: ~네용, ~네욬ㅋㅋ, ~아시나영?), 자주 쓰는 말을 닮게 쓰되 문장을 그대로 베끼지 않는다. \"자동게시\"가 true인 것은 말투 기준으로 삼지 않고 겹치는 표현을 피하는 데만 쓴다. 직접 쓴 댓글처럼 짧게 쓰고 설명을 덧붙이지 않는다. 본문 글자가 없는 글은 제목에 있는 말에만 반응하고 제목에 없는 장면·행동·성별·관계를 짐작하지 않는다. \"달린댓글\"과 같은 말을 되풀이하지 않는다. ㅎㅎ·ㅋㅋ·ㅠ로 끝나는 댓글은 전체의 60% 이하로 한다. 영상을 본 것처럼 쓰거나 직접 겪은 것처럼 쓰지 않고 링크·홍보·수치를 넣지 않는다. 같은 글이 두 번 나오면 안 된다. 끝내기 전에 comments 건수를 세어 대표가 말한 댓글 수와 같은지 확인하고, 모자라면 장부 \"댓글대상\"에서 아직 쓰지 않은 글로 채운다(장부에 남은 대상이 없을 때만 모자란 채로 두고 skipped에 사유를 적는다). 못 채우면 실제 건수와 부족 사유를 skipped에 적는다."
+          },
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [
+              "s2",
+              "s3",
+              "s4"
+            ],
+            "inputs": [
+              "s1",
+              "s2",
+              "s3",
+              "s4"
+            ],
+            "id": "s5",
+            "title": "글·댓글 품질 검수",
+            "dept": "quality",
+            "agent": "quality-2",
+            "output": "outputs/{{task}}/quality/quality-2-posts-comments-check.md",
+            "done": "한 번만 검수한다. FIX가 있는 건만 표로 쓰고 나머지는 건수로 적는다. 숏츠 글: 개수, target이 menus/44인지, 영상 ID가 장부의 \"영상ID\"와 겹치지 않고 서로 다른지, body가 유튜브 링크 한 줄뿐인지(소개 문장이 있으면 FIX), 제목마다 sourceTitle과 나란히 놓고 sourceTitle에 없는 장면·순서·결과를 덧붙였거나 직접 해 본 것처럼 읽히는 표현(\"~했더니\", \"~해봤는데\")이 있으면 FIX. 핫플 글: target이 menus/24인지, kind가 info인지, 본문에 플레이스 등록명이 있고 맨 아래 단독 줄이 플레이스 링크인지, 장부의 \"쓴장소\"·\"핫플최근글\"과 겹치지 않는지, reviewCheck의 최근 리뷰 날짜가 최근 2개월 안인지, 날짜가 지나면 틀리는 문구·후기체·출처 줄·유튜브 링크가 없는지. 댓글: 개수, comments 형식과 건마다 target·body·subject·author가 있는지, 서로 다른 글이고 장부의 \"댓글대상\" 주소와 같은지, author가 아이스베어가 아닌지, 본문 없는 글 댓글이 제목 범위를 넘는 짐작을 하지 않는지, 링크·홍보·민감정보가 없는지. FIX는 사실 오류, 중복(영상·장소·글), 형식 오류, 금지 항목에만 낸다. 문장 틀·끝맺음·표현 취향은 FIX가 아니라 \"참고\"로 한 줄 적는다. 글·댓글이 장부 \"말투참고\"의 직접 쓴 글·댓글(자동게시 false)보다 눈에 띄게 길거나 설명조이면 \"참고\"에 건수를 적는다. 핫플 글이 2건 이상인데 \"같이 가면 좋은 카페\"가 없으면 \"참고\"에 적는다. 원본은 고치지 않는다."
+          }
+        ],
+        "publications": [
+          {
+            "id": "pub-shorts",
+            "action": "post",
+            "service": "naver_cafe",
+            "connection": "aside",
+            "agent": "community-4",
+            "target": "https://cafe.naver.com/f-e/cafes/31520563/menus/44",
+            "recipients": [],
+            "subject": "",
+            "content": "s2",
+            "instructions": "",
+            "files": [],
+            "attachments": []
+          },
+          {
+            "id": "pub-hotplace",
+            "action": "post",
+            "service": "naver_cafe",
+            "connection": "aside",
+            "agent": "community-4",
+            "target": "https://cafe.naver.com/f-e/cafes/31520563/menus/24?viewType=L",
+            "recipients": [],
+            "subject": "",
+            "content": "s3",
+            "instructions": "",
+            "files": [],
+            "attachments": []
+          },
+          {
+            "id": "pub-comments",
+            "action": "comment",
+            "service": "naver_cafe",
+            "connection": "aside",
+            "agent": "community-4",
+            "target": "https://m.cafe.naver.com/ca-fe/web/cafes/31520563/menus/44",
+            "recipients": [],
+            "subject": "",
+            "content": "s4",
+            "instructions": "",
+            "files": [],
+            "attachments": []
+          }
+        ],
+        "review": {
+          "by": "chief",
+          "criteria": "다 등급(품질검수 1회, 독립검증 없음, 반려 최대 1회). 글·댓글 개수가 대표 지시와 맞는지, 영상·장소·댓글 대상이 장부와 겹치지 않는지, 아이스베어 글에 댓글을 달지 않는지, 사실 오류·금지 항목이 없는지 확인한다. 문장 틀·표현 취향은 반려하지 않고 확인 필요에 적는다."
+        }
+      }
+    },
+    {
+      "id": "policy-sync",
+      "when": "홍카페정책부가 정책 지식을 갱신하라는 지시(갱신 도구 policy-sync.cjs 실행). 정책 질문 답변은 해당하지 않는다. 예: \"홍카페정책부 정책자료담당이 정책 지식 갱신해줘\"",
+      "plan": {
+        "goal": "홍카페 정책 지식 갱신",
+        "deliverables": [
+          "s1"
+        ],
+        "publications": [],
+        "review": {
+          "by": "chief",
+          "criteria": "가 등급. 갱신 도구 출력과 갱신 기록 파일이 있는지만 확인한다."
+        },
+        "stages": [
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [],
+            "inputs": [],
+            "id": "s1",
+            "title": "정책 지식 갱신",
+            "dept": "policy",
+            "agent": "policy-2",
+            "output": "outputs/{{task}}/policy/policy-2-정책지식갱신기록.md",
+            "done": "대표 지시: \"{{request}}\". 갱신 도구(보관함/지식/홍카페정책/도구/policy-sync.cjs)를 실행해 Notion 「정책서 이력 관리」 현행판과 비교하고, 바뀐 문서만 지식창고(보관함/지식/홍카페정책/)에 반영한다. 기록 파일에 실행 일시, 도구 실행 결과(성공/실패), 바뀐 문서 목록(문서명·변경 요지·반영 위치)을 적는다. 바뀐 문서가 없으면 '변경 없음'과 확인 일시만 짧게 남긴다. 실패하면 오류 내용과 원인 추정, 다음 조치를 적고 지식창고는 건드리지 않는다. 반복 예약·지속 감시는 시작하지 않는다."
+          }
+        ]
+      }
+    },
+    {
+      "id": "asset-weekly-collect",
+      "when": "상담사데이터자산화부가 홍카페 상담사 데이터를 수집·갱신하고 엑셀·시트로 내보내라는 지시(수집 도구 collect.cjs·export.cjs 실행). 블로그 소재·영상 시안은 해당하지 않는다. 예: \"상담사데이터자산화부 데이터수집담당이 상담사 데이터 갱신해줘\"",
+      "plan": {
+        "goal": "주간 상담사 데이터 갱신",
+        "deliverables": [
+          "s1"
+        ],
+        "publications": [],
+        "review": {
+          "by": "chief",
+          "criteria": "가 등급. 도구 출력과 시트 파일이 있는지만 확인한다."
+        },
+        "stages": [
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [],
+            "inputs": [],
+            "id": "s1",
+            "title": "상담사 데이터 수집·내보내기",
+            "dept": "asset",
+            "agent": "asset-2",
+            "output": "outputs/{{task}}/asset/asset-2-수집기록.md",
+            "done": "대표 지시: \"{{request}}\". 1) 보관함/상담사데이터/도구/collect.cjs를 실행한다(지난 회차가 끝났으면 새 회차가 자동 시작되고, 진행 중이던 회차는 이어서 처리; --restart는 쓰지 않음). 후기는 도구 기본값대로 최근 7일 후기만 모은다. 셸 제한 시간을 10분으로 두고 --minutes 9로 반복 실행해 --status 기준 남은 상담사가 0이 될 때까지 계속한다. 2) 수집이 끝나면 export.cjs로 엑셀을 다시 만든다. 3) 기록 md에 회차 id·시작/완료 시각(KST)·처리 프로필 수/전체 수·최근 7일 후기 건수와 기준 시각·새 포스팅 건수·없는 페이지 수·실패 수(실패 코드와 사유)·실행 횟수·다시 만든 엑셀 파일 경로와 생성 시각을 적는다. 수치는 도구 출력에서만 옮기고, 남은 상담사가 0이 되지 못했거나 엑셀 생성에 실패하면 실제 진행 수와 사유를 표시한다. 후기 작성자 닉네임·1:1문의 내용은 기록하지 않는다. 외부 게시·발송 없음."
+          }
+        ]
+      }
+    },
+    {
+      "id": "profile-make",
+      "when": "프로필제작부에 상담사가 보낸 원문 파일 하나(워드 .docx 또는 한글 .hwp·.hwpx)로 「상담사 프로필 소개서」 워드와 프로필 카드 PPT를 새로 만들라는 지시. 파일을 첨부했거나 파일 경로를 적은 경우다. 원문 파일이 둘 이상이거나, 이미 만든 프로필을 고치라는 지시, 기준서·체크리스트 같은 다른 문서 요청은 해당하지 않는다. 예: \"첨부한 파일로 [예명] 상담사 프로필 소개서 워드와 PPT를 만들어줘\"",
+      "plan": {
+        "goal": "{{from:content:예명}} 상담사 프로필 워드·PPT",
+        "stages": [
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [],
+            "inputs": [
+              "보관함/프로필제작/양식/작성기준서.md",
+              "보관함/프로필제작/양식/내용-형식.json"
+            ],
+            "id": "content",
+            "title": "프로필 내용 작성",
+            "dept": "profile",
+            "agent": "profile-1",
+            "output": "outputs/{{task}}/profile/profile-1-내용.json",
+            "done": "대표 지시: \"{{request}}\". 원문은 대표 지시의 [업로드한 파일](또는 지시에 적힌 경로)의 파일 하나다. 작성기준서 7절 1단계대로 한다: node 보관함/프로필제작/양식/도구/read-source.cjs <원문>으로 원문 전체를 읽고(워드·한글 모두 읽는다), 내용-형식.json 꼴의 내용 JSON을 이 단계 출력에 쓴다. \"원문\"에 원문 파일 경로(작업 공간 기준)를 적고 사실이 든 줄마다 \"근거\"에 원문 위치를 적는다. 예명은 원문의 활동명을 쓰되 대표가 지시에 이름을 적었으면 그 표기를 쓰고, 원문과 다르면 확인필요에 적는다. 소개문 속 실명은 예명으로 바꾼다(실명은 계좌주명 칸에만 원문 그대로). 상담 스타일 3개·상담태그 3개는 원문에 있으면 그대로 쓰고, 목록 밖이거나 고르지 않았으면 기준서대로 정해 확인필요에 적는다. 분야는 원문의 표시대로 하고, 둘 이상이거나 분명하지 않으면 원문 내용으로 하나를 정해 확인필요에 적는다. 원문에 없는 숫자·경력·수식어를 만들지 않는다. 그다음 이 단계 출력 폴더 아래 초안/에 node 보관함/프로필제작/양식/도구/fill-profile.cjs <내용.json> <초안 폴더>로 두 파일을 만들고 node 보관함/프로필제작/양식/도구/check-profile.cjs <내용.json> <초안 워드> <초안 PPT> --render로 검사해, ✖ 0건·\"원문에 없는 호칭·수식어\" 경고 없음·그림에서 넘침·잘림 없음이 될 때까지 내용 JSON만 고친다. 도구 파일(.cjs)의 소스와 틀 파일 속은 열어 보지 않고, 줄 폭·글자 수를 따로 계산하지 않는다(검사 도구 출력의 \"PPT 소개글 칸(어림)\" 줄과 그림으로만 판단). 같은 상담사의 지난 업무를 찾아보지 않는다. 워드·PPT 최종 파일은 다음 단계에서 실행기가 이 내용 JSON으로 만든다. 보고는 10줄 이내로 쓰고(검사 결과 한 줄, 확인 필요 항목) 연락처·실명은 옮기지 않는다."
+          },
+          {
+            "parallelGroup": "make",
+            "connection": "",
+            "target": "",
+            "dependsOn": [
+              "content"
+            ],
+            "inputs": [
+              "content"
+            ],
+            "id": "docx",
+            "title": "상담사프로필_{{from:content:예명}}",
+            "dept": "profile",
+            "agent": "profile-1",
+            "output": "outputs/{{task}}/profile/profile-1-상담사프로필.docx",
+            "done": "실행기가 fill-profile.cjs로 내용 JSON에서 워드 소개서를 만든다(도구 단계, AI 호출 없음). 내용 JSON은 고치지 않는다.",
+            "tool": {
+              "script": "보관함/프로필제작/양식/도구/fill-profile.cjs",
+              "args": [
+                "outputs/{{task}}/profile/profile-1-내용.json",
+                "outputs/{{task}}/profile/profile-1-상담사프로필.docx"
+              ],
+              "timeoutSeconds": 120
+            }
+          },
+          {
+            "parallelGroup": "make",
+            "connection": "",
+            "target": "",
+            "dependsOn": [
+              "content"
+            ],
+            "inputs": [
+              "content"
+            ],
+            "id": "pptx",
+            "title": "프로필_{{from:content:분야}}_{{from:content:예명}}",
+            "dept": "profile",
+            "agent": "profile-1",
+            "output": "outputs/{{task}}/profile/profile-1-프로필카드.pptx",
+            "done": "실행기가 fill-profile.cjs로 내용 JSON에서 분야 양식의 프로필 카드 PPT 1장을 만든다(도구 단계, AI 호출 없음). 내용 JSON은 고치지 않는다.",
+            "tool": {
+              "script": "보관함/프로필제작/양식/도구/fill-profile.cjs",
+              "args": [
+                "outputs/{{task}}/profile/profile-1-내용.json",
+                "outputs/{{task}}/profile/profile-1-프로필카드.pptx"
+              ],
+              "timeoutSeconds": 120
+            }
+          },
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [
+              "content",
+              "docx",
+              "pptx"
+            ],
+            "inputs": [
+              "content",
+              "docx",
+              "pptx"
+            ],
+            "id": "check",
+            "title": "프로필 원문 대조 검수",
+            "dept": "profile",
+            "agent": "profile-2",
+            "output": "outputs/{{task}}/profile/profile-2-검수.md",
+            "done": "node 보관함/프로필제작/양식/도구/check-profile.cjs <내용 JSON> <워드> <PPT> --render를 한 번 실행해 결과(✖·⚠ 건수)를 적고, 나온 그림을 열어 글자 넘침·잘림·빈칸을 본다. 원문(내용 JSON의 \"원문\" 경로)을 node 보관함/프로필제작/양식/도구/read-source.cjs로 읽어 워드·PPT의 사실·연락처·계좌·태그·스타일·분야 표시를 대조하고(연락처 값은 쓰지 않고 일치 여부만), 소개문에 실명이 남지 않았는지 확인한다. 고칠 점은 칸·내용·이유로 적고 앞 단계 파일은 고치지 않는다. 도구 소스는 열어 보지 않는다. 마지막에 판정(통과/수정 필요)을 쓴다."
+          }
+        ],
+        "deliverables": [
+          "docx",
+          "pptx"
+        ],
+        "publications": [],
+        "review": {
+          "by": "chief",
+          "criteria": "나 등급(비서실장 검토 1회, 반려 최대 1회). 검수 결과가 check-profile ✖ 0건이고, 원문에 없는 사실·숫자가 없으며, 예명 사용·실명 노출 없음(계좌주명 칸 제외), 태그·스타일이 워드와 PPT에서 같고, 분야·태그를 추정했으면 확인 필요에 적혔는지 확인한다. 고칠 것이 있으면 content 단계를 반려한다(워드·PPT는 그 뒤 실행기가 다시 만든다). 문체·표현 취향은 반려하지 않는다."
+        }
+      }
+    },
+    {
+      "id": "aitrend-daily",
+      "when": "AI트렌드부의 정기 AI 동향 보고(대장급 AI 회사 모델의 최근 변경·개선사항과 우리 서비스 적용점을 정리한 일일·주간 브리핑 HTML)를 만들라는 지시. 매일 예약으로 도는 것도 해당한다. 특정 주제 하나만 깊게 조사하라는 지시나 HTML이 아닌 다른 형식을 정한 지시는 해당하지 않는다. 예: \"대장급 AI 모델 개선사항 보고해줘\", \"오늘 AI 동향 브리핑 만들어줘\"",
+      "plan": {
+        "goal": "대장급 AI 동향 보고 {{date}}",
+        "stages": [
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [],
+            "inputs": [],
+            "id": "s1",
+            "title": "대장급 AI 모델 변경사항 수집",
+            "dept": "aitrend",
+            "agent": "aitrend-2",
+            "output": "outputs/{{task}}/aitrend/aitrend-2-ai-model-updates.md",
+            "done": "대표 지시: \"{{request}}\". 오늘은 {{date}}이다. 대상은 Anthropic(Claude)·OpenAI(GPT)·Google(Gemini)이 필수이고, 그 밖의 주요 AI 회사는 눈에 띄는 발표가 있을 때만 넣는다. 기간은 대표가 정했으면 그 기간, 아니면 최근 7일이고 최근 24시간 발표를 먼저 적는다. 부서 지침대로 지난 AI 브리핑(보관함/최종산출물 또는 이전 업무 폴더의 가장 최근 것 하나)을 먼저 읽어 항목마다 신규·갱신·변동 없음을 표시한다. 항목마다 회사·모델명·발표 날짜·변경 내용(새 모델·업데이트·새 기능·API·가격)·얼마나 좋아졌는지(공식 수치와 이전 대비 개선 폭, 측정 주체와 조건)·출처 링크(공식 블로그·변경 기록·가격표 우선)를 적는다. 같은 사건은 1건으로 묶고 제목은 원문 그대로 쓴다. 수치·날짜는 직접 연 페이지에서만 가져오고 확인하지 못한 수치는 \"미확인\"으로 표시한다. 기간 안에 발표가 없는 필수 회사는 \"해당 기간 새 발표 없음\"과 가장 최근 발표 날짜를 적는다. 필수 3개 회사를 다 확인하면 바로 끝낸다."
+          },
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [
+              "s1"
+            ],
+            "inputs": [
+              "s1"
+            ],
+            "id": "s2",
+            "title": "대장급 AI 동향 보고서 {{date}}",
+            "dept": "aitrend",
+            "agent": "aitrend-1",
+            "output": "outputs/{{task}}/aitrend/aitrend-1-daily-ai-briefing.html",
+            "done": "s1 수집 결과만으로 비개발자가 읽는 한국어 HTML 보고서 한 개를 쓴다. 구성: 제목·확인일({{date}}), 한눈에 보는 결론(3~5줄), 회사·모델별 카드(무엇이 바뀌었는지, 얼마나 좋아졌는지, 신규·갱신·변동 없음 표시, 출처 링크·발표 날짜), 모델 비교 표(확인된 수치만, 측정 주체 표시), 우리 서비스(홍카페·꼬리별 관측소·AI Office)에 적용할 만한 신기술(제안으로 표시하고 근거 발표와 연결, 없으면 \"해당 없음\"), 한계(미확인 수치·회사 자체 발표 여부), 다음 확인할 일. 확인한 사실·추정·제안을 구분하고 s1에 없는 수치를 만들지 않는다. s1의 수치와 표기가 서로 어긋나는 곳이 있으면 s1 원문 값으로 맞춘다. 모바일에서 표·카드가 화면을 넘지 않게 하고 인쇄용 스타일을 넣는다. 외부 스크립트 없이 파일 하나로 열린다. 내부 진행 용어(단계 id·반려 등)는 본문에 쓰지 않는다."
+          }
+        ],
+        "deliverables": [
+          "s2"
+        ],
+        "publications": [],
+        "review": {
+          "by": "chief",
+          "criteria": "나 등급(비서실장 검토 1회, 반려 최대 1회). Claude·GPT·Gemini 각각의 최근 변경과 개선 정도가 출처 링크·날짜와 함께 들어갔는지, 수치가 수집 파일과 같고 미확인 표시가 있는지, 같은 사건 중복이 없는지, 적용 제안이 제안으로 표시됐는지 확인한다. 수치 불일치·표기 모순은 반려 1회 안에서 고친다. 문체·디자인 취향은 반려하지 않는다."
+        }
+      }
+    },
+    {
+      "id": "ops-self-eval",
+      "when": "AI평가부가 AI 직원들이 끝낸 업무를 스스로 평가해 평가 보고서와 개선노트를 만들라는 지시(AI 업무 자체 평가). 매일 예약으로 도는 것도 해당한다. 특정 업무 하나만 따로 분석하라는 지시는 해당하지 않는다. 예: \"AI 업무 자체 평가 진행해줘\", \"AI 자체 평가하고 개선 노트 만들어줘\"",
+      "plan": {
+        "goal": "AI 자체 평가 개선 노트 {{date}}",
+        "stages": [
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [],
+            "inputs": [],
+            "id": "s1",
+            "title": "업무 기록 분석표",
+            "dept": "operations",
+            "agent": "operations-1",
+            "output": "outputs/{{task}}/operations/operations-1-work-log-review.md",
+            "done": "대표 지시: \"{{request}}\". 오늘은 {{date}}이다. 부서 지침의 [건너뛰기]를 가장 먼저 확인해 맨 위에 적는다. 건너뛰기에 해당하면 첫 줄에 \"평가 건너뜀\"과 사유(마지막 평가일, 새로 끝난 업무 수)만 한두 줄 쓰고 끝낸다. 평가하면 부서 지침의 [평가 대상]대로 마지막 평가 이후 끝난 업무를 최근 10건까지 고르고(이 부서의 평가 업무·건너뜀 기록과 이번 업무는 뺀다. 넘긴 업무는 목록으로 적는다), 업무마다 1행 표로 쓴다: 업무 id·지시 요지·담당 부서/직원·최종 상태·반려·재작업 횟수와 사유·계획 수정 여부·산출물 누락 여부·걸린 시간(report.md의 \"걸린 시간\" 줄이 있으면 그 값, 없으면 파일 시각으로 추정하고 \"추정\" 표시). 표 아래에 반복된 실수·지연 원인 후보와 지난 개선노트 항목이 지켜졌는지 짧게 정리한다. 수치·시각은 업무 폴더 파일에서 직접 확인한 것만 쓰고 확인 못 한 항목은 \"미확인\"으로 둔다. 맨 위에 대상 업무 수와 실제 확인한 업무 수를 적는다. 업무당 핵심만 쓴다."
+          },
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [
+              "s1"
+            ],
+            "inputs": [
+              "s1"
+            ],
+            "id": "s2",
+            "title": "AI 자체 평가 개선노트 {{date}}",
+            "dept": "operations",
+            "agent": "operations-kpi",
+            "output": "outputs/{{task}}/operations/operations-kpi-improvement-note.md",
+            "done": "s1이 \"평가 건너뜀\"이면 같은 사유를 한두 줄로만 쓰고 끝낸다(지난 개선노트를 다시 쓰지 않는다). 평가했으면 부서 지침 [산출물 세 가지]의 (나) 개선노트를 쓴다: 맨 위에 \"평가일: {{date}}\"와 평가한 업무 범위, \"모든 부서 공통\"과 부서별 소제목 아래 \"다음 업무에서 지킬 것\"을 항목당 한 문장·부서마다 최대 5개. 지난 개선노트(가장 최근 것 하나)를 읽어 아직 유효한 항목은 옮기고 해결된 항목은 뺀다. 전체 60줄 이내, 구체적인 행동으로 쓴다. 근거 없는 수치를 쓰지 않는다."
+          },
+          {
+            "parallelGroup": "",
+            "connection": "",
+            "target": "",
+            "dependsOn": [
+              "s2"
+            ],
+            "inputs": [
+              "s1",
+              "s2"
+            ],
+            "id": "s3",
+            "title": "AI 자체 평가 보고서 {{date}}",
+            "dept": "operations",
+            "agent": "operations-kpi",
+            "output": "outputs/{{task}}/operations/operations-kpi-evaluation.html",
+            "done": "s1이 \"평가 건너뜀\"이면 제목과 건너뛴 사유만 담은 짧은 HTML 한 파일을 쓰고 끝낸다. 평가했으면 부서 지침 [산출물 세 가지]의 (가) 평가 보고서 HTML 한 파일을 쓴다: 맨 위 결론 3줄, 업무별 점수표(5개 항목 5점 척도와 근거 경로, 근거가 없으면 \"평가 불가\"), 잘한 점, 반복된 문제와 원인, 부서별 개선점, 다음 평가까지 볼 것, 끝에 (다) 지침 수정안 표(대상 부서·직원 / 추가·수정할 문장 / 근거가 된 업무, 제안으로 표시). 확인한 사실·추정·제안을 구분한다. 개인의 이름·연락처는 옮기지 않는다. 외부 스크립트 없이 파일 하나로 열린다."
+          }
+        ],
+        "deliverables": [
+          "s3",
+          "s2"
+        ],
+        "publications": [],
+        "review": {
+          "by": "chief",
+          "criteria": "가 등급. 건너뜀이면 건너뜀 기록만 확인하고 완료한다. 평가했으면 분석표·개선노트·평가 보고서 파일이 있고 개선노트가 60줄 이내에 평가일·범위가 적혔는지, 지침 수정안이 제안으로만 남았는지만 확인한다."
+        }
+      }
+    }
+  ]
+}
