@@ -688,6 +688,9 @@ export function createRunner({ root, onChange, judge = null, followUp = null, re
         control ? { engine: control.engine, effort: control.effort } : effort ? { effort } : {});
       if (readOnly && childSpec.engine === 'codex') childSpec.args[childSpec.args.indexOf('-s') + 1] = 'read-only';
       if (readOnly && childSpec.engine === 'claude') childSpec.args.push('--tools', 'Read,Glob,Grep');
+      // 비서실장 호출(계획·점검·검토)은 외부 연결(MCP) 도구를 쓸 수 없다(chief-guard가 거부한다). 불러오지 않게 해 호출마다 붙던 도구 설명
+      // 약 16만 토큰과 그만큼의 응답 지연을 없앤다(실측 2026-11-26: 둘째 차례부터 붙었다)
+      if (!agentId && childSpec.engine === 'claude' && !childSpec.args.includes('--strict-mcp-config')) childSpec.args.push('--strict-mcp-config');
       // 검토된 원문을 그대로 넣는 게시·발송은 판단할 것이 거의 없다. Aside 생각 강도를 낮추고 대기 한도를 10분으로 줄여 건당 시간을 줄인다(결과는 실행기가 화면으로 다시 대조한다)
       if (childSpec.engine === 'aside' && phase === 'publish') {
         const at = childSpec.args.indexOf('--timeout');

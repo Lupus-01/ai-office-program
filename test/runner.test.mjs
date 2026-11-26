@@ -107,6 +107,8 @@ test('claude 실행 인자: 부서 권한·도구·--agent, prompt 는 stdin', a
   assert.ok(calls[1].args.some((a) => ['--append-system-prompt', '--append-system-prompt-file'].includes(a)));
   assert.ok(calls[1].args.includes('--json-schema'));
   assert.ok(calls[1].args.includes('Read,Glob,Grep'));
+  assert.ok(calls[1].args.includes('--strict-mcp-config'), '비서실장 호출은 쓰지 못하는 외부 연결(MCP) 도구를 불러오지 않는다');
+  assert.ok(!calls[0].args.includes('--strict-mcp-config'), '직원 실행의 외부 연결은 그대로 둔다');
   assert.equal(calls[1].opts.env.OFFICE_ORGMAP_INJECTED, '1', 'SessionStart 훅이 조직도를 또 넣지 않게 알린다');
   assert.equal(calls[0].opts.env.OFFICE_ORGMAP_INJECTED, process.env.OFFICE_ORGMAP_INJECTED, '직원 실행에는 붙이지 않는다');
   assert.equal(calls[1].opts.env.OFFICE_CHIEF_RUN, '1', '비서실장 실행은 chief-guard가 업무 등록 전에도 판정하게 알린다');

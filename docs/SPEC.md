@@ -226,6 +226,7 @@ test/                     node:test
 
 ### 계획
 
+- 비서실장의 Claude 호출(계획·진행 점검·검토)에는 `--strict-mcp-config`를 붙인다. 비서실장은 외부 연결(MCP) 도구를 쓸 수 없는데(chief-guard가 거부), 그대로 두면 둘째 차례부터 그 도구 설명 약 16만 토큰이 호출마다 붙어 응답이 늦어지고 비용이 든다. 직원 실행의 외부 연결은 바꾸지 않는다.
 - 비서실장이 계획 JSON을 낸다(`schemas/plan.json`). 형식:
   - `plan = {version:1, task, goal, stages, review:{by, criteria}, gaps:[{need, suggestion}], publications, deliverables}`
   - `stages[] = {id, title, dept, agent, inputs, output, done, dependsOn, parallelGroup, connection, target}`
