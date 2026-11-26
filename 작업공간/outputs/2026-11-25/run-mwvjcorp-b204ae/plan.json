@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "task": "2026-11-25/run-mwvjcorp-b204ae",
+  "goal": "AI 자체 평가 개선 노트 11월 25일",
+  "stages": [
+    {
+      "id": "s1a-worklog-1124",
+      "title": "업무 기록 분석표 (11월 24일 오후 진행 업무)",
+      "dept": "operations",
+      "agent": "operations-1",
+      "inputs": [
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-24\\run-mwu3wtef-db0a38\\operations\\operations-kpi-improvement-note.md",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-24\\run-mwu3wtef-db0a38\\operations\\operations-1-work-log-review.md"
+      ],
+      "output": "outputs/2026-11-25/run-mwvjcorp-b204ae/operations/operations-1-work-log-review-1124.md",
+      "done": "지난 평가(2026-11-24 run-mwu3wtef-db0a38) 이후 진행된 업무 11건만 대상: outputs/2026-11-24/ 의 run-mwu61zwd-2a9784, run-mwu6qnnc-08f2e7, run-mwu93zql-536025, run-mwu9chvc-393846, run-mwu9e3qt-f08f47, run-mwua3zg0-2166af, run-mwua94og-1e28bc, run-mwualycv-63d2d4, run-mwuani93-d61573, run-mwuc4ulk-c166f7, run-mwudaxd2-74d871. 업무별 1행 표: 업무 id·지시 요지·담당 부서/직원·최종 상태(완료/막힘/진행 중)·반려·재작업 횟수와 사유·계획 수정 여부·산출물 누락 여부·소요 시간 추정(기록 시각 근거, 없으면 '미확인'). 표 아래에 반복된 실수·지연 원인 후보와 지난 개선 노트(11-24) 항목의 지켜짐/안 지켜짐 확인을 짧게 정리. 수치·시각은 업무 폴더 파일(brief·plan·report·review-notes·이벤트 기록)에서 직접 확인한 것만 쓰고 확인 못 한 항목은 '미확인'. 맨 위에 대상 업무 수와 실제 확인한 업무 수를 적는다. 12시 25분 안에 끝낼 분량으로 업무당 핵심만 쓴다.",
+      "dependsOn": [],
+      "parallelGroup": "worklog",
+      "connection": "",
+      "target": ""
+    },
+    {
+      "id": "s1b-worklog-1125",
+      "title": "업무 기록 분석표 (11월 25일 오전 진행 업무)",
+      "dept": "operations",
+      "agent": "operations-1",
+      "inputs": [
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-24\\run-mwu3wtef-db0a38\\operations\\operations-kpi-improvement-note.md"
+      ],
+      "output": "outputs/2026-11-25/run-mwvjcorp-b204ae/operations/operations-1-work-log-review-1125.md",
+      "done": "outputs/2026-11-25/ 의 업무 4건만 대상(이번 업무 run-mwvjcorp-b204ae 제외): run-mwvfuoou-645d74, run-mwvg9fqc-e7b03f, run-mwvh7ioc-2a7e20, run-mwvhf38g-ca9c36. 업무별 1행 표: 업무 id·지시 요지·담당 부서/직원·최종 상태(완료/막힘/진행 중)·반려·재작업 횟수와 사유·계획 수정 여부·산출물 누락 여부·소요 시간 추정(기록 시각 근거, 없으면 '미확인'). 표 아래에 반복된 실수·지연 원인 후보와 지난 개선 노트(11-24) 항목의 지켜짐/안 지켜짐 확인을 짧게 정리. 수치·시각은 업무 폴더 파일에서 직접 확인한 것만 쓰고 확인 못 한 항목은 '미확인'. 맨 위에 대상 업무 수와 실제 확인한 업무 수를 적는다. 12시 20분 안에 끝낼 분량으로 업무당 핵심만 쓴다.",
+      "dependsOn": [],
+      "parallelGroup": "worklog",
+      "connection": "",
+      "target": ""
+    },
+    {
+      "id": "s2-note",
+      "title": "AI 자체 평가·다음 업무 개선 노트 (2026-11-25)",
+      "dept": "operations",
+      "agent": "operations-kpi",
+      "inputs": [
+        "s1a-worklog-1124",
+        "s1b-worklog-1125",
+        "C:\\Users\\재영이\\AIOffice\\outputs\\2026-11-24\\run-mwu3wtef-db0a38\\operations\\operations-kpi-improvement-note.md"
+      ],
+      "output": "outputs/2026-11-25/run-mwvjcorp-b204ae/operations/operations-kpi-improvement-note.md",
+      "done": "s1a·s1b 분석표를 근거로 md 한 파일 작성: ① 평가 결론 3줄(잘된 점·문제점·전체 점수 또는 등급과 기준) ② 업무별 평가 요약(대상 15건, 업무 id 인용) ③ 반복 문제 원인 분석(근거 업무 id 명시) ④ 다음 업무를 위한 개선 노트—부서·직원별로 바로 적용할 행동 항목(무엇을·언제·어떻게) ⑤ 지침 수정안 제안(대상 직원/부서, 현재 문제, 바꿀 문장 예시; 실제 org·에이전트 파일은 고치지 않고 제안만) ⑥ 지난 노트(11-24) 대비 개선·미개선 항목. 확인한 사실·추정·제안을 구분 표기하고 출처 없는 수치는 쓰지 않는다. 12시 40분 전에 끝낸다.",
+      "dependsOn": [
+        "s1a-worklog-1124",
+        "s1b-worklog-1125"
+      ],
+      "parallelGroup": "",
+      "connection": "",
+      "target": ""
+    }
+  ],
+  "review": {
+    "by": "chief",
+    "criteria": "대상 업무 15건(11-24 지난 평가 이후 11건 + 11-25 오전 4건, 이번 업무 제외)이 빠짐없이 다뤄졌는지, 평가 근거가 업무 폴더 기록과 일치하는지(미확인 표시 포함), 개선 노트가 부서·직원별 실행 가능한 행동으로 쓰였는지, 지침 수정안이 제안으로만 남았는지, 사실·추정·제안 구분, 12시 40분 마감 준수"
+  },
+  "gaps": [],
+  "publications": [],
+  "deliverables": [
+    "s2-note"
+  ]
+}
