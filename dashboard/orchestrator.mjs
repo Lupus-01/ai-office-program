@@ -489,6 +489,8 @@ export async function orchestrate({ root, run, prompt, execute: runAI, signal, m
     response = { plan: saved.plan, rerunStages: [] };
     plan = saved.plan;
   } else {
+    // 비서실장이 계획을 새로 세우면 더는 검증해 둔 고정 절차가 아니다(추가 지시·계정 변경·문안 수정). 절차 표시를 지워 단계 사이 점검을 되살리고 도구 단계·이름 자리를 쓰지 않는다
+    if (state.recipe) state.recipe = null;
     let error = '';
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
