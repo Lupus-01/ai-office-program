@@ -35,3 +35,5 @@ metadata:
 **2.0 저장소에도 회사 설정 전체(11-24 대표 지시):** 대표가 "2.0 폴더에도 모든 지침 및 설정을 올려 달라"고 해서, 회사 데이터 저장소(ai-office-company)의 main을 비공개 ai-office-program의 `company-data` 브랜치로 그대로 올린다. 명령: 로컬 `ai-office-workspace` 폴더에서 `node sync.mjs` 뒤 `git push https://github.com/Lupus-01/ai-office-program.git main:refs/heads/company-data`.
 **Why:** 프로그램 코드 브랜치(main·feat/…)는 공개 포크에도 push되므로, 회사 설정(ERP 주소 포함)을 코드 브랜치에 섞으면 공개 저장소로 샐 수 있다. 브랜치를 따로 둔 것은 내 판단이다.
 **How to apply:** "두 저장소에 올려줘"는 코드(origin 작업 브랜치 + v2) push, sync.mjs, 그리고 위 company-data push까지 한다.
+
+- **2.0 회사 구성(2026-11-26):** 2.0 개발 서버가 쓰는 회사 구성 복사본(`C:\Dev\ai-office-2.0-company`, 저장소 아님)에서 운영 구성과 다른 파일만 이 저장소의 `작업공간-2.0/`에 올린다(sync.mjs 대상이 아니라 직접 복사·커밋). 집 PC에서 2.0을 이어 하는 순서는 `이어서-작업하기.md`의 "2.0 개발 이어서 하기" 절에 있다. 2.0 복사본의 구성 파일을 바꾸면 이 폴더도 함께 갱신한다.
