@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // 광고 선정 자료 수집: 아테나 「아이템별정산현황」(전체 상담사)과 광고 기록 시트(「메인상담사 배너 리스트」)를 한 번에 읽는다.
 // Aside 브라우저의 로그인을 쓴다(읽기 전용: 저장·수정·입력 없음). AI를 쓰지 않는다.
+// AI 오피스 안의 확정 기록(보관함/광고운영/확정기록.json)이 있으면 광고 이력에 합친다.
 //
 //   node 보관함/광고운영/도구/ad-collect.cjs --out <폴더> [--prefix <파일 이름 앞가지>] [--month 2026-10] [--skip-sheet] [--skip-athena]
 //   node 보관함/광고운영/도구/ad-collect.cjs --check      아테나 로그인과 시트 열람만 확인(시작 전 점검용)
@@ -201,11 +202,27 @@ async function main() {
       history.push(...parsed.records); skipped.push(...parsed.skipped);
       tabs.push({ name: ws.name, order: wb.worksheets.indexOf(ws), blocks: parsed.blocks });
     }
+    // AI 오피스 안의 확정 기록(시트에 넣지 않고 확정한 명단)을 이력에 합친다. 그 주·배너에 시트의 "예정" 이름이 있으면 확정 기록이 대신한다
+    const ledgerFile = path.join(__dirname, '..', '확정기록.json');
+    let localCount = 0;
+    if (fs.existsSync(ledgerFile)) {
+      let ledger = [];
+      try { ledger = JSON.parse(fs.readFileSync(ledgerFile, 'utf8')); } catch { fail('확정기록.json을 읽지 못했습니다(JSON 형식 확인).'); }
+      const slot = (r) => `${r.start}|${r.group}|${r.channel}|${r.banner}`;
+      const confirmedSlots = new Set(ledger.map(slot));
+      for (let i = history.length - 1; i >= 0; i--) if (history[i].status === '예정' && confirmedSlots.has(slot(history[i]))) history.splice(i, 1);
+      const have = new Set(history.map((h) => `${slot(h)}|${h.nickname}`));
+      for (const r of ledger) {
+        if (have.has(`${slot(r)}|${r.nickname}`)) continue;
+        history.push({ start: r.start, end: r.end, group: r.group, channel: r.channel, banner: r.banner, nickname: r.nickname, status: '확정', original: r.nickname, position: `확정기록 ${r.draftId}` });
+        localCount++;
+      }
+    }
     if (!tabs.length) fail('광고 기록 시트에서 그린/퍼플 전화·채팅 탭을 찾지 못했습니다. 탭 이름을 확인해 주세요.');
     const weeks = [...new Set(history.filter((h) => h.status === '확정').map((h) => h.start))].sort();
     const planned = history.filter((h) => h.status === '예정');
     fs.writeFileSync(path.join(out, `${opt('prefix')}이력.json`), JSON.stringify({ source: `https://docs.google.com/spreadsheets/d/${sheetId}/edit`, collectedAt: new Date().toISOString(), firstWeek: weeks[0] || '', lastWeek: weeks.at(-1) || '', tabs, history, skipped }, null, 1));
-    lines.push(`광고 기록: ${tabs.length}개 탭 ${history.length}건 (${weeks[0] || '-'} 주 ~ ${weeks.at(-1) || '-'} 주, 예정 ${planned.length}건, 메모로 뺀 칸 ${skipped.length})`);
+    lines.push(`광고 기록: ${tabs.length}개 탭 ${history.length}건 (${weeks[0] || '-'} 주 ~ ${weeks.at(-1) || '-'} 주, 예정 ${planned.length}건, 메모로 뺀 칸 ${skipped.length}${localCount ? `, AI 오피스 확정 기록 ${localCount}건 포함` : ''})`);
   }
   for (const line of lines) console.log(line);
   console.log(`걸린 시간 ${Math.round((Date.now() - started) / 1000)}초`);

@@ -340,3 +340,40 @@ test('조정 명령: 넣기·빼기·우선·주기·희망·취소가 파일에
     assert.match(run('취소', '--id', 'EX-099').stderr, /없습니다/);
   } finally { rmSync(vault, { recursive: true, force: true }); }
 });
+
+test('확정: AI 오피스 안의 확정 기록에만 남기고, 같은 초안은 다시 쓰지 않으며, 다른 초안이 있으면 "다시 확정"일 때만 바꾼다', async () => {
+  const { cpSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join, dirname } = await import('node:path');
+  const { spawnSync } = await import('node:child_process');
+  const root = mkdtempSync(join(tmpdir(), 'ad-apply-'));
+  const tools = join(root, '보관함', '광고운영', '도구');
+  try {
+    cpSync(dirname(require.resolve('../shared/보관함/광고운영/도구/ad-lib.cjs')), tools, { recursive: true });
+    writeFileSync(join(tools, '설정.json'), JSON.stringify({ sheet: 'https://docs.google.com/spreadsheets/d/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/edit' }));
+    const make = (id, names) => {
+      const draft = ad.generateDraft({ startDate: WEEK, weekCount: 4, counselors: names.map((n) => person(n)) });
+      const file = join(root, `${id}-광고선정초안.json`);
+      writeFileSync(file, JSON.stringify({ draftId: id, version: 1, weeks: ['2026-11-30', '2026-12-07', '2026-12-14', '2026-12-21'], rows: draft.rows, policy: ad.defaultPolicy() }));
+      return { file, rows: draft.rows.filter((r) => r.result === '선정') };
+    };
+    const one = make('AD-20261130-4W-AAAAAA', ['가온', '나래']), two = make('AD-20261130-4W-BBBBBB', ['다솜']);
+    const run = (...a) => spawnSync(process.execPath, [join(tools, 'ad-apply.cjs'), ...a], { encoding: 'utf8', cwd: root });
+    const ledger = () => JSON.parse(readFileSync(join(root, '보관함', '광고운영', '확정기록.json'), 'utf8'));
+    assert.match(run('--draft', one.file, '--confirm', 'AD-20261130-4W-XXXXXX').stderr, /초안 ID가 맞지 않습니다/);
+    assert.equal(existsSync(join(root, '보관함', '광고운영', '확정기록.json')), false);
+    const first = run('--draft', one.file, '--confirm', 'AD-20261130-4W-AAAAAA', '--weeks', '2026-11-30', '--out', join(root, 'out'));
+    assert.match(first.stdout, /확정 완료/); assert.match(first.stdout, /구글 시트에는 넣지 않았습니다/);
+    assert.equal(ledger().length, one.rows.filter((r) => r.week === '2026-11-30').length);
+    assert.equal(JSON.parse(readFileSync(join(root, 'out', '확정결과.json'), 'utf8')).ok, true);
+    assert.match(run('--draft', one.file, '--confirm', 'AD-20261130-4W-AAAAAA', '--weeks', '2026-11-30').stdout, /이미 확정돼 있습니다/);
+    assert.match(run('--draft', two.file, '--confirm', 'AD-20261130-4W-BBBBBB', '--weeks', '2026-11-30').stderr, /이미 확정된 다른 초안/);
+    mkdirSync(join(root, 'task'), { recursive: true });
+    writeFileSync(join(root, 'task', 'brief.md'), '- apply: [[지시]]초안 AD-20261130-4W-BBBBBB 1주차만 다시 확정해줘[[/지시]]');
+    const again = run('--brief', join(root, 'task', 'brief.md'), '--find', root, '--out', join(root, 'out2'));
+    assert.match(again.stdout, /바꾼 초안: AD-20261130-4W-AAAAAA/);
+    assert.deepEqual([...new Set(ledger().map((r) => `${r.draftId} ${r.start} ${r.nickname}`))], two.rows.filter((r) => r.week === '2026-11-30').map((r) => `AD-20261130-4W-BBBBBB 2026-11-30 ${r.nickname}`));
+    writeFileSync(join(root, 'task', 'brief.md'), '- apply: [[지시]]검토한 초안 최종 확정해줘[[/지시]]');
+    assert.match(run('--brief', join(root, 'task', 'brief.md'), '--find', root).stderr, /초안 ID가 없어/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

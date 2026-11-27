@@ -158,7 +158,7 @@ function writeSummary() {
     `- 광고 기록: 시트의 ${lastWeek} 주까지 확정분 반영, 미리 적힌 "예정" 자리 ${preassigned.length}칸`,
     `- 선정 기준: ${meta.policy} · 희망 ${meta.counts.wishes}건 · 조정(넣기·빼기·우선·주기) ${meta.counts.exceptions}건 · 이월 ${meta.counts.carryovers}건`,
     `- 결과: 선정 ${draft.summary.selected}명 · 빈 자리 ${draft.summary.emptySlots} · 이월예정 ${draft.summary.carryover} · 제외(희망) ${draft.summary.excluded}`,
-    `- 이 초안은 계산 결과입니다. 광고 기록 시트에는 아직 아무것도 넣지 않았습니다. 넣으려면 "초안 ${draftId} 최종 확정해줘"라고 지시합니다.`, '',
+    `- 이 초안은 계산 결과이고 아직 확정되지 않았습니다. 확정하려면 "초안 ${draftId} 최종 확정해줘"라고 지시합니다. 확정 명단은 AI 오피스 안의 확정 기록에 남고(다음 초안의 광고 이력이 됩니다) 구글 시트는 건드리지 않습니다.`, '',
     '## 주차별 선정 / 정원', '', `| 배너 | ${weeks.join(' | ')} |`, `| --- | ${weeks.map(() => '---').join(' | ')} |`];
   for (const b of [...new Set(draft.slots.map((s) => `${s.group} ${s.channel} ${s.banner}`))]) lines.push(`| ${b} | ${weeks.map((w) => { const s = draft.slots.find((x) => x.week === w && `${x.group} ${x.channel} ${x.banner}` === b); return `${s.placed}/${s.capacity}`; }).join(' | ')} |`);
   lines.push('', '## 확인 필요', '');

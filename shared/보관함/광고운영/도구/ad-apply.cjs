@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// 광고 선정 확정 반영: 운영자가 확정한 초안의 명단을 광고 기록 시트(「메인상담사 배너 리스트」)의 해당 주 열에 넣고, 다시 읽어 대조한다.
-// Aside 브라우저의 구글 로그인을 쓴다. AI를 쓰지 않는다. 시트에 쓰는 유일한 도구다.
+// 광고 선정 확정: 운영자가 확정한 초안의 명단을 확정 기록으로 남긴다. AI를 쓰지 않는다.
+// 기본은 AI 오피스 안의 파일에만 남긴다(보관함/광고운영/확정기록.json). 구글 시트는 건드리지 않는다. 다음 초안은 이 기록을 광고 이력에 합쳐 계산한다.
+// 설정.json에 "applyTarget":"sheet"를 적은 PC에서만 광고 기록 시트(「메인상담사 배너 리스트」)의 해당 주 열에 넣고 다시 읽어 대조한다(Aside 브라우저의 구글 로그인).
+// 지시에 "다시 확정"·"덮어"가 있거나 --replace 를 주면, 같은 주에 이미 확정된 다른 초안의 기록을 이 초안으로 바꾼다(파일 방식만).
 //
 //   node 보관함/광고운영/도구/ad-apply.cjs --draft <광고선정초안.json> --confirm <초안 ID> [--weeks 2026-12-07,2026-12-14] [--out <폴더>] [--prefix <앞가지>] [--dry-run]
 //   node 보관함/광고운영/도구/ad-apply.cjs --brief <업무 brief.md> --find outputs --out <폴더>     고정 절차용: 대표 지시([[지시]]…[[/지시]])에 적힌 초안 ID로 초안을 찾아 반영한다.
@@ -31,10 +33,10 @@ const user = Number.isInteger(Number(config.googleUser)) ? Number(config.googleU
 const sheetUrl = `https://docs.google.com/spreadsheets/u/${user}/d/${sheetId}/edit`;
 
 // 고정 절차: 지시문에서 초안 ID를 읽고 업무 폴더들에서 그 초안을 찾는다
-let draftPath = opt('draft'), confirmId = opt('confirm'), ordinals = [];
+let draftPath = opt('draft'), confirmId = opt('confirm'), ordinals = [], asked = { text: '' };
 if (opt('brief')) {
   if (!fs.existsSync(opt('brief'))) fail(`업무 설명 파일이 없습니다(${opt('brief')}).`);
-  const asked = ad.parseRequest(fs.readFileSync(opt('brief'), 'utf8'));
+  asked = ad.parseRequest(fs.readFileSync(opt('brief'), 'utf8'));
   if (!asked.draftId) fail('지시에 초안 ID가 없어 반영하지 않았습니다. 확정할 초안의 ID(예: AD-20261207-4W-XXXXXX)를 적어 다시 지시해 주세요. 초안 ID는 초안 요약 첫 줄에 있습니다.');
   confirmId = asked.draftId; ordinals = asked.weekOrdinals;
   const found = [];
@@ -60,6 +62,37 @@ const outside = weeks.filter((w) => !draft.weeks.includes(w));
 if (outside.length || !weeks.length) fail(`초안에 없는 주차입니다: ${outside.join(', ') || '(없음)'}. 이 초안의 주차: ${draft.weeks.join(', ')}`);
 const problems = ad.validateDraft(draft.rows.filter((r) => weeks.includes(r.week)), draft.policy);
 if (problems.length) fail(`검증 문제가 있어 반영하지 않았습니다:\n${problems.slice(0, 10).join('\n')}`);
+
+// ---- 파일 방식(기본): AI 오피스 안의 확정 기록에만 남긴다
+if (String(config.applyTarget || 'file') !== 'sheet') {
+  const ledgerFile = path.join(__dirname, '..', '확정기록.json');
+  let ledger = [];
+  try { if (fs.existsSync(ledgerFile)) ledger = JSON.parse(fs.readFileSync(ledgerFile, 'utf8')); } catch { fail('확정기록.json을 읽지 못했습니다(JSON 형식 확인). 고치기 전에는 확정하지 않습니다.'); }
+  const rows = draft.rows.filter((r) => r.result === '선정' && weeks.includes(r.week));
+  const others = ledger.filter((r) => weeks.includes(r.start) && r.draftId !== draft.draftId);
+  const mine = ledger.filter((r) => weeks.includes(r.start) && r.draftId === draft.draftId);
+  const sig = (list) => list.map((r) => [r.start ?? r.week, r.group, r.channel, r.banner, r.nickname].join('|')).sort().join('\n');
+  const replace = args.includes('--replace') || /다시\s*확정|덮어/.test(asked.text || '');
+  console.log(`확정 대상 ${draft.draftId} v${draft.version}: ${weeks.join(', ')} (${weeks.length}주), 이름 ${rows.length}칸 — AI 오피스 안의 확정 기록에만 남깁니다(구글 시트는 건드리지 않음)`);
+  const outDirFile = opt('out') || path.dirname(draftPath);
+  fs.mkdirSync(outDirFile, { recursive: true });
+  const writeResult = (extra) => fs.writeFileSync(path.join(outDirFile, `${opt('prefix')}확정결과.json`), JSON.stringify({ draftId: draft.draftId, version: draft.version, weeks, target: '확정기록.json(AI 오피스 안)', expected: rows.length, ...extra }, null, 1));
+  if (mine.length && sig(mine) === sig(rows) && !others.length) { if (!dryRun) writeResult({ alreadyApplied: true, matched: rows.length, ok: true, checkedAt: new Date().toISOString() }); console.log(`이미 확정돼 있습니다: 확정 기록의 ${weeks.length}주 명단 ${rows.length}칸이 초안과 같습니다. 다시 쓰지 않았습니다.`); process.exit(0); }
+  if (others.length && !replace) fail(`같은 주에 이미 확정된 다른 초안이 있어 확정하지 않았습니다: ${[...new Set(others.map((r) => `${r.draftId}(${r.start})`))].join(', ')}. 이 초안으로 바꾸려면 "초안 ${draft.draftId} 다시 확정해줘"라고 지시해 주세요.`);
+  if (dryRun) { console.log('미리 보기만 했습니다(--dry-run). 확정 기록에는 쓰지 않았습니다.'); process.exit(0); }
+  const appliedAt = new Date().toISOString();
+  const next = [...ledger.filter((r) => !weeks.includes(r.start)), ...rows.map((r) => ({ start: r.week, end: r.end, group: r.group, channel: r.channel, banner: r.banner, seq: r.seq, nickname: r.nickname, status: '확정', draftId: draft.draftId, appliedAt }))];
+  if (fs.existsSync(ledgerFile)) fs.copyFileSync(ledgerFile, `${ledgerFile}.bak`);
+  fs.writeFileSync(ledgerFile, JSON.stringify(next, null, 1));
+  // 다시 읽어 대조한다
+  const saved = JSON.parse(fs.readFileSync(ledgerFile, 'utf8')).filter((r) => weeks.includes(r.start));
+  const ok = sig(saved) === sig(rows);
+  writeResult({ appliedAt, matched: ok ? rows.length : 0, replaced: [...new Set(others.map((r) => r.draftId))], ok });
+  if (!ok) fail('확정 기록을 다시 읽은 내용이 초안과 다릅니다. 확정기록.json을 확인해 주세요(바꾸기 전 파일은 확정기록.json.bak).');
+  console.log(`확정 완료: 확정 기록의 ${weeks.length}주 명단 ${rows.length}칸이 초안과 같습니다${others.length ? ` (바꾼 초안: ${[...new Set(others.map((r) => r.draftId))].join(', ')})` : ''}. 다음 초안부터 이 명단이 광고 이력으로 계산됩니다.`);
+  console.log('구글 시트에는 넣지 않았습니다. 시트에 옮길 때는 초안 엑셀의 탭별 명단(시트와 같은 모양)을 쓰면 됩니다.');
+  process.exit(0);
+}
 
 function asideBin() {
   const local = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Aside', 'CLI', 'current', 'aside.exe') : '';
@@ -135,7 +168,7 @@ if (blockers.length) fail(`반영하지 않았습니다(시트는 그대로입�
 const already = compare(before);
 if (!already.diffs.length && total > 0) {
   const dirDone = opt('out') || path.dirname(draftPath); fs.mkdirSync(dirDone, { recursive: true });
-  if (!dryRun) fs.writeFileSync(path.join(dirDone, `${opt('prefix')}시트반영결과.json`), JSON.stringify({ draftId: draft.draftId, version: draft.version, weeks, alreadyApplied: true, matched: already.matched, expected: total, diffs: [], ok: true, checkedAt: new Date().toISOString() }, null, 1));
+  if (!dryRun) fs.writeFileSync(path.join(dirDone, `${opt('prefix')}확정결과.json`), JSON.stringify({ draftId: draft.draftId, version: draft.version, weeks, alreadyApplied: true, matched: already.matched, expected: total, diffs: [], ok: true, checkedAt: new Date().toISOString() }, null, 1));
   console.log(`이미 반영돼 있습니다: 시트의 ${weeks.length}주 명단 ${already.matched}칸이 초안과 같습니다. 다시 쓰지 않았습니다.`); process.exit(0); }
 if (dryRun) { console.log('미리 보기만 했습니다(--dry-run). 시트에는 쓰지 않았습니다.'); process.exit(0); }
 
@@ -182,7 +215,7 @@ const result = compare(after);
 const record = { draftId: draft.draftId, version: draft.version, weeks, sheet: `https://docs.google.com/spreadsheets/d/${sheetId}/edit`, appliedAt: new Date().toISOString(), writtenTabs: wrote.written, writeError: wrote.error || '', matched: result.matched, expected: total, diffs: result.diffs, ok: !result.diffs.length };
 const outDir = opt('out') || path.dirname(draftPath);
 fs.mkdirSync(outDir, { recursive: true });
-fs.writeFileSync(path.join(outDir, `${opt('prefix')}시트반영결과.json`), JSON.stringify(record, null, 1));
+fs.writeFileSync(path.join(outDir, `${opt('prefix')}확정결과.json`), JSON.stringify(record, null, 1));
 const ledger = path.join(__dirname, '..', '반영기록.json');
 let log = []; try { log = JSON.parse(fs.readFileSync(ledger, 'utf8')); } catch { log = []; }
 log.push(record); fs.writeFileSync(ledger, JSON.stringify(log, null, 1));
