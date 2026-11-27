@@ -209,3 +209,28 @@ test('예약에 고정 절차 id가 있으면 예약 실행 때 함께 넘기고
   assert.equal(f.started.find((s) => s.prompt.startsWith('정책 지식')).recipe, 'policy-sync');
   assert.equal(f.started.find((s) => s.prompt.startsWith('다른 업무')).recipe, undefined);
 });
+
+test('매달 반복 예약은 그 날짜에만 실행하고 다음 달 같은 날로 넘어간다. 횟수·요일과 함께 쓰면 거부한다', async (t) => {
+  const now = Date.parse('2026-11-16T01:00:00Z');
+  assert.deepEqual(scheduleRequest('매달 15일 오전 11시 30분에 인센티브 지급 대상 확인해줘', now), { time: '11:30', monthDays: [15] });
+  assert.deepEqual(scheduleRequest('매월 1일과 15일 9시에 정산 자료 정리해줘', now), { time: '09:00', monthDays: [1, 15] });
+  assert.throws(() => scheduleRequest('매달 15일에 인센티브 확인해줘', now), /시각/);
+  assert.throws(() => scheduleRequest('매달 40일 오전 9시에 확인해줘', now), /1~31/);
+  assert.throws(() => scheduleRequest('매달 15일 오전 9시에 3회 반복 실행해 줘', now), /횟수/);
+  // 날짜가 업무 내용일 뿐이면 예약이 아니다
+  assert.equal(scheduleRequest('매달 15일 정산 자료 양식을 정리해줘', now), null);
+  const f = await fixture(t); const store = createSchedules(f.options); // 지금: 2026-10-30(금) 10:59(한국)
+  const item = store.add({ prompt: '매달 15일 오전 11시 30분에 인센티브 지급 대상 확인해줘' });
+  assert.deepEqual([item.time, item.monthDays, item.weekdays, item.nextAt], ['11:30', [15], null, '2026-11-15T02:30:00.000Z']);
+  assert.throws(() => store.add({ time: '09:00', monthDays: [15], times: 2, prompt: '횟수와 매달' }), /횟수/);
+  assert.throws(() => store.add({ time: '09:00', monthDays: [15], weekdays: [1], prompt: '요일과 매달' }), /하나만/);
+  assert.throws(() => store.add({ time: '09:00', monthDays: [0], prompt: '없는 날' }), /1~31/);
+  f.set('2026-11-14T02:30:00Z'); store.tick(); assert.equal(f.started.length, 0);
+  f.set('2026-11-15T02:30:00Z'); store.tick(); assert.equal(f.started.length, 1);
+  assert.equal(store.list().find((x) => x.id === item.id).nextAt, '2026-12-15T02:30:00.000Z');
+  // 31일은 31일이 있는 달에만 실행한다
+  const last = store.add({ time: '08:00', monthDays: [31], prompt: '월말 정리' });
+  assert.equal(last.nextAt, '2026-12-30T23:00:00.000Z');
+  const daily = store.update(item.id, { monthDays: null });
+  assert.equal(daily.monthDays, null);
+});

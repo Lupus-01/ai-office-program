@@ -42,6 +42,7 @@ import { historyClearIntent, taskCloseIntent } from '../lib/pause.mjs';
 import { quickCandidates } from '../lib/quick.mjs';
 import { createJudge } from '../lib/ai-judge.mjs';
 import { recipeChoices } from '../lib/recipes.mjs';
+import { loadBoard, setBoardAck, setBoardManager } from '../lib/board.mjs';
 import { guideCoverage, loadGuides, publicGuides, publicTeams, teamCoverage } from '../lib/guides.mjs';
 import { ensureVault } from '../lib/vault.mjs';
 import { UPLOAD_MAX_BYTES, saveUpload } from '../lib/uploads.mjs';
@@ -1660,6 +1661,11 @@ export async function startServer({
         checkToken(req);
         return sendJson(res, 200, { schedules: schedules?.list({ full: true }) || [] });
       }
+      // 현황판: 도구가 보관함/현황판/에 올린 "지금 챙길 것" 목록. 파일만 읽는다(AI 호출·외부 전송 0회)
+      if (parts.length === 2 && parts[1] === 'board') {
+        checkToken(req);
+        return sendJson(res, 200, demo ? { manager: '', managers: [], panels: [], acks: {}, problems: [] } : loadBoard(root));
+      }
       // 업무 가이드: 작업 공간 org/guides.json의 예시 카드와 누락 점검. 파일만 읽는다(AI 호출·외부 전송 0회).
       // 화면용 목록에는 직원·절차 연결을 싣지 않고, 점검(coverage)에만 직원 이름·절차 id가 나온다
       if (parts.length === 2 && parts[1] === 'guides') {
@@ -1825,6 +1831,14 @@ export async function startServer({
     }
 
     if (resource === 'history' && method === 'DELETE' && parts.length === 2) return sendJson(res, 200, clearHistory());
+
+    if (resource === 'board' && method === 'POST' && parts.length === 3) {
+      if (demo) throw new HttpError(409, '데모에서는 현황판을 바꿀 수 없습니다.');
+      try {
+        if (id === 'manager') return sendJson(res, 200, setBoardManager(root, body?.name));
+        if (id === 'ack') return sendJson(res, 200, setBoardAck(root, body?.key, body?.on));
+      } catch (error) { if (error.status) throw new HttpError(error.status, error.message); throw error; }
+    }
 
     if (resource === 'schedules') {
       if (!schedules) throw new HttpError(409, '데모에서는 예약을 변경할 수 없습니다.');

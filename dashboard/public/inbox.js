@@ -278,7 +278,8 @@ export function createInbox(deps) {
         ${team.length ? `<h2 class="sb-title"><button type="button" class="sb-fold" data-fold-leads data-key="sb-fold" aria-expanded="${!folded}">팀장 ${team.length}<span aria-hidden="true">${folded ? '▸' : '▾'}</span></button></h2>${leadRows}<h2 class="sb-title">대화</h2>` : ''}
         ${shown.map(row).join('') || `<p class="sb-empty">${ui.filter === 'needs' ? '답변을 기다리는 대화가 없습니다.' : '아직 대화가 없습니다. 맡길 일을 적어 보내면 여기에 쌓입니다.'}</p>`}
       </nav>
-      <div class="sb-foot"><button type="button" class="sb-item" data-page="guides" data-key="sb-guides" aria-current="${v === 'inbox' && ['guides', 'guide', 'teamguide'].includes(ui.page) ? 'page' : 'false'}"><span class="sb-ic" aria-hidden="true">?</span><span class="sb-label">가이드</span></button>
+      <div class="sb-foot"><a class="sb-item" href="board.html" data-key="sb-board"><span class="sb-ic" aria-hidden="true">▦</span><span class="sb-label">현황판</span></a>
+        <button type="button" class="sb-item" data-page="guides" data-key="sb-guides" aria-current="${v === 'inbox' && ['guides', 'guide', 'teamguide'].includes(ui.page) ? 'page' : 'false'}"><span class="sb-ic" aria-hidden="true">?</span><span class="sb-label">가이드</span></button>
         <button type="button" class="sb-item" data-page="settings" data-key="sb-settings" aria-current="${(v === 'inbox' && ['settings', 'reports', 'report', 'guidecheck'].includes(ui.page)) || v === 'team' ? 'page' : 'false'}"><span class="sb-ic" aria-hidden="true">⚙</span><span class="sb-label">설정</span></button></div>`);
   }
 

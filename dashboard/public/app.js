@@ -3254,6 +3254,7 @@ const kstDate = (value) => new Date(Date.parse(value) + 9 * 3600e3).toISOString(
 // 예약 요약: "11월 4일 10:00 한 번" / "매일 10:00 · 3회(11월 6일까지)" / "매일 10:00(11월 4일부터)" / "매일 10:00" / "매주 금요일 13:00"
 export function scheduleLabel(item) {
   if (!item?.time) return '';
+  if (item.monthDays?.length) return `매달 ${item.monthDays.map((d) => `${d}일`).join('·')} ${item.time}${item.startDate ? `(${monthDay(item.startDate)}부터)` : ''}`;
   if (item.weekdays?.length) return `매주 ${[...item.weekdays].sort((a, b) => (a || 7) - (b || 7)).map((d) => '일월화수목금토'[d]).join('·')}요일 ${item.time}${item.startDate ? `(${monthDay(item.startDate)}부터)` : ''}`;
   if (item.times === 1) return `${monthDay(item.startDate || (item.nextAt && kstDate(item.nextAt)))} ${item.time} 한 번`.trim();
   if (item.times > 1) return `매일 ${item.time} · ${item.times}회${item.untilDate ? `(${monthDay(item.untilDate)}까지)` : ''}`;
@@ -3305,6 +3306,7 @@ async function saveSchedule(event) {
   const weekdays = [...$('scheduleWeekdays').querySelectorAll('input:checked')].map((box) => Number(box.value));
   const body = { prompt: $('schedulePrompt').value.trim(), time: $('scheduleTime').value,
     startDate: $('scheduleDate').value || null, times: times ? Number(times) : null, weekdays: weekdays.length ? weekdays : null,
+    monthDays: $('scheduleMonthDay').value.trim() ? [Number($('scheduleMonthDay').value)] : null,
     chief: previous?.chief || { engine: $('chiefEngine').value, model: $('chiefModel').value, effort: $('chiefEffort').value } };
   setScheduleBusy(true); $('scheduleError').hidden = true;
   try {
@@ -3328,6 +3330,7 @@ async function scheduleAction(event) {
       $('scheduleId').value = id; $('scheduleTime').value = full.time; $('schedulePrompt').value = full.prompt;
       $('scheduleDate').value = full.startDate || ''; $('scheduleTimes').value = full.times || '';
       for (const box of $('scheduleWeekdays').querySelectorAll('input')) box.checked = (full.weekdays || []).includes(Number(box.value));
+      $('scheduleMonthDay').value = full.monthDays?.[0] || '';
       $('scheduleDate').min = ''; // 이미 시작한 예약도 날짜를 그대로 두고 수정할 수 있게
       $('scheduleFormTitle').textContent = '예약 수정'; $('scheduleSave').textContent = '수정 저장'; $('scheduleCancelEdit').hidden = false;
       $('schedulePrompt').focus(); return;
