@@ -57,8 +57,8 @@ function lastBefore(nickname, rule, week) {
   for (const r of picked) if (r.nickname === nickname && keyOf(r) === keyOf(rule) && r.week < week && r.week > last) last = r.week;
   return last;
 }
-function exceptionFor(nickname, rule, week) {
-  return exceptions.find((e) => e.nickname === nickname && (!e.start || week >= String(e.start).slice(0, 10)) && (!e.end || week <= String(e.end).slice(0, 10))
+function exceptionFor(nickname, rule, week, types) {
+  return exceptions.find((e) => e.nickname === nickname && types.includes(e.type) && (!e.start || week >= String(e.start).slice(0, 10)) && (!e.end || week <= String(e.end).slice(0, 10))
     && (!e.group || e.group === rule.group) && (!e.channel || e.channel === rule.channel) && (!e.banner || e.banner === rule.banner)) || null;
 }
 // 자격 미달 사유(없으면 '')
@@ -75,12 +75,14 @@ function ineligible(nickname, rule, week) {
   const partner = c.stage >= policy.partnerStages[0] && c.stage <= policy.partnerStages[1];
   if (rule.partner === '파트너' && !partner) return `파트너 전용인데 ${c.stage}단계`;
   if (rule.banner === '메인' && c.stage < Number(rule.mainStage || 0) && c.seconds < Number(rule.mainSeconds || 0)) return `${rule.mainStage}단계 미만이고 상담시간 ${Math.floor(c.seconds / 3600)}시간`;
-  const ex = exceptionFor(nickname, rule, week);
-  if (ex && (ex.type === '제외' || ex.type === '연기')) return `예외설정 ${ex.type}`;
+  const ex = exceptionFor(nickname, rule, week, ['제외', '연기']);
+  if (ex) return `예외설정 ${ex.type}`;
+  const own = exceptionFor(nickname, rule, week, ['주기']);
+  const minWeeks = own && own.weeks !== undefined && own.weeks !== '' ? Number(own.weeks) : Number(rule.minWeeks || 0);
   const next = picked.filter((r) => isPre(r) && r.nickname === nickname && keyOf(r) === keyOf(rule) && r.week > week).map((r) => r.week).sort()[0];
-  if (next && weeksApart(week, next) < Number(rule.minWeeks || 0)) return `주기 미충족(${next} 주에 미리 정해진 자리, ${weeksApart(week, next)}주 전)`;
+  if (next && weeksApart(week, next) < minWeeks) return `주기 미충족(${next} 주에 미리 정해진 자리, ${weeksApart(week, next)}주 전)`;
   const last = lastBefore(nickname, rule, week);
-  if (last && weeksApart(last, week) < Number(rule.minWeeks || 0)) return `주기 미충족(${last} 뒤 ${weeksApart(last, week)}주, 최소 ${rule.minWeeks}주)`;
+  if (last && weeksApart(last, week) < minWeeks) return `주기 미충족(${last} 뒤 ${weeksApart(last, week)}주, 최소 ${minWeeks}주)`;
   return '';
 }
 // 우선순위(작을수록 먼저): 정렬 순서대로 숫자 배열을 만든다
@@ -89,12 +91,12 @@ function rank(nickname, rule, week) {
   const last = lastBefore(nickname, rule, week);
   const elapsed = last ? weeksApart(last, week) : 9999;
   const k = `${nickname}|${rule.group}|${rule.channel}|${rule.banner}`;
-  const ex = exceptionFor(nickname, rule, week);
+  const ex = exceptionFor(nickname, rule, week, ['고정']);
   const usedEarlier = picked.some((r) => r.nickname === nickname && keyOf(r) === keyOf(rule) && r.week < week);
   const carry = usedEarlier ? null : carryOf[k], wish = usedEarlier ? null : wishOf[k];
   const stagePriority = rule.banner === '메인' && c.stage >= Number(rule.mainStage || 0);
   const part = {
-    fixed: [ex && ex.type === '고정' ? 0 : 1],
+    fixed: [ex ? 0 : 1],
     carry: [carry ? 0 : 1, carry && carry.start ? -Math.max(0, weeksApart(String(carry.start).slice(0, 10), week)) : 0],
     wish: [wish ? 0 : 1, wish && wish.registeredAt ? dayNo(wish.registeredAt) : Number.MAX_SAFE_INTEGER],
     longWait: [Number(rule.priorityWeeks) > 0 && elapsed >= Number(rule.priorityWeeks) ? 0 : 1],

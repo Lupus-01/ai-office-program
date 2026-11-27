@@ -96,7 +96,29 @@ else {
         if (cells.length < heads.length - 2) return;
         rows.push([at + 1, cells[idx.service], cells[idx.category], cells[idx.group], cells[idx.stage], cells[idx.manager], cells[idx.nickname], cells[idx.seconds], cells[idx.memo]]);
       });
-      return { rows };
+      // 활동 상태: 실시간 상담아이템관리의 '승인완료' 목록(닉네임과 단계만 읽는다). 이용중지 아이템의 옛 줄을 가려내는 데 쓴다
+      const active = [];
+      let activeOk = true, pages = 1;
+      try {
+        const pageOf = async (n) => { const r2 = await fetch('/items/list/call/?page=' + n + '&it_status=3'); if (!r2.ok) throw new Error('HTTP ' + r2.status); return new DOMParser().parseFromString(await r2.text(), 'text/html'); };
+        const read = (doc) => {
+          const hs = [...doc.querySelectorAll('table thead th')].map((th) => norm(th.textContent));
+          const ci = hs.indexOf('상담사'), si = hs.indexOf('단계'), ti = hs.indexOf('아이템상태');
+          if (ci < 0 || si < 0 || ti < 0) return false;
+          for (const tr of doc.querySelectorAll('table tbody tr')) {
+            const td = [...tr.children].map((c) => c.textContent.replace(/\\s+/g, ' ').trim());
+            const m = (td[ci] || '').match(/\\(([^()]*)\\)\\s*$/);
+            if (m && td[ti] === '승인완료') active.push([m[1].trim(), td[si]]);
+          }
+          return true;
+        };
+        const first = await pageOf(1);
+        pages = Math.max(1, ...[...first.querySelectorAll('.pagination a')].map((a) => Number(((a.getAttribute('href') || '').match(/page=(\\d+)/) || [])[1] || 0)));
+        activeOk = read(first);
+        const queue = []; for (let n = 2; n <= pages; n++) queue.push(n);
+        await Promise.all(Array.from({ length: 6 }, async () => { while (queue.length) { if (!read(await pageOf(queue.shift()))) activeOk = false; } }));
+      } catch (e) { activeOk = false; }
+      return { rows, active, activeOk, activePages: pages };
     } catch (e) { return { error: String(e.message || e) }; }
   }, AIO);
   console.log('AIO_RESULT' + JSON.stringify(aioData) + 'AIO_END');
@@ -139,12 +161,26 @@ async function main() {
     try { if (fs.existsSync(policyPath)) policyFile = JSON.parse(fs.readFileSync(policyPath, 'utf8').replace(/^\uFEFF/, '')); } catch { fail('규칙.json을 읽지 못했습니다(JSON 형식 확인).'); }
     let normalized;
     try { normalized = ad.normalizeSettlement(raw, policyFile); } catch (e) { fail(`규칙.json 오류: ${e.message}`); }
-    const { excluded, duplicates } = normalized;
-    const counselors = normalized.counselors.map((c) => ({ ...c, memo: c.memo.slice(0, 80) }));
+    const { excluded } = normalized;
+    let { duplicates } = normalized;
+    let counselors = normalized.counselors.map((c) => ({ ...c, memo: c.memo.slice(0, 80) }));
+    // 활동 상태 반영: 승인완료 아이템이 없는 상담사는 빼고, 같은 닉네임의 옛(이용중지) 줄은 가려낸다
+    const policy = ad.resolvePolicy(policyFile);
+    let activeNote = '';
+    let activeInfo = { checked: false };
+    if (policy.requireActive) {
+      if (!got.activeOk || !(got.active || []).length) activeNote = ' · 활동 상태를 읽지 못해 이용중지 여부는 반영하지 않았습니다';
+      else {
+        const applied = ad.applyActiveStatus(counselors, got.active.map(([nickname, stage]) => ({ nickname, stage })));
+        counselors = applied.counselors; duplicates = applied.unresolved;
+        activeInfo = { checked: true, activeItems: got.active.length, inactive: applied.inactive, resolved: applied.resolved };
+        activeNote = ` · 아테나 승인완료 ${got.active.length}건과 대조: 이용중지로 뺌 ${applied.inactive.length}줄, 닉네임 중복 정리 ${applied.resolved.length}건`;
+      }
+    }
     const reasons = {};
     for (const e of excluded) reasons[e.reason] = (reasons[e.reason] || 0) + 1;
-    fs.writeFileSync(path.join(out, `${opt('prefix')}정산.json`), JSON.stringify({ source: '아테나 아이템별정산현황', month, period: [`${month}-01`, monthEnd], collectedAt: new Date().toISOString(), total: raw.length, counselors, excludedCount: reasons, excluded: excluded.filter((e) => e.nickname).slice(0, 2000), duplicates }, null, 1));
-    lines.push(`정산 ${month}: 전체 ${raw.length}행 → 후보 상담사 ${counselors.length}명 (제외 ${excluded.length}행: ${Object.entries(reasons).map(([k, n]) => `${k} ${n}`).join(', ') || '없음'})${duplicates.length ? `, 같은 닉네임 중복 ${duplicates.length}건` : ''}`);
+    fs.writeFileSync(path.join(out, `${opt('prefix')}정산.json`), JSON.stringify({ source: '아테나 아이템별정산현황', month, period: [`${month}-01`, monthEnd], collectedAt: new Date().toISOString(), total: raw.length, counselors, excludedCount: reasons, excluded: excluded.filter((e) => e.nickname).slice(0, 2000), duplicates, active: activeInfo }, null, 1));
+    lines.push(`정산 ${month}: 전체 ${raw.length}행 → 후보 상담사 ${counselors.length}명 (제외 ${excluded.length}행: ${Object.entries(reasons).map(([k, n]) => `${k} ${n}`).join(', ') || '없음'})${duplicates.length ? `, 같은 닉네임 중복 ${duplicates.length}건` : ''}${activeNote}`);
   }
 
   if (!skipSheet) {

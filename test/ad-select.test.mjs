@@ -271,3 +271,72 @@ test('규칙·예외 파일을 줄여 적어도 조용히 빠지지 않는다', 
   for (const [text, want] of [['1주차 11.30 ~ 12.06', false], ['12.07 ~ 12.13 예정', true], ['12.07(예정)', true], ['11.30~12.06', false]]) assert.equal(ad.weekLabel(text)?.planned, want, text);
   assert.equal(ad.weekLabel('가온'), null);
 });
+
+test('사람별 주기: 그 사람만 최소 주기가 짧아지고 다른 사람과 정원·중복 규칙은 그대로다', () => {
+  const key = { group: '퍼플', channel: '전화', banner: '메인' };
+  const rules = ad.defaultRules().filter((r) => r.group === '퍼플' && r.channel === '전화' && r.banner === '메인');
+  const history = ['빠른이', '보통이'].map((n) => ({ start: '2026-11-09', ...key, nickname: n, status: '확정' }));
+  const base = { startDate: WEEK, weekCount: 4, policy: { rules }, counselors: [person('빠른이', { group: '퍼플' }), person('보통이', { group: '퍼플' })], history };
+  assert.deepEqual(picked(ad.generateDraft(base)).map((r) => `${r.week.slice(5)} ${r.nickname}`), ['12-21 보통이', '12-21 빠른이'], '둘 다 6주 뒤');
+  const fast = ad.generateDraft({ ...base, exceptions: [{ type: '주기', nickname: '빠른이', weeks: 2 }] });
+  assert.deepEqual(picked(fast).map((r) => `${r.week.slice(5)} ${r.nickname}`), ['11-30 빠른이', '12-14 빠른이', '12-21 보통이']);
+  assert.match(picked(fast)[0].description, /개별 주기 2주/);
+  const limited = ad.generateDraft({ ...base, exceptions: [{ type: '주기', nickname: '빠른이', weeks: 2, banner: '타로' }] });
+  assert.equal(picked(limited).filter((r) => r.nickname === '빠른이').length, 1, '다른 배너에 건 주기는 메인에 영향이 없다');
+});
+
+test('미리 적힌 이름이 자격에 안 맞으면 빼고 알리고, 운영자가 지정한 자리는 넣고 알린다', () => {
+  const rules = ad.defaultRules().filter((r) => r.group === '퍼플' && r.channel === '전화' && r.banner === '타로');
+  const pre = (over) => ({ week: WEEK, group: '퍼플', channel: '전화', banner: '타로', nickname: '영단계', source: '시트', ...over });
+  const counselors = [person('영단계', { group: '퍼플', stage: 0 }), person('파트너', { group: '퍼플', stage: 2 })];
+  const sheet = ad.generateDraft({ startDate: WEEK, weekCount: 1, policy: { rules }, counselors, preassigned: [pre()] });
+  assert.deepEqual(picked(sheet).map((r) => r.nickname), ['파트너']);
+  assert.match(sheet.warnings[0], /영단계.*파트너 전용 배너.*뺐습니다/);
+  assert.equal(sheet.dropped[0].nickname, '영단계');
+  const forced = ad.generateDraft({ startDate: WEEK, weekCount: 1, policy: { rules }, counselors, preassigned: [pre({ force: true })] });
+  assert.deepEqual(picked(forced).map((r) => r.nickname), ['영단계', '파트너']);
+  assert.match(forced.warnings[0], /확인 필요/);
+  const keep = ad.generateDraft({ startDate: WEEK, weekCount: 1, policy: { rules, dropIneligiblePreassigned: false }, counselors, preassigned: [pre()] });
+  assert.equal(picked(keep).length, 2, '규칙을 끄면 그대로 둔다');
+});
+
+test('활동 상태: 승인완료 아이템이 없는 상담사는 빼고, 같은 닉네임의 옛 줄은 가려낸다', () => {
+  const row = (nickname, group, stage, seconds, sourceRow) => ({ ...person(nickname, { group, stage, seconds }), sourceRow });
+  const out = ad.applyActiveStatus([
+    row('단독', '그린', 1, 0, 2), row('그만둔이', '그린', 0, 500, 3),
+    row('단계다름', '그린', 2, 100, 4), row('단계다름', '퍼플', 2, 0, 5),
+    row('단계같음', '퍼플', 0, 7200, 6), row('단계같음', '퍼플', 0, 0, 7),
+    row('못가림', '그린', 0, 0, 8), row('못가림', '그린', 0, 0, 9),
+  ], [{ nickname: '단독', stage: '그린 1단계' }, { nickname: '단계다름', stage: '그린 2단계' }, { nickname: '단계같음', stage: '퍼플 0단계' }, { nickname: '못가림', stage: '그린 0단계' }]);
+  assert.deepEqual(out.counselors.map((c) => c.sourceRow), [2, 4, 6, 8, 9]);
+  assert.deepEqual(out.inactive.map((c) => c.nickname), ['그만둔이']);
+  assert.deepEqual(out.resolved.map((r) => `${r.nickname}:${r.keptRow}`), ['단계다름:4', '단계같음:6']);
+  assert.deepEqual(out.unresolved, ['못가림']);
+});
+
+test('조정 명령: 넣기·빼기·우선·주기·희망·취소가 파일에 쌓이고 잘못 적으면 알려 준다', async () => {
+  const { mkdtempSync, readFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { spawnSync } = await import('node:child_process');
+  const vault = mkdtempSync(join(tmpdir(), 'ad-adjust-'));
+  const run = (...a) => spawnSync(process.execPath, [require.resolve('../shared/보관함/광고운영/도구/ad-adjust.cjs'), ...a, '--vault', vault], { encoding: 'utf8' });
+  try {
+    assert.match(run('넣기', '--name', '가온', '--channel', '전화', '--banner', '메인', '--week', '2026-12-09').stdout, /EX-001\s+넣기\s+가온\s+전화 메인\s+2026-12-07 주/);
+    assert.equal(run('빼기', '--name', '나래', '--from', '2026-12-07', '--until', '2026-12-28', '--reason', '휴식').status, 0);
+    assert.equal(run('우선', '--name', '다솜', '--channel', '채팅', '--banner', '타로').status, 0);
+    assert.equal(run('주기', '--name', '라온', '--weeks', '2').status, 0);
+    assert.equal(run('희망', '--name', '마루', '--channel', '전화', '--banner', '신점').status, 0);
+    assert.match(run('주기', '--name', '라온').stderr, /--weeks/);
+    assert.match(run('넣기', '--name', '가온', '--channel', '문자', '--banner', '메인', '--week', '2026-12-07').stderr, /전화\|채팅/);
+    assert.match(run('넣기', '--name', '가온', '--channel', '전화', '--banner', '메인', '--week', '2026-12-07').stderr, /이미 있습니다/);
+    const list = run('목록').stdout;
+    assert.match(list, /조정 4건/); assert.match(list, /주기 2주\s+라온\s+모든 배너/); assert.match(list, /광고 희망\(대기\) 1건/);
+    const saved = JSON.parse(readFileSync(join(vault, '예외.json'), 'utf8'));
+    assert.deepEqual(saved.map((e) => e.type), ['지정', '제외', '고정', '주기']);
+    assert.equal(ad.prepare({ counselors: [person('나래')], exceptions: saved }).exceptions.length, 4);
+    assert.match(run('취소', '--id', 'ex-002').stdout, /없앴습니다/);
+    assert.equal(JSON.parse(readFileSync(join(vault, '예외.json'), 'utf8')).length, 3);
+    assert.match(run('취소', '--id', 'EX-099').stderr, /없습니다/);
+  } finally { rmSync(vault, { recursive: true, force: true }); }
+});

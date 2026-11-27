@@ -93,6 +93,8 @@ function defaultRules() {
 //   partnerStages    파트너로 보는 활동단계 범위 [최소, 최대]
 //   serviceTokens    채널별로 제공서비스에 있어야 하는 글자
 //   excludeCategoryWords / excludeRowWords  카테고리·정산 행에 이 글자가 있으면 후보에서 뺀다
+//   dropIneligiblePreassigned  시트에 미리 적힌 이름이 자격·주기에 맞지 않으면 빼고 알린다(false면 그대로 두고 알리기만). 운영자가 '지정'으로 넣은 자리는 빼지 않는다
+//   requireActive    아테나 아이템 상태가 '승인완료'인 상담사만 후보로 둔다(이용중지는 뺀다)
 const SORT_KEYS = ['fixed', 'carry', 'wish', 'longWait', 'mainStage', 'elapsed'];
 function defaultPolicy() {
   return {
@@ -105,6 +107,8 @@ function defaultPolicy() {
     serviceTokens: { 전화: '전화상담(1)', 채팅: '채팅상담(1)' },
     excludeCategoryWords: ['심리'],
     excludeRowWords: ['타사이동'],
+    dropIneligiblePreassigned: true,
+    requireActive: true,
   };
 }
 // 규칙 파일 내용 검사 + 기본값과 합치기. 잘못된 값은 조용히 넘기지 않고 알린다
@@ -153,6 +157,27 @@ function normalizeSettlement(rawRows, customPolicy) {
   for (const c of valid) count[c.nickname] = (count[c.nickname] || 0) + 1;
   const duplicates = Object.keys(count).filter((name) => count[name] > 1);
   return { counselors: valid, excluded, duplicates };
+}
+
+// 아테나 아이템 상태 반영: 승인완료 아이템이 있는 상담사만 남기고, 같은 닉네임이 여러 줄이면 활동 중인 줄을 고른다.
+// activeItems: [{ nickname, stage: '그린 2단계' }] (승인완료 아이템). 같은 닉네임 줄이 여럿일 때는 ①활동 아이템과 그룹·단계가 같은 줄 ②그중 전월 상담시간이 있는 줄 하나.
+function applyActiveStatus(counselors, activeItems) {
+  const active = {};
+  for (const item of activeItems || []) (active[clean(item.nickname)] ||= []).push({ group: normGroup(item.stage), stage: parseStage(String(item.stage || '').replace(/^.*?(\d)\s*단계.*$/, '$1')) });
+  const groups = {};
+  for (const c of counselors) (groups[c.nickname] ||= []).push(c);
+  const kept = [], inactive = [], resolved = [], unresolved = [];
+  for (const [nickname, rows] of Object.entries(groups)) {
+    const items = active[nickname] || [];
+    if (!items.length) { inactive.push(...rows.map((r) => ({ nickname, sourceRow: r.sourceRow, group: r.group, stage: r.stage }))); continue; }
+    if (rows.length === 1) { kept.push(rows[0]); continue; }
+    let pool = rows.filter((r) => items.some((i) => i.group === r.group && i.stage === r.stage));
+    if (!pool.length) pool = rows;
+    if (pool.length > 1) { const worked = pool.filter((r) => r.seconds > 0); if (worked.length === 1) pool = worked; }
+    if (pool.length === 1) { kept.push(pool[0]); resolved.push({ nickname, keptRow: pool[0].sourceRow, droppedRows: rows.filter((r) => r !== pool[0]).map((r) => r.sourceRow) }); }
+    else { kept.push(...rows); unresolved.push(nickname); }
+  }
+  return { counselors: kept, inactive, resolved, unresolved };
 }
 
 // ---- 광고 기록 시트(「메인상담사 배너 리스트」) 읽기 ----
@@ -308,16 +333,18 @@ function prepare(input) {
   return { policy, counselors, counselorMap, duplicateCounselors, rules, wishes, wishMap, history, carryoverMap, exceptions };
 }
 
-function findException(exceptions, context, week) {
+// 조정(예외) 유형: 제외·연기(후보에서 뺌) / 고정(맨 앞 순위) / 주기(이 사람만 최소 주기를 weeks로) / 지정(그 주 자리에 바로 넣음 — 초안 도구가 미리 정해진 자리로 바꾼다)
+function findException(exceptions, context, week, types) {
   for (const row of exceptions) {
     if (clean(row.nickname) !== context.nickname) continue;
+    if (types && !types.includes(clean(row.type))) continue;
     const start = toDay(row.start), end = toDay(row.end);
     if (start != null && week < start) continue;
     if (end != null && week > end) continue;
     if (clean(row.group) && normGroup(row.group) !== context.group) continue;
     if (clean(row.channel) && normChannel(row.channel) !== context.channel) continue;
     if (clean(row.banner) && normBanner(row.banner) !== context.banner) continue;
-    return { type: clean(row.type), reason: clean(row.reason) };
+    return { type: clean(row.type), reason: clean(row.reason), weeks: row.weeks };
   }
   return null;
 }
@@ -338,9 +365,11 @@ function evaluateCandidate(counselor, rule, week, history, carryoverMap, wishMap
   }
 
   const context = { nickname: counselor.nickname, group: rule.group, channel: rule.channel, banner: rule.banner };
-  const exception = findException(exceptions, context, week);
-  if (exception && exception.type === '제외') return { ok: false, reason: `예외설정 제외: ${exception.reason}` };
-  if (exception && exception.type === '연기') return { ok: false, reason: `예외설정 연기: ${exception.reason}` };
+  const blockedBy = findException(exceptions, context, week, ['제외', '연기']);
+  if (blockedBy) return { ok: false, reason: `예외설정 ${blockedBy.type}: ${blockedBy.reason}` };
+  const exception = findException(exceptions, context, week, ['고정']);
+  const cycle = findException(exceptions, context, week, ['주기']);
+  const minWeeks = cycle && cycle.weeks !== undefined && cycle.weeks !== '' ? Math.max(0, asNumber(cycle.weeks, rule.minWeeks)) : rule.minWeeks;
 
   let last = null;
   for (const item of history) {
@@ -348,7 +377,7 @@ function evaluateCandidate(counselor, rule, week, history, carryoverMap, wishMap
     if (last == null || item.start > last) last = item.start;
   }
   const elapsedWeeks = last != null ? weeksBetween(last, week) : 9999;
-  if (elapsedWeeks < rule.minWeeks) return { ok: false, reason: `광고 주기 미충족(${elapsedWeeks}/${rule.minWeeks}주)` };
+  if (elapsedWeeks < minWeeks) return { ok: false, reason: `광고 주기 미충족(${elapsedWeeks}/${minWeeks}주)` };
 
   const key = candidateKey(counselor.nickname, rule.group, rule.channel, rule.banner);
   const carry = carryoverMap[key] || null;
@@ -367,13 +396,14 @@ function evaluateCandidate(counselor, rule, week, history, carryoverMap, wishMap
   };
   const description = [
     score.fixed ? '수동고정' : '',
+    minWeeks !== rule.minWeeks ? `개별 주기 ${minWeeks}주` : '',
     score.carry ? `이월 ${score.carryAge}주` : '',
     score.wish ? `광고희망 ${formatDay(wish.registeredAt)}` : '',
     rule.priorityWeeks ? `${elapsedWeeks}주 경과` : '',
     rule.banner === '메인' ? (isMainStagePriority ? `${counselor.stage}단계 우선` : `${Math.floor(counselor.seconds / 3600)}시간 충족`) : '',
     last != null ? `최근광고 ${formatDay(last)}` : '광고이력 없음',
   ].filter(Boolean).join(' · ');
-  return { ok: true, score, description, wish, last, elapsedWeeks };
+  return { ok: true, score, description, wish, last, elapsedWeeks, minWeeks };
 }
 
 // 정렬: 수동고정 → 이월(오래된 순) → 희망(등록 빠른 순) → 장기 대기 구간 → 메인 단계 구간·단계 → 최근 광고가 오래된 순 → 닉네임
@@ -419,25 +449,37 @@ function generateDraft(input) {
 
   const policy = data.policy;
   const sort = (a, b) => compareCandidates(a, b, policy.sortOrder);
+  const minWeeksFor = (nickname, rule, week) => { const c = findException(data.exceptions, { nickname, group: rule.group, channel: rule.channel, banner: rule.banner }, week, ['주기']); return c && c.weeks !== undefined && c.weeks !== '' ? Math.max(0, asNumber(c.weeks, rule.minWeeks)) : rule.minWeeks; };
   const rows = [];
   const plannedHistory = data.history.slice();
   const selectedCombination = {};
   const finalEligible = {};
   const slots = [];
   const warnings = [];
-  const preassigned = (input.preassigned || []).map((p) => ({ week: mondayOf(p.week ?? p.start), group: normGroup(p.group), channel: normChannel(p.channel), banner: normBanner(p.banner), nickname: clean(p.nickname), source: clean(p.source) }))
+  const dropped = [];
+  const preassigned = (input.preassigned || []).map((p) => ({ week: mondayOf(p.week ?? p.start), group: normGroup(p.group), channel: normChannel(p.channel), banner: normBanner(p.banner), nickname: clean(p.nickname), source: clean(p.source), force: p.force === true }))
     .filter((p) => p.nickname && p.week != null);
   let selected = 0;
 
   for (let offset = 0; offset < weekCount; offset++) {
     const week = start + offset * 7 * DAY;
     const assignedThisWeek = {};
-    // 미리 정해진 자리(시트의 "예정" 열 등): 그 주 자리를 먼저 차지하고, 같은 주 다른 배너 후보에서 빠진다
+    // 미리 정해진 자리(시트의 "예정" 열, 운영자의 '지정'): 그 주 자리를 먼저 차지하고, 같은 주 다른 배너 후보에서 빠진다.
+    // 시트에 미리 적힌 이름이 자격·주기에 맞지 않으면 빼고 알린다. 운영자가 '지정'한 자리(force)는 그대로 넣고 알리기만 한다
     const preOfRule = {};
     for (const pre of preassigned.filter((p) => p.week === week)) {
       const rule = data.rules.find((r) => r.group === pre.group && r.channel === pre.channel && r.banner === pre.banner);
-      if (!rule) { warnings.push(`미리 적힌 ${pre.nickname}: 사용 중인 규칙에 없는 배너(${bannerKey(pre.group, pre.channel, pre.banner)})`); continue; }
-      (preOfRule[bannerKey(rule.group, rule.channel, rule.banner)] ||= []).push(pre);
+      const where = `${formatDay(week)} ${pre.group} ${pre.channel} ${pre.banner}`;
+      if (!rule) { warnings.push(`미리 적힌 ${pre.nickname}(${where}): 사용 중인 규칙에 없는 배너라 뺐습니다`); continue; }
+      const list = data.counselorMap[pre.nickname] || [];
+      const checked = list.length === 1 ? evaluateCandidate(list[0], rule, week, plannedHistory, data.carryoverMap, data.wishMap, data.exceptions, policy) : null;
+      const note = list.length !== 1 ? (list.length > 1 ? '정산 자료에 닉네임 중복' : '정산 자료에 없는 닉네임(활동 중이 아니거나 닉네임이 다름)') : checked.ok ? '' : checked.reason;
+      const taken = assignedThisWeek[pre.nickname] || [];
+      const clash = taken.length && !canAssignThisWeek(assignedThisWeek, pre.nickname, rule.banner, policy.sameWeekTogether) ? `같은 주 ${taken.join('·')} 배너와 겹침` : '';
+      const problem = [note, clash].filter(Boolean).join(', ');
+      if (problem && !pre.force && policy.dropIneligiblePreassigned) { warnings.push(`미리 적힌 ${pre.nickname}(${where}): ${problem} — 명단에서 뺐습니다`); dropped.push({ ...pre, week: formatDay(week), reason: problem }); continue; }
+      if (problem) warnings.push(`미리 정한 ${pre.nickname}(${where}): 확인 필요 — ${problem}`);
+      (preOfRule[bannerKey(rule.group, rule.channel, rule.banner)] ||= []).push({ ...pre, note: problem });
       (assignedThisWeek[pre.nickname] ||= []).push(rule.banner);
     }
     for (const rule of data.rules) {
@@ -446,14 +488,10 @@ function generateDraft(input) {
       for (const pre of preList) {
         const key = candidateKey(pre.nickname, rule.group, rule.channel, rule.banner);
         const counselor = (data.counselorMap[pre.nickname] || [])[0] || { nickname: pre.nickname, manager: '', stage: '', seconds: '' };
-        const known = (data.counselorMap[pre.nickname] || []).length === 1;
-        const checked = known ? evaluateCandidate(counselor, rule, week, plannedHistory, data.carryoverMap, data.wishMap, data.exceptions, policy) : null;
-        const note = !known ? (data.duplicateCounselors[pre.nickname] ? '정산 자료에 닉네임 중복' : '정산 자료에 없는 닉네임') : checked.ok ? '' : `자격 확인 필요: ${checked.reason}`;
-        if (note) warnings.push(`미리 적힌 ${pre.nickname}(${formatDay(week)} ${rule.group} ${rule.channel} ${rule.banner}): ${note}`);
         const wish = data.wishMap[key] || null;
         placed++; selected++;
         selectedCombination[key] = true;
-        rows.push(draftRow(week, rule, placed, { counselor: { nickname: pre.nickname, manager: counselor.manager, stage: counselor.stage, seconds: counselor.seconds }, wish, trackingId: trackingId(pre.nickname, rule.group, rule.channel, rule.banner), description: ['미리 정해짐', pre.source, note].filter(Boolean).join(' · ') }, '선정'));
+        rows.push(draftRow(week, rule, placed, { counselor: { nickname: pre.nickname, manager: counselor.manager, stage: counselor.stage, seconds: counselor.seconds }, wish, trackingId: trackingId(pre.nickname, rule.group, rule.channel, rule.banner), description: ['미리 정해짐', pre.source, pre.note ? `확인 필요: ${pre.note}` : ''].filter(Boolean).join(' · ') }, '선정'));
         plannedHistory.push({ start: week, group: rule.group, channel: rule.channel, banner: rule.banner, nickname: pre.nickname, confirmed: true });
       }
       if (preList.length > rule.capacity) warnings.push(`미리 적힌 자리가 정원보다 많습니다: ${formatDay(week)} ${rule.group} ${rule.channel} ${rule.banner} ${preList.length}/${rule.capacity}`);
@@ -464,7 +502,7 @@ function generateDraft(input) {
         const key = candidateKey(counselor.nickname, rule.group, rule.channel, rule.banner);
         if (policy.oncePerBatch && selectedCombination[key]) continue;
         const ahead = preassigned.find((p) => p.nickname === counselor.nickname && p.week > week && p.group === rule.group && p.channel === rule.channel && p.banner === rule.banner
-          && (policy.oncePerBatch || weeksBetween(week, p.week) < rule.minWeeks));
+          && (policy.oncePerBatch || weeksBetween(week, p.week) < minWeeksFor(counselor.nickname, rule, p.week)));
         if (ahead) continue;
         const used = selectedCombination[key];
         const result = evaluateCandidate(counselor, rule, week, plannedHistory, used ? {} : data.carryoverMap, used ? {} : data.wishMap, data.exceptions, policy);
@@ -529,7 +567,7 @@ function generateDraft(input) {
   return {
     version: VERSION, startDate: formatDay(start), weekCount, rows, slots,
     summary: { selected, carryover: carryCandidates.length, excluded: excluded.length, emptySlots: slots.reduce((sum, s) => sum + s.empty, 0) },
-    duplicates: Object.keys(data.duplicateCounselors), warnings,
+    duplicates: Object.keys(data.duplicateCounselors), warnings, dropped,
   };
 }
 
@@ -567,6 +605,6 @@ module.exports = {
   clean, normGroup, normChannel, normBanner, asNumber, asBoolean, parseStage,
   toDay, formatDay, mondayOf, addDays, weeksBetween, nextMonday,
   bannerKey, candidateKey, trackingId, defaultRules, defaultPolicy, resolvePolicy, SORT_KEYS, normalizeSettlement,
-  historyNickname, weekLabel, weekStarts, parseHistoryTab, columnLetter, parseRequest,
+  historyNickname, weekLabel, weekStarts, parseHistoryTab, columnLetter, parseRequest, applyActiveStatus, findException,
   prepare, evaluateCandidate, compareCandidates, canAssignThisWeek, generateDraft, validateDraft,
 };

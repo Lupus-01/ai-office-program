@@ -67,7 +67,17 @@ const wishes = wishesRaw.map((w, i) => {
 });
 // 시트의 "예정" 열에 미리 적힌 이름은 그 주의 정해진 자리로 본다
 for (const h of history) if (h.status === '예정' && h.start < weeks[0]) h.status = '확정';
-const preassigned = history.filter((h) => h.status === '예정' && weeks.includes(h.start)).map((h) => ({ week: h.start, group: h.group, channel: h.channel, banner: h.banner, nickname: h.nickname, source: `시트 ${h.position}` }));
+const placedByHand = [];
+for (const e of exceptions) {
+  if (ad.clean(e.type) !== '지정' || !(e.enabled === undefined || ad.asBoolean(e.enabled))) continue;
+  const nickname = ad.clean(e.nickname);
+  const found = byName[nickname] || [];
+  const group = e.group || (found.length === 1 ? found[0].group : '');
+  const from = ad.formatDay(ad.mondayOf(e.start)), until = e.end ? ad.formatDay(ad.mondayOf(e.end)) : from;
+  for (const w of weeks) if (from && w >= from && w <= until) placedByHand.push({ week: w, group, channel: e.channel, banner: e.banner, nickname, source: `지정 ${e.id || ''}`.trim(), force: true });
+}
+const handKeys = new Set(placedByHand.map((p) => `${p.week}|${p.nickname}|${ad.bannerKey(p.group, p.channel, p.banner)}`));
+const preassigned = [...placedByHand, ...history.filter((h) => h.status === '예정' && weeks.includes(h.start) && !handKeys.has(`${h.start}|${h.nickname}|${ad.bannerKey(h.group, h.channel, h.banner)}`)).map((h) => ({ week: h.start, group: h.group, channel: h.channel, banner: h.banner, nickname: h.nickname, source: `시트 ${h.position}` }))];
 
 let draft;
 try { draft = ad.generateDraft({ startDate: start, weekCount, policy, counselors: settlement.counselors, wishes, history, carryovers, exceptions, preassigned }); } catch (e) { fail(e.message); }
@@ -146,13 +156,16 @@ function writeSummary() {
     `- 광고 기간: ${weeks[0]} ~ ${ad.formatDay(ad.addDays(weeks.at(-1), 6))} (${weekCount}주)${startAsked ? '' : ' — 시작 주차 지정이 없어 시트의 마지막 확정 주 다음 주부터 잡았습니다'}`,
     `- 정산 기준월: ${settlement.month} (아테나 아이템별정산현황, 후보 상담사 ${settlement.counselors.length}명)`,
     `- 광고 기록: 시트의 ${lastWeek} 주까지 확정분 반영, 미리 적힌 "예정" 자리 ${preassigned.length}칸`,
-    `- 선정 기준: ${meta.policy} · 희망 ${meta.counts.wishes}건 · 예외 ${meta.counts.exceptions}건 · 이월 ${meta.counts.carryovers}건`,
+    `- 선정 기준: ${meta.policy} · 희망 ${meta.counts.wishes}건 · 조정(넣기·빼기·우선·주기) ${meta.counts.exceptions}건 · 이월 ${meta.counts.carryovers}건`,
     `- 결과: 선정 ${draft.summary.selected}명 · 빈 자리 ${draft.summary.emptySlots} · 이월예정 ${draft.summary.carryover} · 제외(희망) ${draft.summary.excluded}`,
     `- 이 초안은 계산 결과입니다. 광고 기록 시트에는 아직 아무것도 넣지 않았습니다. 넣으려면 "초안 ${draftId} 최종 확정해줘"라고 지시합니다.`, '',
     '## 주차별 선정 / 정원', '', `| 배너 | ${weeks.join(' | ')} |`, `| --- | ${weeks.map(() => '---').join(' | ')} |`];
   for (const b of [...new Set(draft.slots.map((s) => `${s.group} ${s.channel} ${s.banner}`))]) lines.push(`| ${b} | ${weeks.map((w) => { const s = draft.slots.find((x) => x.week === w && `${x.group} ${x.channel} ${x.banner}` === b); return `${s.placed}/${s.capacity}`; }).join(' | ')} |`);
   lines.push('', '## 확인 필요', '');
-  const notes = [...problems.map((p) => `검증 문제: ${p}`), ...draft.warnings, ...draft.duplicates.map((d) => `닉네임 중복으로 자동 선정에서 뺌: ${d}`),
+  const inactive = settlement.active && settlement.active.checked ? settlement.active.inactive : [];
+  const notes = [...problems.map((p) => `검증 문제: ${p}`), ...draft.warnings,
+    ...(settlement.active && !settlement.active.checked ? ['아테나 활동 상태를 읽지 못해 이용중지 상담사가 후보에 섞여 있을 수 있습니다'] : []),
+    ...(inactive.length ? [`아테나에 승인완료 아이템이 없어 후보에서 뺀 닉네임 ${inactive.length}건(닉네임을 바꾼 활동 상담사면 '넣기'로 지정): ${[...new Set(inactive.map((i) => i.nickname))].join(', ')}`] : []), ...draft.duplicates.map((d) => `닉네임 중복으로 자동 선정에서 뺌: ${d}`),
     ...emptySlots.map((s) => `빈 자리: ${s.week} ${s.group} ${s.channel} ${s.banner} ${s.placed}/${s.capacity} (자격·주기를 채운 후보가 더 없음)`),
     ...draft.rows.filter((r) => r.result !== '선정').map((r) => `${r.result}: ${r.group} ${r.channel} ${r.banner} ${r.nickname} — ${r.description}`)];
   lines.push(...(notes.length ? notes.map((n) => `- ${n}`) : ['- 없음']));
