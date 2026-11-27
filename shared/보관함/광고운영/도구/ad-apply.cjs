@@ -28,7 +28,7 @@ const configPath = path.join(__dirname, '설정.json');
 let config = {};
 try { if (fs.existsSync(configPath)) config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch { fail('설정.json을 읽지 못했습니다(JSON 형식 확인).'); }
 const sheetId = (String(opt('sheet') || config.sheet || '').match(/\/spreadsheets\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]{20,})/) || [])[1] || '';
-if (!sheetId) fail('광고 기록 시트 주소가 없습니다. 보관함/광고운영/도구/설정.json에 "sheet":"https://docs.google.com/spreadsheets/d/…"를 적어 주세요.');
+if (!sheetId && String(config.applyTarget || 'file') === 'sheet') fail('광고 기록 시트 주소가 없습니다. 보관함/광고운영/도구/설정.json에 "sheet":"https://docs.google.com/spreadsheets/d/…"를 적어 주세요.');
 const user = Number.isInteger(Number(config.googleUser)) ? Number(config.googleUser) : 0;
 const sheetUrl = `https://docs.google.com/spreadsheets/u/${user}/d/${sheetId}/edit`;
 
@@ -60,6 +60,8 @@ const weeks = opt('weeks') ? opt('weeks').split(',').map((w) => ad.formatDay(ad.
   : ordinals.length ? ordinals.sort().map((n) => draft.weeks[n - 1]).filter(Boolean) : draft.weeks;
 const outside = weeks.filter((w) => !draft.weeks.includes(w));
 if (outside.length || !weeks.length) fail(`초안에 없는 주차입니다: ${outside.join(', ') || '(없음)'}. 이 초안의 주차: ${draft.weeks.join(', ')}`);
+// 초안 파일이 만든 뒤 손으로 바뀌었으면 확정하지 않는다(명단은 조정 도구로 바꾸고 초안을 다시 만든다)
+if (draft.rowsHash && require('crypto').createHash('sha256').update(JSON.stringify([draft.rows, draft.policy])).digest('hex').slice(0, 16) !== draft.rowsHash) fail('초안 파일이 만든 뒤 바뀌어 확정하지 않았습니다. 명단을 바꾸려면 조정(넣기·빼기)을 등록하고 초안을 다시 만들어 주세요.');
 const problems = ad.validateDraft(draft.rows.filter((r) => weeks.includes(r.week)), draft.policy);
 if (problems.length) fail(`검증 문제가 있어 반영하지 않았습니다:\n${problems.slice(0, 10).join('\n')}`);
 
@@ -67,7 +69,7 @@ if (problems.length) fail(`검증 문제가 있어 반영하지 않았습니다:
 if (String(config.applyTarget || 'file') !== 'sheet') {
   const ledgerFile = path.join(__dirname, '..', '확정기록.json');
   let ledger = [];
-  try { if (fs.existsSync(ledgerFile)) ledger = JSON.parse(fs.readFileSync(ledgerFile, 'utf8')); } catch { fail('확정기록.json을 읽지 못했습니다(JSON 형식 확인). 고치기 전에는 확정하지 않습니다.'); }
+  try { if (fs.existsSync(ledgerFile)) ledger = JSON.parse(fs.readFileSync(ledgerFile, 'utf8').replace(/^\uFEFF/, '')); if (!Array.isArray(ledger)) throw new Error('목록이 아님'); } catch { fail('확정기록.json을 읽지 못했습니다(JSON 형식 확인). 고치기 전에는 확정하지 않습니다.'); }
   const rows = draft.rows.filter((r) => r.result === '선정' && weeks.includes(r.week));
   const others = ledger.filter((r) => weeks.includes(r.start) && r.draftId !== draft.draftId);
   const mine = ledger.filter((r) => weeks.includes(r.start) && r.draftId === draft.draftId);

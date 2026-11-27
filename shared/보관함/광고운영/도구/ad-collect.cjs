@@ -207,10 +207,10 @@ async function main() {
     let localCount = 0;
     if (fs.existsSync(ledgerFile)) {
       let ledger = [];
-      try { ledger = JSON.parse(fs.readFileSync(ledgerFile, 'utf8')); } catch { fail('확정기록.json을 읽지 못했습니다(JSON 형식 확인).'); }
+      try { ledger = JSON.parse(fs.readFileSync(ledgerFile, 'utf8').replace(/^\uFEFF/, '')); if (!Array.isArray(ledger)) throw new Error('목록이 아님'); } catch { fail('확정기록.json을 읽지 못했습니다(JSON 형식 확인).'); }
       const slot = (r) => `${r.start}|${r.group}|${r.channel}|${r.banner}`;
-      const confirmedSlots = new Set(ledger.map(slot));
-      for (let i = history.length - 1; i >= 0; i--) if (history[i].status === '예정' && confirmedSlots.has(slot(history[i]))) history.splice(i, 1);
+      const confirmedWeeks = new Set(ledger.map((r) => r.start));
+      for (let i = history.length - 1; i >= 0; i--) if (history[i].status === '예정' && confirmedWeeks.has(history[i].start)) history.splice(i, 1);
       const have = new Set(history.map((h) => `${slot(h)}|${h.nickname}`));
       for (const r of ledger) {
         if (have.has(`${slot(r)}|${r.nickname}`)) continue;

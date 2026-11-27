@@ -10,6 +10,8 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+// 글자 다듬기(공백·"전화상담"→"전화"·날짜 꼴)만 계산 도구와 같은 함수를 쓴다. 자격·주기·순위 판정은 아래에서 따로 한다
+const { clean, normGroup, normChannel, normBanner, toDay, formatDay, mondayOf, asBoolean } = require('./ad-lib.cjs');
 
 const args = process.argv.slice(2);
 const opt = (name) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : ''; };
@@ -22,23 +24,29 @@ const settlement = read(path.join(opt('in'), `${opt('prefix')}정산.json`));
 const collected = read(path.join(opt('in'), `${opt('prefix')}이력.json`));
 const draft = read(opt('draft'));
 const vault = opt('vault') || path.join(__dirname, '..');
-const exceptions = listOf(path.join(vault, '예외.json'), 'exceptions').filter((e) => e.enabled === undefined || e.enabled === true || ['true', 'y', '1', '사용'].includes(String(e.enabled).toLowerCase()));
-const wishList = listOf(path.join(vault, '희망.json'), 'wishes');
-const carryList = listOf(path.join(vault, '이월.json'), 'carryovers');
+const tidy = (e) => ({ ...e, nickname: clean(e.nickname), type: clean(e.type), group: e.group ? normGroup(e.group) : '', channel: e.channel ? normChannel(e.channel) : '', banner: e.banner ? normBanner(e.banner) : '' });
+const exceptions = listOf(path.join(vault, '예외.json'), 'exceptions').filter((e) => e.enabled === undefined || asBoolean(e.enabled)).map((e) => ({ ...tidy(e), start: formatDay(toDay(e.start)), end: formatDay(toDay(e.end)) }));
+const wishList = listOf(path.join(vault, '희망.json'), 'wishes').map((w) => ({ ...tidy(w), registeredAt: formatDay(toDay(w.registeredAt)) }));
+const carryList = listOf(path.join(vault, '이월.json'), 'carryovers').map((c) => ({ ...tidy(c), start: formatDay(mondayOf(c.start)) }));
 const policy = draft.policy;
 
 // 날짜: 'YYYY-MM-DD' → 날 수(정수). 주 차이는 7로 나눈다
 const dayNo = (s) => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return Math.round(Date.UTC(y, m - 1, d) / 86400000); };
 const weeksApart = (older, newer) => Math.floor((dayNo(newer) - dayNo(older)) / 7);
 const keyOf = (r) => `${r.group}|${r.channel}|${r.banner}`;
-const rules = policy.rules.filter((r) => r.enabled === true || String(r.enabled) === 'true').slice().sort((a, b) => a.order - b.order);
+const rules = policy.rules.filter((r) => r.enabled === undefined || asBoolean(r.enabled)).slice().sort((a, b) => a.order - b.order);
 const ruleOf = Object.fromEntries(rules.map((r) => [keyOf(r), r]));
 
 const people = {};
 for (const c of settlement.counselors) (people[c.nickname] ||= []).push(c);
 const picked = draft.rows.filter((r) => r.result === '선정');
 const isPre = (r) => String(r.description).startsWith('미리 정해짐');
-const confirmed = (collected.history || []).filter((h) => h.status === '확정' || h.status === '완료');
+const confirmed = (collected.history || []).filter((h) => h.status === '확정' || h.status === '완료' || (h.status === '예정' && h.start < draft.weeks[0]));
+// 미리 정해진 자리의 근거: 시트의 "예정" 칸이나 운영자의 '지정'
+const preSource = new Set([
+  ...(collected.history || []).filter((h) => h.status === '예정').map((h) => `${h.start}|${h.nickname}|${h.group}|${h.channel}|${h.banner}`),
+  ...exceptions.filter((e) => e.type === '지정').flatMap((e) => draft.weeks.filter((w) => { const from = formatDay(mondayOf(e.start)), until = e.end ? formatDay(mondayOf(e.end)) : from; return w >= from && w <= until; }).map((w) => `${w}|${e.nickname}|${e.channel}|${e.banner}`)),
+]);
 
 const wishOf = {};
 for (const w of wishList) {
@@ -58,7 +66,7 @@ function lastBefore(nickname, rule, week) {
   return last;
 }
 function exceptionFor(nickname, rule, week, types) {
-  return exceptions.find((e) => e.nickname === nickname && types.includes(e.type) && (!e.start || week >= String(e.start).slice(0, 10)) && (!e.end || week <= String(e.end).slice(0, 10))
+  return exceptions.find((e) => e.nickname === nickname && types.includes(e.type) && (!e.start || new Date(Date.UTC(...week.split('-').map((n, i) => (i === 1 ? Number(n) - 1 : Number(n)))) + 6 * 86400000).toISOString().slice(0, 10) >= e.start) && (!e.end || week <= e.end)
     && (!e.group || e.group === rule.group) && (!e.channel || e.channel === rule.channel) && (!e.banner || e.banner === rule.banner)) || null;
 }
 // 자격 미달 사유(없으면 '')
@@ -75,6 +83,7 @@ function ineligible(nickname, rule, week) {
   const partner = c.stage >= policy.partnerStages[0] && c.stage <= policy.partnerStages[1];
   if (rule.partner === '파트너' && !partner) return `파트너 전용인데 ${c.stage}단계`;
   if (rule.banner === '메인' && c.stage < Number(rule.mainStage || 0) && c.seconds < Number(rule.mainSeconds || 0)) return `${rule.mainStage}단계 미만이고 상담시간 ${Math.floor(c.seconds / 3600)}시간`;
+  if (policy.oncePerBatch && picked.some((r) => r.nickname === nickname && keyOf(r) === keyOf(rule) && r.week < week)) return '이 초안에서 이미 배정됨(한 번만 배정 규칙)';
   const ex = exceptionFor(nickname, rule, week, ['제외', '연기']);
   if (ex) return `예외설정 ${ex.type}`;
   const own = exceptionFor(nickname, rule, week, ['주기']);
@@ -136,6 +145,7 @@ for (const [who, list] of Object.entries(perPersonWeek)) {
 // ④⑤⑥
 for (const r of picked) {
   const rule = ruleOf[keyOf(r)];
+  if (rule && isPre(r) && !preSource.has(`${r.week}|${r.nickname}|${r.group}|${r.channel}|${r.banner}`) && !preSource.has(`${r.week}|${r.nickname}|${r.channel}|${r.banner}`)) add('⑨근거 없는 미리 정해진 자리', `${r.week} ${keyOf(r)} ${r.nickname}: 시트의 예정 칸에도 조정(넣기)에도 없습니다`);
   if (!rule || isPre(r)) continue;
   counts.eligibilityChecked++;
   const why = ineligible(r.nickname, rule, r.week);

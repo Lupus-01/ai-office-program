@@ -329,7 +329,7 @@ test('조정 명령: 넣기·빼기·우선·주기·희망·취소가 파일에
     assert.equal(run('희망', '--name', '마루', '--channel', '전화', '--banner', '신점').status, 0);
     assert.match(run('주기', '--name', '라온').stderr, /--weeks/);
     assert.match(run('넣기', '--name', '가온', '--channel', '문자', '--banner', '메인', '--week', '2026-12-07').stderr, /전화\|채팅/);
-    assert.match(run('넣기', '--name', '가온', '--channel', '전화', '--banner', '메인', '--week', '2026-12-07').stderr, /이미 있습니다/);
+    assert.match(run('넣기', '--name', '가온', '--channel', '전화', '--banner', '메인', '--week', '2026-12-07').stderr, /이미 넣기가 있습니다/);
     const list = run('목록').stdout;
     assert.match(list, /조정 4건/); assert.match(list, /주기 2주\s+라온\s+모든 배너/); assert.match(list, /광고 희망\(대기\) 1건/);
     const saved = JSON.parse(readFileSync(join(vault, '예외.json'), 'utf8'));
@@ -376,4 +376,36 @@ test('확정: AI 오피스 안의 확정 기록에만 남기고, 같은 초안�
     writeFileSync(join(root, 'task', 'brief.md'), '- apply: [[지시]]검토한 초안 최종 확정해줘[[/지시]]');
     assert.match(run('--brief', join(root, 'task', 'brief.md'), '--find', root).stderr, /초안 ID가 없어/);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('두 번째 독립 검토 지적: 뺀 예정 자리·조정 기간·활동 줄 고르기·지시문 읽기', () => {
+  // 뺀 미리 적힌 자리는 앞 주 배정을 막지 않는다
+  const rules = ad.defaultRules().filter((r) => r.group === '그린' && r.channel === '전화' && ['메인', '타로'].includes(r.banner)).map((r) => ({ ...r, capacity: 2 }));
+  const pre = (banner) => ({ week: '2026-12-21', group: '그린', channel: '전화', banner, nickname: '가', source: '시트' });
+  const draft = ad.generateDraft({ startDate: '2026-12-07', weekCount: 4, policy: { rules }, counselors: ['가', '나', '다'].map((n) => person(n, { stage: 3 })), preassigned: [pre('메인'), pre('타로')] });
+  assert.equal(draft.dropped.length, 1, '같은 주 두 배너 중 하나는 뺀다');
+  const dropped = draft.dropped[0].banner, kept = dropped === '메인' ? '타로' : '메인';
+  assert.ok(picked(draft, (r) => r.week === '2026-12-07' && r.banner === dropped).some((r) => r.nickname === '가'), '뺀 배너에서는 가가 앞 주 후보로 돌아온다');
+  assert.ok(!picked(draft, (r) => r.banner === kept && r.week < '2026-12-21').some((r) => r.nickname === '가'), '남은 자리의 주기 안 앞 주에는 넣지 않는다');
+  // 빼기 기간이 주 중간이어도 그 주에 적용된다
+  const r = rule('그린', '채팅', '메인');
+  const run = (exceptions) => { const d = ad.prepare({ counselors: [person('차')], exceptions }); return ad.evaluateCandidate(d.counselors[0], r, ad.toDay('2026-12-07'), [], {}, {}, d.exceptions); };
+  assert.equal(run([{ type: '제외', nickname: '차', start: '2026-12-08', end: '2026-12-12', reason: '휴식' }]).ok, false);
+  assert.equal(run([{ type: '제외', nickname: '차', start: '2026-12-14', reason: '휴식' }]).ok, true);
+  assert.equal(run([{ type: '제외', nickname: '차', end: '2026-12-06', reason: '휴식' }]).ok, true);
+  // 단계가 바뀐 뒤에도 활동 중인 그룹의 줄을 고른다
+  const row = (group, stage, seconds, sourceRow) => ({ ...person('가', { group, stage, seconds }), sourceRow });
+  assert.deepEqual(ad.applyActiveStatus([row('그린', 2, 0, 1), row('퍼플', 3, 9000, 2)], [{ nickname: '가', stage: '그린 3단계' }]).counselors.map((c) => c.sourceRow), [1]);
+  assert.deepEqual(ad.applyActiveStatus([row('그린', 2, 5000, 1), row('퍼플', 1, 3000, 2)], [{ nickname: '가', stage: '그린 3단계' }]).unresolved, []);
+  // 지시문: 주기·날짜 속 숫자는 범위가 아니고, 주차 여러 개와 지원하지 않는 범위를 읽는다
+  const opt = { today: '2026-11-27' };
+  assert.equal(ad.parseRequest('가온 주기 4주로 바꾸고 다음 주 초안 만들어줘', opt).weekCount, null);
+  assert.equal(ad.parseRequest('4주 뒤부터 1주만 초안', opt).weekCount, 1);
+  assert.deepEqual([ad.parseRequest('1/4 주부터 초안', opt).weekCount, ad.parseRequest('1/4 주부터 초안', opt).startDate], [null, '2027-01-04']);
+  assert.equal(ad.parseRequest('12-14 주부터 초안', opt).startDate, '2026-12-14');
+  assert.equal(ad.parseRequest('다음 4주 광고 선정 초안', opt).weekCount, 4);
+  assert.equal(ad.parseRequest('2주 초안 만들어줘', opt).unsupportedWeeks, 2);
+  assert.deepEqual(ad.parseRequest('초안 AD-20261207-4W-63173B 1, 2주차 확정', opt).weekOrdinals, [1, 2]);
+  assert.deepEqual(ad.parseRequest('초안 AD-20261207-4W-63173B 1~3주차 확정', opt).weekOrdinals, [1, 2, 3]);
+  assert.deepEqual(ad.parseRequest('12주차 정산 이야기', opt).weekOrdinals, []);
 });

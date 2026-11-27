@@ -172,6 +172,7 @@ function applyActiveStatus(counselors, activeItems) {
     if (!items.length) { inactive.push(...rows.map((r) => ({ nickname, sourceRow: r.sourceRow, group: r.group, stage: r.stage }))); continue; }
     if (rows.length === 1) { kept.push(rows[0]); continue; }
     let pool = rows.filter((r) => items.some((i) => i.group === r.group && i.stage === r.stage));
+    if (!pool.length) pool = rows.filter((r) => items.some((i) => i.group === r.group));
     if (!pool.length) pool = rows;
     if (pool.length > 1) { const worked = pool.filter((r) => r.seconds > 0); if (worked.length === 1) pool = worked; }
     if (pool.length === 1) { kept.push(pool[0]); resolved.push({ nickname, keptRow: pool[0].sourceRow, droppedRows: rows.filter((r) => r !== pool[0]).map((r) => r.sourceRow) }); }
@@ -273,11 +274,14 @@ function parseRequest(text, { today } = {}) {
   const now = toDay(today) ?? toDay(new Date(Date.now() + 9 * 3600 * 1000));
   const id = body.match(/AD-\d{8}-[14]W-[0-9A-F]{6}/i);
   let weekCount = null;
-  if (/(^|[^0-9])4\s*주(?!차)/.test(body) || /네\s*주|한\s*달/.test(body)) weekCount = 4;
-  else if (/(^|[^0-9])1\s*주(?!차)/.test(body) || /한\s*주|일주일|주만/.test(body)) weekCount = 1;
+  const span = body.replace(/주기[^,.\n]{0,8}?\d+\s*주/g, ' ').replace(/\d+\s*주\s*(뒤|후|전|마다|동안은)/g, ' ').replace(/\d{1,2}\s*[./-]\s*\d{1,2}\s*주/g, ' ');
+  const counts = [...span.matchAll(/(^|[^0-9])(\d{1,2})\s*주(?!\s*차|기)/g)].map((m) => Number(m[2]));
+  if (counts.includes(4) || /네\s*주|한\s*달/.test(span)) weekCount = 4;
+  else if (counts.includes(1) || /한\s*주|일주일|주만/.test(span)) weekCount = 1;
+  const unsupported = counts.find((n) => n !== 1 && n !== 4) ?? null;
   let start = null;
   const full = body.match(/(20\d{2})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})/);
-  const short = body.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/) || body.match(/(^|[^0-9.])(\d{1,2})[./](\d{1,2})(?=\s*(주|부터|시작|일))/);
+  const short = body.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/) || body.match(/(^|[^0-9.A-Za-z-])(\d{1,2})[./-](\d{1,2})(?=\s*(주|부터|시작|일))/);
   if (full) start = Date.UTC(Number(full[1]), Number(full[2]) - 1, Number(full[3]));
   else if (short) {
     const [m, d] = short.length === 3 ? [Number(short[1]), Number(short[2])] : [Number(short[2]), Number(short[3])];
@@ -285,8 +289,16 @@ function parseRequest(text, { today } = {}) {
     // 연도가 없으면 오늘에서 두 달 전 ~ 열 달 뒤 사이의 그 날짜
     start = [year - 1, year, year + 1].map((y) => Date.UTC(y, m - 1, d)).find((ms) => ms >= now - 60 * DAY && ms <= now + 305 * DAY) ?? null;
   }
-  const ordinals = [...body.matchAll(/([1-4])\s*주차/g)].map((m) => Number(m[1]));
-  return { startDate: start != null ? formatDay(mondayOf(start)) : null, weekCount, draftId: id ? id[0].toUpperCase() : null, weekOrdinals: [...new Set(ordinals)], text: body.trim() };
+  const ordinals = [];
+  for (const m of body.matchAll(/(?<![0-9])((?:[1-4]\s*(?:[,·~-]|와|과|및)\s*)*[1-4])\s*주차/g)) {
+    const parts = m[1].split(/(?=[,·~-]|와|과|및)|(?<=[,·~-]|와|과|및)/).map((p) => p.trim()).filter(Boolean);
+    let prev = null, range = false;
+    for (const p of parts) {
+      if (/^[1-4]$/.test(p)) { const n = Number(p); if (range && prev != null) for (let i = Math.min(prev, n); i <= Math.max(prev, n); i++) ordinals.push(i); else ordinals.push(n); prev = n; range = false; }
+      else range = p === '~' || p === '-';
+    }
+  }
+  return { startDate: start != null ? formatDay(mondayOf(start)) : null, weekCount, draftId: id ? id[0].toUpperCase() : null, weekOrdinals: [...new Set(ordinals)].sort(), unsupportedWeeks: unsupported, text: body.trim() };
 }
 
 // 입력을 계산용으로 정리한다(v2.1의 hc21LoadSortingData_)
@@ -339,7 +351,7 @@ function findException(exceptions, context, week, types) {
     if (clean(row.nickname) !== context.nickname) continue;
     if (types && !types.includes(clean(row.type))) continue;
     const start = toDay(row.start), end = toDay(row.end);
-    if (start != null && week < start) continue;
+    if (start != null && week + 6 * DAY < start) continue;
     if (end != null && week > end) continue;
     if (clean(row.group) && normGroup(row.group) !== context.group) continue;
     if (clean(row.channel) && normChannel(row.channel) !== context.channel) continue;
@@ -439,6 +451,14 @@ function draftRow(week, rule, seq, candidate, result) {
 
 // 1주 또는 4주 선정 초안(v2.1의 hc21GenerateDraft). 기본은 최소 주기가 지나면 같은 생성 안에서도 다시 배정하고, 규칙의 oncePerBatch가 true면 v2.1처럼 한 번만 배정한다
 function generateDraft(input) {
+  const first = generateDraftOnce(input);
+  if (!first.dropped.length) return first;
+  const gone = new Set(first.dropped.map((d) => `${d.week}|${d.nickname}|${bannerKey(d.group, d.channel, d.banner)}`));
+  const rest = (input.preassigned || []).filter((p) => !gone.has(`${formatDay(mondayOf(p.week ?? p.start))}|${clean(p.nickname)}|${bannerKey(p.group, p.channel, p.banner)}`));
+  const second = generateDraftOnce({ ...input, preassigned: rest });
+  return { ...second, dropped: [...first.dropped, ...second.dropped], warnings: [...first.warnings.filter((w) => w.includes('뺐습니다')), ...second.warnings] };
+}
+function generateDraftOnce(input) {
   const start = mondayOf(input.startDate);
   const weekCount = Number(input.weekCount);
   if (start == null) throw new Error('시작 주차를 정해 주세요.');

@@ -41,7 +41,9 @@ const policyFile = readJson(path.join(vault, '규칙.json'), '규칙');
 const wishesRaw = listOf(readJson(path.join(vault, '희망.json'), '광고 희망'), 'wishes');
 const exceptions = listOf(readJson(path.join(vault, '예외.json'), '예외 설정'), 'exceptions');
 const carryovers = listOf(readJson(path.join(vault, '이월.json'), '이월 대기'), 'carryovers');
-const request = opt('brief') && fs.existsSync(opt('brief')) ? ad.parseRequest(fs.readFileSync(opt('brief'), 'utf8')) : {};
+if (opt('brief') && !fs.existsSync(opt('brief'))) fail(`업무 설명 파일이 없습니다(${opt('brief')}).`);
+const request = opt('brief') ? ad.parseRequest(fs.readFileSync(opt('brief'), 'utf8')) : {};
+if (!opt('weeks') && request.unsupportedWeeks) fail(`초안은 1주 또는 4주만 만들 수 있습니다(지시에 ${request.unsupportedWeeks}주라고 적혀 있습니다). 1주씩 만들어 확정하거나 4주로 지시해 주세요.`);
 
 let policy;
 try { policy = ad.resolvePolicy(policyFile); } catch (e) { fail(`규칙.json 오류: ${e.message}`); }
@@ -55,7 +57,7 @@ if (!start) fail(`시작 주차를 읽지 못했습니다(${startAsked}). YYYY-M
 if (![1, 4].includes(weekCount)) fail('생성 범위는 1주 또는 4주만 가능합니다.');
 const weeks = Array.from({ length: weekCount }, (_, i) => ad.formatDay(ad.addDays(start, i * 7)));
 const filled = weeks.filter((w) => history.some((h) => h.status === '확정' && h.start === w));
-if (filled.length && !args.includes('--force')) fail(`이미 광고 기록 시트에 명단이 있는 주가 들어 있습니다: ${filled.join(', ')}. 시트에 확정된 마지막 주는 ${lastWeek}입니다. 그다음 주(${ad.formatDay(ad.addDays(lastWeek, 7))})부터 지정해 주세요.`);
+if (filled.length && !args.includes('--force')) fail(`이미 광고 기록(시트 또는 확정 기록)에 명단이 있는 주가 들어 있습니다: ${filled.join(', ')}. 확정된 마지막 주는 ${lastWeek}입니다. 그다음 주(${ad.formatDay(ad.addDays(lastWeek, 7))})부터 지정해 주세요.`);
 
 // 희망의 그룹은 정산 자료에서 찾는다(닉네임이 하나일 때만)
 const byName = {};
@@ -67,20 +69,23 @@ const wishes = wishesRaw.map((w, i) => {
 });
 // 시트의 "예정" 열에 미리 적힌 이름은 그 주의 정해진 자리로 본다
 for (const h of history) if (h.status === '예정' && h.start < weeks[0]) h.status = '확정';
-const placedByHand = [];
+const placedByHand = [], handNotes = [];
 for (const e of exceptions) {
   if (ad.clean(e.type) !== '지정' || !(e.enabled === undefined || ad.asBoolean(e.enabled))) continue;
   const nickname = ad.clean(e.nickname);
   const found = byName[nickname] || [];
-  const group = e.group || (found.length === 1 ? found[0].group : '');
+  const group = e.group ? ad.normGroup(e.group) : (found.length === 1 ? found[0].group : '');
+  if (!ad.GROUPS.includes(group)) { handNotes.push(`넣기 ${e.id || ''} ${nickname}: 정산 자료에서 그룹(그린·퍼플)을 찾지 못해 넣지 못했습니다. 조정을 취소하고 --group 그린|퍼플 을 붙여 다시 등록해 주세요`); continue; }
   const from = ad.formatDay(ad.mondayOf(e.start)), until = e.end ? ad.formatDay(ad.mondayOf(e.end)) : from;
   for (const w of weeks) if (from && w >= from && w <= until) placedByHand.push({ week: w, group, channel: e.channel, banner: e.banner, nickname, source: `지정 ${e.id || ''}`.trim(), force: true });
 }
 const handKeys = new Set(placedByHand.map((p) => `${p.week}|${p.nickname}|${ad.bannerKey(p.group, p.channel, p.banner)}`));
-const preassigned = [...placedByHand, ...history.filter((h) => h.status === '예정' && weeks.includes(h.start) && !handKeys.has(`${h.start}|${h.nickname}|${ad.bannerKey(h.group, h.channel, h.banner)}`)).map((h) => ({ week: h.start, group: h.group, channel: h.channel, banner: h.banner, nickname: h.nickname, source: `시트 ${h.position}` }))];
+const preassigned = [...placedByHand, ...history.filter((h) => h.status === '예정' && h.start >= weeks[0] && !handKeys.has(`${h.start}|${h.nickname}|${ad.bannerKey(h.group, h.channel, h.banner)}`)).map((h) => ({ week: h.start, group: h.group, channel: h.channel, banner: h.banner, nickname: h.nickname, source: `시트 ${h.position}` }))];
 
 let draft;
 try { draft = ad.generateDraft({ startDate: start, weekCount, policy, counselors: settlement.counselors, wishes, history, carryovers, exceptions, preassigned }); } catch (e) { fail(e.message); }
+draft.warnings.unshift(...handNotes);
+const placedPre = draft.rows.filter((r) => r.result === '선정' && String(r.description).startsWith('미리 정해짐')).length;
 
 const policyHash = crypto.createHash('sha256').update(JSON.stringify(policy)).digest('hex').slice(0, 8);
 const inputHash = crypto.createHash('sha256').update(JSON.stringify([settlement.month, settlement.counselors, history.map((h) => [h.start, h.group, h.channel, h.banner, h.nickname, h.status]), wishes, exceptions, carryovers, policy])).digest('hex').slice(0, 6);
@@ -91,10 +96,11 @@ const emptySlots = draft.slots.filter((s) => s.empty > 0);
 const meta = {
   draftId, version: 1, createdAt: new Date().toISOString(), startDate: start, weekCount, weeks, settlementMonth: settlement.month, settlementCollectedAt: settlement.collectedAt,
   historySource: collected.source, historyLastWeek: lastWeek, policy: policyFile ? `규칙.json(${policyHash})` : `기본 규칙(${policyHash})`, engine: ad.VERSION,
-  counts: { counselors: settlement.counselors.length, wishes: wishes.filter((w) => w.status === '대기').length, exceptions: exceptions.length, carryovers: carryovers.length, preassigned: preassigned.length },
+  counts: { counselors: settlement.counselors.length, wishes: wishes.filter((w) => w.status === '대기').length, exceptions: exceptions.length, carryovers: carryovers.length, preassigned: placedPre },
 };
 fs.mkdirSync(outDir, { recursive: true });
-fs.writeFileSync(path.join(outDir, `${prefix}광고선정초안.json`), JSON.stringify({ ...meta, summary: draft.summary, slots: draft.slots, rows: draft.rows, warnings: draft.warnings, duplicates: draft.duplicates, problems, policy }, null, 1));
+const rowsHash = crypto.createHash('sha256').update(JSON.stringify([draft.rows, policy])).digest('hex').slice(0, 16);
+fs.writeFileSync(path.join(outDir, `${prefix}광고선정초안.json`), JSON.stringify({ ...meta, rowsHash, summary: draft.summary, slots: draft.slots, rows: draft.rows, warnings: draft.warnings, dropped: draft.dropped, duplicates: draft.duplicates, problems, policy }, null, 1));
 
 async function writeXlsx() {
   const ExcelJS = require(path.join(programRoot(), 'node_modules', 'exceljs'));
@@ -105,7 +111,7 @@ async function writeXlsx() {
   const sum = wb.addWorksheet('요약');
   sum.columns = [{ width: 22 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }];
   for (const [k, v] of [['초안 ID', draftId], ['버전', meta.version], ['광고 기간', `${weeks[0]} ~ ${ad.formatDay(ad.addDays(weeks.at(-1), 6))} (${weekCount}주)`], ['정산 기준월', settlement.month], ['광고 기록 마지막 확정 주', lastWeek],
-    ['선정 기준', meta.policy], ['후보 상담사', settlement.counselors.length], ['선정', draft.summary.selected], ['빈 자리', draft.summary.emptySlots], ['이월예정', draft.summary.carryover], ['제외(희망)', draft.summary.excluded], ['미리 정해진 자리', preassigned.length], ['검증 문제', problems.length]]) sum.addRow([k, v]);
+    ['선정 기준', meta.policy], ['후보 상담사', settlement.counselors.length], ['선정', draft.summary.selected], ['빈 자리', draft.summary.emptySlots], ['이월예정', draft.summary.carryover], ['제외(희망)', draft.summary.excluded], ['미리 정해진 자리', placedPre], ['검증 문제', problems.length]]) sum.addRow([k, v]);
   sum.getColumn(1).font = { bold: true };
   sum.addRow([]);
   sum.addRow(['배너', ...weeks.map(label)]); head(sum, sum.rowCount);
@@ -155,7 +161,7 @@ function writeSummary() {
   const lines = [`# 광고 선정 초안 ${draftId} (v${meta.version})`, '',
     `- 광고 기간: ${weeks[0]} ~ ${ad.formatDay(ad.addDays(weeks.at(-1), 6))} (${weekCount}주)${startAsked ? '' : ' — 시작 주차 지정이 없어 시트의 마지막 확정 주 다음 주부터 잡았습니다'}`,
     `- 정산 기준월: ${settlement.month} (아테나 아이템별정산현황, 후보 상담사 ${settlement.counselors.length}명)`,
-    `- 광고 기록: 시트의 ${lastWeek} 주까지 확정분 반영, 미리 적힌 "예정" 자리 ${preassigned.length}칸`,
+    `- 광고 기록: 시트의 ${lastWeek} 주까지 확정분 반영, 미리 정해진 자리 ${placedPre}칸`,
     `- 선정 기준: ${meta.policy} · 희망 ${meta.counts.wishes}건 · 조정(넣기·빼기·우선·주기) ${meta.counts.exceptions}건 · 이월 ${meta.counts.carryovers}건`,
     `- 결과: 선정 ${draft.summary.selected}명 · 빈 자리 ${draft.summary.emptySlots} · 이월예정 ${draft.summary.carryover} · 제외(희망) ${draft.summary.excluded}`,
     `- 이 초안은 계산 결과이고 아직 확정되지 않았습니다. 확정하려면 "초안 ${draftId} 최종 확정해줘"라고 지시합니다. 확정 명단은 AI 오피스 안의 확정 기록에 남고(다음 초안의 광고 이력이 됩니다) 구글 시트는 건드리지 않습니다.`, '',
@@ -175,7 +181,7 @@ function writeSummary() {
 writeXlsx().then(() => {
   writeSummary();
   console.log(`초안 ${draftId} v1: ${weeks[0]} 주부터 ${weekCount}주 (정산 ${settlement.month}, 광고 기록 ${lastWeek} 주까지 반영)`);
-  console.log(`선정 ${draft.summary.selected}명 · 빈 자리 ${draft.summary.emptySlots} · 이월예정 ${draft.summary.carryover} · 제외 ${draft.summary.excluded} · 미리 정해진 자리 ${preassigned.length}`);
+  console.log(`선정 ${draft.summary.selected}명 · 빈 자리 ${draft.summary.emptySlots} · 이월예정 ${draft.summary.carryover} · 제외 ${draft.summary.excluded} · 미리 정해진 자리 ${placedPre}`);
   for (const w of weeks) { const slots = draft.slots.filter((s) => s.week === w); console.log(`  ${w}: 선정 ${slots.reduce((n, s) => n + s.placed, 0)} / 정원 ${slots.reduce((n, s) => n + s.capacity, 0)}`); }
   console.log(`확인 필요: 검증 문제 ${problems.length}, 미리 정해진 자리 확인 ${draft.warnings.length}, 닉네임 중복 ${draft.duplicates.length}`);
 }).catch((e) => fail(`엑셀을 쓰지 못했습니다: ${e.message}`));
