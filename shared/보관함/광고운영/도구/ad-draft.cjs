@@ -5,7 +5,7 @@
 //   node 보관함/광고운영/도구/ad-draft.cjs --in <수집 폴더> --out <폴더> [--prefix <앞가지>] [--start 2026-12-07] [--weeks 1|4] [--brief <업무 brief.md>] [--force]
 // --brief: 업무 폴더의 brief.md(대표 지시가 [[지시]]…[[/지시]]로 들어 있다)에서 시작 주차와 1주/4주를 읽는다.
 //
-// 시작 주차를 주지 않으면 광고 기록 시트에 확정된 마지막 주의 다음 월요일부터 4주다.
+// 기본은 1주 초안이다: 시작 주차를 주지 않으면 광고 기록(시트 + 확정 기록)의 마지막 주 다음 월요일부터 1주. 4주는 지시에 "4주"라고 적었을 때만 만든다.
 // 보관함/광고운영/ 의 선택 파일: 규칙.json(선정 기준), 희망.json, 예외.json, 이월.json — 없으면 기본 규칙·빈 목록으로 계산한다.
 'use strict';
 const fs = require('fs');
@@ -50,7 +50,7 @@ const history = collected.history || [];
 const lastWeek = collected.lastWeek || '';
 const startAsked = opt('start') || request.startDate || '';
 const start = ad.formatDay(ad.mondayOf(startAsked || (lastWeek ? ad.addDays(lastWeek, 7) : ad.nextMonday(new Date(Date.now() + 9 * 3600 * 1000)))));
-const weekCount = Number(opt('weeks') || request.weekCount || 4);
+const weekCount = Number(opt('weeks') || request.weekCount || 1);
 if (!start) fail(`시작 주차를 읽지 못했습니다(${startAsked}). YYYY-MM-DD로 적어 주세요.`);
 if (![1, 4].includes(weekCount)) fail('생성 범위는 1주 또는 4주만 가능합니다.');
 const weeks = Array.from({ length: weekCount }, (_, i) => ad.formatDay(ad.addDays(start, i * 7)));
