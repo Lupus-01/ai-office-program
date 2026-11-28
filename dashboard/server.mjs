@@ -42,7 +42,7 @@ import { historyClearIntent, taskCloseIntent } from '../lib/pause.mjs';
 import { quickCandidates } from '../lib/quick.mjs';
 import { createJudge } from '../lib/ai-judge.mjs';
 import { recipeChoices } from '../lib/recipes.mjs';
-import { loadBoard, setBoardAck, setBoardManager } from '../lib/board.mjs';
+import { loadBoard, loadSales, setBoardAck, setBoardManager } from '../lib/board.mjs';
 import { guideCoverage, loadGuides, publicGuides, publicTeams, teamCoverage } from '../lib/guides.mjs';
 import { ensureVault } from '../lib/vault.mjs';
 import { UPLOAD_MAX_BYTES, saveUpload } from '../lib/uploads.mjs';
@@ -1665,6 +1665,11 @@ export async function startServer({
       if (parts.length === 2 && parts[1] === 'board') {
         checkToken(req);
         return sendJson(res, 200, demo ? { manager: '', managers: [], panels: [], acks: {}, problems: [] } : loadBoard(root));
+      }
+      // 현황판 매출: 도구가 올린 일·월 매출 표(숫자만). 파일만 읽는다
+      if (parts.length === 3 && parts[1] === 'board' && parts[2] === 'sales') {
+        checkToken(req);
+        return sendJson(res, 200, demo ? { updatedAt: '', today: '', source: '', error: null, notes: [], days: [], months: [] } : loadSales(root));
       }
       // 업무 가이드: 작업 공간 org/guides.json의 예시 카드와 누락 점검. 파일만 읽는다(AI 호출·외부 전송 0회).
       // 화면용 목록에는 직원·절차 연결을 싣지 않고, 점검(coverage)에만 직원 이름·절차 id가 나온다
