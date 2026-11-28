@@ -1836,7 +1836,7 @@ export async function startServer({
       if (demo) throw new HttpError(409, '데모에서는 현황판을 바꿀 수 없습니다.');
       try {
         if (id === 'manager') return sendJson(res, 200, setBoardManager(root, body?.name));
-        if (id === 'ack') return sendJson(res, 200, setBoardAck(root, body?.key, body?.on));
+        if (id === 'ack') return sendJson(res, 200, setBoardAck(root, Array.isArray(body?.keys) ? body.keys : body?.key, body?.on));
       } catch (error) { if (error.status) throw new HttpError(error.status, error.message); throw error; }
     }
 

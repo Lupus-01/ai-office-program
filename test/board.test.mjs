@@ -39,6 +39,12 @@ test('담당자 이름과 확인 표시는 작업 공간 파일에 남고, 목�
   setBoardAck(root, 'athena:assign:CE-2', false);
   assert.deepEqual(Object.keys(loadBoard(root).acks), ['athena:assign:CE-1']);
   assert.throws(() => setBoardAck(root, 'bad key', true), /항목/);
+  // 한 카드를 한꺼번에 접고 되돌린다
+  setBoardAck(root, ['athena:assign:CE-1', 'athena:assign:CE-2'], true);
+  assert.equal(Object.keys(loadBoard(root).acks).length, 2);
+  setBoardAck(root, ['athena:assign:CE-2'], false);
+  assert.throws(() => setBoardAck(root, [], true), /항목/);
+  assert.throws(() => setBoardAck(root, ['athena:assign:CE-1', 'x'], true), /항목/);
   // 아테나에서 처리돼 목록에서 빠지면 확인 표시도 없어진다(다시 생기면 다시 보인다)
   writeFileSync(join(boardDir(root), 'athena.json'), JSON.stringify(panel([{ key: 'CE-2', name: '나상담사' }])));
   assert.deepEqual(loadBoard(root).acks, {});

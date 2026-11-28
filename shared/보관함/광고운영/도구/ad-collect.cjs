@@ -11,7 +11,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { spawn } = require('child_process');
 const ad = require('./ad-lib.cjs');
 
 const args = process.argv.slice(2);
@@ -45,8 +45,23 @@ function asideBin() {
   for (const p of [local, home]) if (p && fs.existsSync(p)) return p;
   return 'aside';
 }
-function repl(code, what) {
-  const r = spawnSync(asideBin(), ['repl', '--json', '--file', '-'], { input: code, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, timeout: 170000 });
+function run(code) {
+  return new Promise((resolve) => {
+    let stdout = '', stderr = '', done = false;
+    const finish = (value) => { if (!done) { done = true; clearTimeout(timer); resolve(value); } };
+    let child;
+    try { child = spawn(asideBin(), ['repl', '--json', '--file', '-'], { windowsHide: true }); } catch (error) { finish({ error }); return; }
+    const timer = setTimeout(() => { try { child.kill(); } catch { /* 이미 끝남 */ } finish({ error: new Error('제한 시간 170초 초과') }); }, 170000);
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (d) => { stdout += d; }); child.stderr.on('data', (d) => { stderr += d; });
+    child.on('error', (error) => finish({ error }));
+    child.on('close', () => finish({ stdout, stderr }));
+    child.stdin.on('error', () => { /* 실행 실패는 close·error에서 알린다 */ });
+    child.stdin.end(code);
+  });
+}
+async function repl(code, what) {
+  const r = await run(code);
   if (r.error) fail(`Aside를 실행하지 못했습니다(${r.error.message}). Aside 앱과 CLI가 설치돼 있는지 확인해 주세요.`);
   const line = String(r.stdout || '').trim().split('\n').pop();
   let parsed; try { parsed = JSON.parse(line); } catch { fail(`Aside 응답을 읽지 못했습니다(${what}): ${String(r.stdout || r.stderr).slice(-300)}`); }
@@ -68,12 +83,12 @@ const monthEnd = `${month}-${String(new Date(Date.UTC(my, mm, 0)).getUTCDate()).
 // 아테나: 화면의 「엑셀다운로드(기본)」과 같은 자료를 받아 필요한 열만 남긴다
 const athenaCode = (onlyCheck) => `
 const AIO = ${JSON.stringify({ origin: athena, start: `${month}-01`, end: monthEnd, onlyCheck })};
-const aioTab = await openTab(AIO.origin + '/finance/items');
-// 화면이 늦게 뜨는 때가 있어 로그인 화면으로 넘어간 것이 확실할 때까지 잠깐 기다린다
-for (let i = 0; i < 8 && !/\\/finance\\/items/.test(aioTab.url()) && !(await aioTab.locator('input[type="password"]').count().catch(() => 0)); i++) await sleep(1000);
-await sleep(800);
-if (!/\\/finance\\/items/.test(aioTab.url())) console.log('AIO_RESULT' + JSON.stringify({ error: 'login' }) + 'AIO_END');
-else if (AIO.onlyCheck) console.log('AIO_RESULT' + JSON.stringify({ ok: true }) + 'AIO_END');
+// 정산 화면은 띄우는 데만 몇 초가 걸려, 같은 사이트의 가벼운 파일로 탭을 연다(자료는 아래에서 직접 받는다)
+const aioTab = await openTab(AIO.origin + '/assets/js/AppCsrfAjax.js');
+if (AIO.onlyCheck) {
+  const aioLogin = await aioTab.evaluate(async () => { try { const r = await fetch('/items/posting?pt_status=1', { credentials: 'same-origin' }); if (!r.ok) return 'HTTP ' + r.status; return /<input[^>]+type=["']?password/i.test(await r.text()) ? 'login' : ''; } catch (e) { return String(e.message || e); } });
+  console.log('AIO_RESULT' + JSON.stringify(aioLogin ? { error: aioLogin } : { ok: true }) + 'AIO_END');
+}
 else {
   const aioData = await aioTab.evaluate(async (AIO) => {
     try {
@@ -139,8 +154,9 @@ const SHEET = '광고 기록 시트를 열지 못했습니다. Aside 브라우�
 
 async function main() {
   if (checkOnly) {
-    if (!skipAthena && repl(athenaCode(true), '아테나').error) fail(LOGIN);
-    if (!skipSheet && repl(sheetCode(true), '광고 기록 시트').error) fail(SHEET);
+    const [a, b] = await Promise.all([skipAthena ? {} : repl(athenaCode(true), '아테나'), skipSheet ? {} : repl(sheetCode(true), '광고 기록 시트')]);
+    if (a.error) fail(LOGIN);
+    if (b.error) fail(SHEET);
     console.log('아테나 로그인·광고 기록 시트 열람 확인됨');
     return;
   }
@@ -149,9 +165,10 @@ async function main() {
   fs.mkdirSync(out, { recursive: true });
   const started = Date.now();
   const lines = [];
+  const [athenaGot, sheetGot] = await Promise.all([skipAthena ? null : repl(athenaCode(false), '아테나 정산 자료'), skipSheet ? null : repl(sheetCode(false), '광고 기록 시트')]);
 
   if (!skipAthena) {
-    const got = repl(athenaCode(false), '아테나 정산 자료');
+    const got = athenaGot;
     if (got.error === 'login') fail(LOGIN);
     if (got.error === 'columns') fail(`아테나 정산 자료에서 필요한 열을 찾지 못했습니다: ${got.missing.join(', ')}. 화면의 열 이름이 바뀌었는지 확인해 주세요.`);
     if (got.error) fail(`아테나 정산 자료를 읽지 못했습니다: ${got.error}`);
@@ -185,7 +202,7 @@ async function main() {
   }
 
   if (!skipSheet) {
-    const got = repl(sheetCode(false), '광고 기록 시트');
+    const got = sheetGot;
     if (got.error) fail(SHEET);
     const ExcelJS = require(path.join(programRoot(), 'node_modules', 'exceljs'));
     const wb = new ExcelJS.Workbook();

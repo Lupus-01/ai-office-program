@@ -2,9 +2,10 @@
 // 아테나 주요사항 확인: 내 담당 상담사 중 지금 챙겨야 할 사람을 아테나에서 읽어 현황판(보관함/현황판/athena.json)에 올린다.
 // Aside 브라우저의 아테나 로그인을 쓴다(읽기 전용: 저장·수정·상태 변경 없음). AI를 쓰지 않는다.
 //
-//   node 보관함/현황판/도구/athena-watch.cjs [--only weekly|incentive] [--out <결과.json>]
-//        weekly(기본): 이번 주 배정 상담사 · 파트너 계약 검토 · 포스팅 대기
+//   node 보관함/현황판/도구/athena-watch.cjs [--only weekly|incentive|daily] [--out <결과.json>]
+//        weekly(기본): 이번 주 배정 상담사 · 파트너 계약 검토 · 포스팅 대기 · 홍멘토 멘토/멘티 신청
 //        incentive   : 인센티브(소개비) 지급 대상
+//        daily       : 1:1 문의·후기 규정 점검(어제·오늘 글에서 개인 연락·SNS 거래, 외부 거래, 욕설 표현을 찾는다. 기준은 보관함/현황판/점검규칙.json)
 //   node 보관함/현황판/도구/athena-watch.cjs --check      아테나 로그인과 담당자 이름만 확인(시작 전 점검용)
 //
 // 아테나 주소: 같은 폴더의 설정.json {"athena":"https://…"} (없으면 보관함/광고운영/도구/설정.json의 athena)
@@ -14,6 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { resolveRules, checkText } = require('./watch-rules.cjs');
 
 const args = process.argv.slice(2);
 const opt = (name) => { const i = args.indexOf(`--${name}`); return i >= 0 ? String(args[i + 1] ?? '') : ''; };
@@ -26,7 +28,7 @@ const nowIso = () => new Date().toISOString();
 
 const only = opt('only') || 'weekly';
 const checkOnly = args.includes('--check');
-if (!['weekly', 'incentive'].includes(only)) { console.error('--only 는 weekly 또는 incentive 입니다.'); process.exit(1); }
+if (!['weekly', 'incentive', 'daily'].includes(only)) { console.error('--only 는 weekly, incentive, daily 중 하나입니다.'); process.exit(1); }
 
 // 실패해도 현황판에 사유가 보이게 남긴다(지난 목록은 그대로 둔다)
 function fail(message, { record = true } = {}) {
@@ -42,6 +44,10 @@ const CARDS = [
   { id: 'assign', group: 'weekly', title: '이번 주 배정 상담사', path: '/callee/callee', when: '월·수·금 10:30', hint: '내 담당으로 배정됐고 정산정보 입력일이 아직 없는 상담사' },
   { id: 'partner', group: 'weekly', title: '파트너 계약 검토', path: '/callee/partner?ce_contact_status=1', when: '월·수·금 10:30', hint: '파트너 계약이 검토중인 내 담당 상담사' },
   { id: 'posting', group: 'weekly', title: '포스팅 대기', path: '/items/posting?pt_status=1', when: '월·수·금 10:30', hint: '내 담당 상담사가 올린 포스팅 중 대기 상태' },
+  { id: 'mentor', group: 'weekly', title: '홍멘토 멘토 신청', path: '/hongmentor/mentor/pending', when: '월·수·금 10:30', hint: '멘토를 신청한 내 담당 상담사' },
+  { id: 'mentee', group: 'weekly', title: '홍멘토 멘티 신청', path: '/hongmentor/mentee/requested', when: '월·수·금 10:30', hint: '멘티를 신청했거나 멘토로 지목된 내 담당 상담사' },
+  { id: 'qna', group: 'daily', title: '1:1 문의 규정 점검', path: '/items/qna', when: '매일 15:00', hint: '내 담당 상담사의 1:1 문의·답변 중 개인 연락·SNS 거래, 외부 거래, 욕설 표현이 걸린 글(사람이 다시 볼 후보)' },
+  { id: 'review', group: 'daily', title: '후기 규정 점검', path: '/items/comment', when: '매일 15:00', hint: '내 담당 상담사의 후기·댓글 중 개인 연락·SNS 거래, 외부 거래, 욕설 표현이 걸린 글(사람이 다시 볼 후보)' },
   { id: 'incentive', group: 'incentive', title: '인센티브 지급 대상', path: '/callee/incentive', when: '매달 15일 11:30', hint: '내 담당 상담사 중 소개비가 지급대기인 건' },
 ];
 function emptyPanel(manager) {
@@ -55,6 +61,16 @@ const athena = String(opt('athena') || toolConfig.athena || adConfig.athena || '
 if (!/^https:\/\/[^/]+$/.test(athena)) fail('아테나 주소가 없습니다. 보관함/현황판/도구/설정.json에 {"athena":"https://…"}를 적어 주세요.');
 const settings = readJson(settingsFile, {});
 const manager = String(opt('manager') || settings.manager || '').trim();
+// 지난 실행에서 본 담당자 식별값과 쪽 수(다음 실행이 느린 화면을 덜 기다리게 한다). 담당자가 바뀌면 쓰지 않는다
+const memo = settings.memo && settings.memo.manager === manager && manager ? settings.memo : {};
+const list = (v) => Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x).slice(0, 10) : [];
+const count = (v) => Number.isInteger(v) && v >= 1 && v <= 60 ? v : 1;
+const remembered = { managerIds: list(memo.managerIds), incentiveIds: list(memo.incentiveIds), calleePages: count(memo.calleePages), incentivePages: count(memo.incentivePages) };
+let rules;
+try { rules = resolveRules(fs.existsSync(path.join(board, '점검규칙.json')) ? JSON.parse(fs.readFileSync(path.join(board, '점검규칙.json'), 'utf8').replace(/^﻿/, '')) : null); }
+catch (e) { fail('점검규칙.json 오류: ' + e.message); }
+const kstDay = (offset) => new Date(Date.now() + 9 * 3600000 - offset * 86400000).toISOString().slice(0, 10);
+const windowStart = kstDay(rules.days - 1), windowEnd = kstDay(0);
 
 function asideBin() {
   const local = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Aside', 'CLI', 'current', 'aside.exe') : '';
@@ -85,7 +101,8 @@ async function collect(AIO) {
     if (isLogin(doc)) { const e = new Error('login'); e.login = true; throw e; }
     return doc;
   };
-  const ce = (tr) => { const m = tr.innerHTML.match(/viewCalleeInfo\('(CE-[0-9-]+)'\)/); return m ? m[1] : ''; };
+  const ce = (tr) => { const m = tr.innerHTML.match(/viewCalleeInfo\('(CE-[0-9-]+)'/); return m ? m[1] : ''; };
+  const pool = async (list, size, work) => { const queue = [...list]; await Promise.all(Array.from({ length: size }, async () => { while (queue.length) await work(queue.shift()); })); };
   const lastPage = (doc) => Math.max(1, ...[...doc.querySelectorAll('.pagination a')].map((a) => Number(((a.getAttribute('href') || '').match(/page=(\d+)/) || [])[1] || 0)));
   // 머리글에 need가 모두 있는 표의 줄 목록
   const tables = (doc, need) => [...doc.querySelectorAll('table')].map((tb) => {
@@ -93,29 +110,43 @@ async function collect(AIO) {
     if (!need.every((h) => heads.includes(h))) return null;
     return { heads, rows: [...tb.querySelectorAll('tbody tr')].map((tr) => ({ tr, cells: [...tr.children].map((td) => n(td.textContent)) })).filter((r) => r.cells.length >= need.length) };
   }).filter(Boolean);
-  const pages = async (base, max) => {
-    const first = await get(base);
-    const total = lastPage(first), upto = Math.min(total, max);
-    const docs = [first], queue = [];
-    for (let p = 2; p <= upto; p++) queue.push(p);
-    await Promise.all(Array.from({ length: 4 }, async () => { while (queue.length) { const p = queue.shift(); docs[p - 1] = await get(base + (base.includes('?') ? '&' : '?') + 'page=' + p); } }));
-    return { docs, total, cut: total > upto };
+  // hint: 지난번에 본 쪽 수. 그만큼은 첫 쪽을 기다리지 않고 한꺼번에 요청한다(느린 화면을 차례로 기다리지 않게). 실제 쪽 수는 첫 쪽에서 다시 읽는다
+  const pages = async (base, max, hint) => {
+    const url = (p) => p === 1 ? base : base + (base.includes('?') ? '&' : '?') + 'page=' + p;
+    const want = Math.max(1, Math.min(hint || 1, max));
+    const docs = await Promise.all(Array.from({ length: want }, (_, i) => get(url(i + 1))));
+    const total = lastPage(docs[0]), upto = Math.min(total, max);
+    const queue = [];
+    for (let p = want + 1; p <= upto; p++) queue.push(p);
+    await Promise.all(Array.from({ length: 6 }, async () => { while (queue.length) { const p = queue.shift(); docs[p - 1] = await get(url(p)); } }));
+    return { docs: docs.slice(0, upto), total, cut: total > upto };
   };
+  const same = (a, b) => a.length === b.length && a.every((v) => b.includes(v));
   const optionsOf = (doc) => [...doc.querySelectorAll('select[name="regist_id"] option')].map((o) => [o.value, n(o.textContent)]).filter((o) => o[0]);
   const out = { notes: [] };
   try {
-    const home = await get('/callee/callee');
-    const options = optionsOf(home);
-    out.managers = [...new Set(options.map((o) => o[1]))];
-    const mineIds = options.filter((o) => o[1] === AIO.manager).map((o) => o[0]);
-    if (!AIO.manager || !mineIds.length) return { error: 'manager', managers: out.managers };
-    if (AIO.onlyCheck) return { ok: true, managers: out.managers };
+    // 로그인 확인은 빨리 뜨는 화면으로 한다(로그인이 풀렸으면 get이 login으로 알린다)
+    await get('/items/posting?pt_status=1');
+    let options = null, mineIds = AIO.manager ? (AIO.managerIds || []) : [];
+    if (AIO.onlyCheck && mineIds.length) return { ok: true };
+    if (!mineIds.length) {
+      options = optionsOf(await get('/callee/callee'));
+      out.managers = [...new Set(options.map((o) => o[1]))];
+      mineIds = options.filter((o) => o[1] === AIO.manager).map((o) => o[0]);
+      if (!AIO.manager || !mineIds.length) return { error: 'manager', managers: out.managers };
+      if (AIO.onlyCheck) return { ok: true, managers: out.managers, managerIds: mineIds };
+    }
 
     // 내 담당 상담사 전체(상담사 리스트를 담당자로 걸러 읽는다)
-    const mine = new Map();
-    for (const id of mineIds) {
-      const got = await pages('/callee/callee/?regist_id=' + encodeURIComponent(id), 60);
-      if (got.cut) out.notes.push('상담사 리스트가 60쪽을 넘어 일부만 읽었습니다');
+    let mine = new Map(), calleePages = 1;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      mine = new Map();
+      let firstDoc = null;
+      for (const id of mineIds) {
+      const got = await pages('/callee/callee/?regist_id=' + encodeURIComponent(id), 60, AIO.calleePages);
+      calleePages = Math.max(calleePages, got.total);
+      if (!firstDoc) firstDoc = got.docs[0];
+      if (got.cut && !out.notes.includes('상담사 리스트가 60쪽을 넘어 일부만 읽었습니다')) out.notes.push('상담사 리스트가 60쪽을 넘어 일부만 읽었습니다');
       for (const doc of got.docs) {
         const t = tables(doc, ['이름', '닉네임', '담당자', '등록일', '정산정보입력일'])[0];
         if (!t) return { error: 'columns', where: '상담사 리스트' };
@@ -127,7 +158,16 @@ async function collect(AIO) {
         }
       }
     }
-    out.mine = mine.size;
+      if (options) break;
+      // 기억해 둔 식별값이 지금 아테나의 담당자 목록과 같은지 확인한다. 다르면 새 값으로 한 번 더 읽는다
+      options = optionsOf(firstDoc);
+      out.managers = [...new Set(options.map((o) => o[1]))];
+      const fresh = options.filter((o) => o[1] === AIO.manager).map((o) => o[0]);
+      if (!fresh.length) return { error: 'manager', managers: out.managers };
+      if (same(fresh, mineIds)) break;
+      mineIds = fresh;
+    }
+    out.mine = mine.size; out.managerIds = mineIds; out.calleePages = calleePages;
 
     if (AIO.only === 'weekly') {
       // ① 이번 주 배정: 정산정보 입력일이 날짜로 적히지 않은 내 담당 상담사
@@ -169,15 +209,104 @@ async function collect(AIO) {
           out.posting.push({ key: 'P' + r.cells[at('NO')], nick: r.cells[at('상담사닉네임')], title: r.cells[at('제목')].slice(0, 60), date: (r.cells[at('등록일')] || '').slice(0, 10) });
         }
       }
+
+      // ⑤ 홍멘토 멘토 신청 · ⑥ 멘티 신청(신청 탭)
+      const nicks = new Map();
+      for (const c of mine.values()) if (c.nick) nicks.set(c.nick, nicks.has(c.nick) ? null : c.key);
+      const mineOf = (td) => { const code = td ? ce(td) : ''; if (code) return mine.has(code) ? code : ''; const byNick = td ? nicks.get(n(td.textContent)) : ''; return byNick || ''; };
+      out.mentor = []; out.mentee = [];
+      const mdoc = await pages('/hongmentor/mentor/pending', 10);
+      for (const doc of mdoc.docs) {
+        const t = tables(doc, ['상담사 닉네임', '신청일시', '상태'])[0];
+        if (!t) return { error: 'columns', where: '멘토 신청현황' };
+        const at = (h) => t.heads.indexOf(h);
+        for (const r of t.rows) {
+          const code = mineOf(r.tr.children[at('상담사 닉네임')]);
+          if (!code) continue;
+          out.mentor.push({ key: 'M' + code + '|' + r.cells[at('신청일시')], name: mine.get(code).name, nick: r.cells[at('상담사 닉네임')], date: (r.cells[at('신청일시')] || '').slice(0, 10), state: r.cells[at('상태')] });
+        }
+      }
+      const edoc = await pages('/hongmentor/mentee/requested', 10);
+      for (const doc of edoc.docs) {
+        const t = tables(doc, ['멘티상담사 닉네임', '멘토상담사 닉네임', '신청일시', '상태'])[0];
+        if (!t) return { error: 'columns', where: '멘티 신청현황' };
+        const at = (h) => t.heads.indexOf(h);
+        for (const r of t.rows) {
+          const menteeCode = mineOf(r.tr.children[at('멘티상담사 닉네임')]), mentorCode = mineOf(r.tr.children[at('멘토상담사 닉네임')]);
+          if (!menteeCode && !mentorCode) continue;
+          const code = menteeCode || mentorCode;
+          out.mentee.push({ key: 'E' + code + '|' + r.cells[at('신청일시')], name: mine.get(code).name, nick: menteeCode ? r.cells[at('멘티상담사 닉네임')] : r.cells[at('멘토상담사 닉네임')], role: menteeCode ? '멘티 신청' : '멘토로 지목됨',
+            other: menteeCode ? '멘토 ' + r.cells[at('멘토상담사 닉네임')] : '멘티 ' + r.cells[at('멘티상담사 닉네임')], date: (r.cells[at('신청일시')] || '').slice(0, 10) });
+        }
+      }
+    } else if (AIO.only === 'daily') {
+      // ⑦ 1:1 문의 · ⑧ 후기: 기간 안의 글 중 내 담당 상담사 것만 전체 글을 읽어 온다(규정 점검은 PC에서 한다)
+      const range = '?start_date=' + AIO.start + '&end_date=' + AIO.end;
+      out.qna = []; out.review = []; out.qnaAll = 0; out.reviewAll = 0;
+      const qdoc = await pages('/items/qna' + range, 150);
+      if (qdoc.cut) out.notes.push('1:1 문의가 150쪽을 넘어 일부만 읽었습니다');
+      for (const doc of qdoc.docs) {
+        const t = tables(doc, ['상담사닉네임', '고객문의', '상담사답변', '등록일'])[0];
+        if (!t) { if (doc === qdoc.docs[0]) return { error: 'columns', where: '1:1 문의 관리' }; continue; }
+        const at = (h) => t.heads.indexOf(h);
+        for (const r of t.rows) {
+          const link = r.tr.querySelector('[data-qano]');
+          if (!link) continue;
+          out.qnaAll++;
+          const code = ce(r.tr);
+          if (!code || !mine.has(code)) continue;
+          out.qna.push({ key: 'Q' + link.getAttribute('data-qano'), no: link.getAttribute('data-qano'), nick: r.cells[at('상담사닉네임')], date: r.cells[at('등록일')], text: r.cells[at('고객문의')], reply: r.cells[at('상담사답변')] });
+        }
+      }
+      // 목록의 글이 잘렸을 수 있어 상세 화면에서 전체 글을 읽는다(읽지 못하면 목록의 글로 점검한다)
+      await pool(out.qna, 4, async (q) => {
+        try {
+          const d = await get('/items/qnaDetail?qa_no=' + q.no);
+          const body = d.querySelector('textarea[name="qa_content"]'), reply = d.querySelector('textarea[name="qa_reply"]');
+          if (body && body.value.length >= q.text.replace(/\.\.$/, '').length) q.text = n(body.value);
+          if (reply && reply.value.length >= q.reply.length) q.reply = n(reply.value);
+        } catch (e) { if (e.login) throw e; q.partial = true; }
+      });
+      const cdoc = await pages('/items/comment' + range, 150);
+      if (cdoc.cut) out.notes.push('후기가 150쪽을 넘어 일부만 읽었습니다');
+      for (const doc of cdoc.docs) {
+        const t = tables(doc, ['상담사닉네임', '후기내용', '등록일'])[0];
+        if (!t) { if (doc === cdoc.docs[0]) return { error: 'columns', where: '후기 관리' }; continue; }
+        const at = (h) => t.heads.indexOf(h);
+        for (const r of t.rows) {
+          const link = r.tr.querySelector('[data-cmno]');
+          if (!link) continue;
+          out.reviewAll++;
+          const code = ce(r.tr);
+          if (!code || !mine.has(code)) continue;
+          out.review.push({ key: 'R' + link.getAttribute('data-cmno'), no: link.getAttribute('data-cmno'), nick: r.cells[at('상담사닉네임')].replace(/\s*\(\d+\)\s*$/, ''), date: r.cells[at('등록일')], text: r.cells[at('후기내용')], reply: '' });
+        }
+      }
+      // 후기 전체 글과 상담사 댓글은 화면의 "내용 보기"와 같은 조회로 읽는다(조회만 한다)
+      await pool(out.review, 4, async (c) => {
+        try {
+          const res = await fetch('/api/items/getCommentContent', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }, body: 'cm_no=' + encodeURIComponent(c.no) });
+          const data = res.ok ? await res.json() : null;
+          if (data && data.comment) { c.text = n(data.comment.cm_content) || c.text; c.reply = n(data.comment.reply); } else c.partial = true;
+        } catch (e) { c.partial = true; }
+      });
+      const partial = [...out.qna, ...out.review].filter((x) => x.partial).length;
+      if (partial) out.notes.push('전체 글을 읽지 못해 목록에 보이는 부분만 점검한 글 ' + partial + '건');
     } else {
       // ④ 인센티브(소개비) 지급대기: 담당자로 걸러 읽는다
-      const idoc = await get('/callee/incentive');
-      const incIds = optionsOf(idoc).filter((o) => o[1] === AIO.manager).map((o) => o[0]);
-      if (!incIds.length) return { error: 'manager', managers: out.managers, where: '인센티브 관리' };
-      out.incentive = []; out.incentiveAll = 0; out.incentiveReview = 0;
-      let bad = 0;
+      let incIds = AIO.incentiveIds || [], incOptions = null, bad = 0, incPages = 1;
+      if (!incIds.length) {
+        incOptions = optionsOf(await get('/callee/incentive'));
+        incIds = incOptions.filter((o) => o[1] === AIO.manager).map((o) => o[0]);
+        if (!incIds.length) return { error: 'manager', managers: out.managers, where: '인센티브 관리' };
+      }
+      for (let attempt = 0; attempt < 2; attempt++) {
+      out.incentive = []; out.incentiveAll = 0; out.incentiveReview = 0; bad = 0;
+      let firstDoc = null;
       for (const id of incIds) {
-        const got = await pages('/callee/incentive/?regist_id=' + encodeURIComponent(id), 60);
+        const got = await pages('/callee/incentive/?regist_id=' + encodeURIComponent(id), 60, AIO.incentivePages);
+        incPages = Math.max(incPages, got.total);
+        if (!firstDoc) firstDoc = got.docs[0];
         for (const doc of got.docs) {
           const tb = doc.querySelector('table');
           const heads = tb ? n(tb.querySelector('thead') && tb.querySelector('thead').textContent) : '';
@@ -193,6 +322,14 @@ async function collect(AIO) {
           }
         }
       }
+      if (incOptions) break;
+      incOptions = optionsOf(firstDoc);
+      const fresh = incOptions.filter((o) => o[1] === AIO.manager).map((o) => o[0]);
+      if (!fresh.length) return { error: 'manager', managers: out.managers, where: '인센티브 관리' };
+      if (same(fresh, incIds)) break;
+      incIds = fresh;
+      }
+      out.incentiveIds = incIds; out.incentivePages = incPages;
       if (bad && !out.incentiveAll) return { error: 'columns', where: '인센티브 관리' };
       if (bad) out.notes.push('인센티브 표에서 모양이 다른 줄 ' + bad + '개는 읽지 않았습니다');
     }
@@ -204,16 +341,23 @@ async function collect(AIO) {
 }
 
 const code = (onlyCheck) => `
-const AIO = ${JSON.stringify({ origin: athena, manager, only, onlyCheck })};
-const aioTab = await openTab(AIO.origin + '/callee/callee');
-for (let i = 0; i < 8 && !/\\/callee\\/callee/.test(aioTab.url()) && !(await aioTab.locator('input[type="password"]').count().catch(() => 0)); i++) await sleep(1000);
-await sleep(800);
-let aioData;
-if (!/\\/callee\\/callee/.test(aioTab.url())) aioData = { error: 'login' };
-else aioData = await aioTab.evaluate(${collect.toString()}, AIO);
+const AIO = ${JSON.stringify({ origin: athena, manager, only, onlyCheck, start: windowStart, end: windowEnd, ...remembered })};
+const aioTab = await openTab(AIO.origin + '/assets/js/AppCsrfAjax.js');
+const aioData = await aioTab.evaluate(${collect.toString()}, AIO);
 console.log('AIO_RESULT' + JSON.stringify(aioData) + 'AIO_END');
 await closeTab(aioTab);
 `;
+
+// 규정 점검: 글과 답변을 따로 보고, 걸린 분류와 앞뒤 글 조각만 남긴다(글 전체는 저장하지 않는다)
+function flagged(rows, textLabel, replyLabel) {
+  const list = [];
+  for (const row of rows || []) {
+    const hits = [...checkText(row.text, rules).map((h) => ({ ...h, side: textLabel })), ...checkText(row.reply, rules).map((h) => ({ ...h, side: replyLabel }))];
+    if (!hits.length) continue;
+    list.push({ key: row.key, name: row.nick, sub: hits.slice(0, 3).map((h) => h.side + ' [' + h.word + '] ' + h.snippet).join(' / ').slice(0, 198), tags: [...new Set(hits.map((h) => h.category))], date: row.date });
+  }
+  return list;
+}
 
 const LOGIN = '아테나 로그인이 필요합니다. Aside 브라우저에서 아테나(관리 프로그램)에 로그인한 뒤 "로그인했어"라고 답해 주세요.';
 const who = (c) => c.nick && c.nick !== c.name ? `${c.nick} (${c.name})` : c.name || c.nick;
@@ -223,7 +367,16 @@ function main() {
   const started = Date.now();
   const got = repl(code(checkOnly), '아테나');
   // 담당자 목록은 현황판의 선택 칸에 쓰도록 남긴다
-  if (Array.isArray(got.managers) && got.managers.length) writeJson(settingsFile, { ...readJson(settingsFile, {}), managers: got.managers });
+  {
+    const now = readJson(settingsFile, {});
+    const next = { ...now };
+    if (Array.isArray(got.managers) && got.managers.length) next.managers = got.managers;
+    if (manager && !got.error) {
+      const old = now.memo && now.memo.manager === manager ? now.memo : {};
+      next.memo = { ...old, manager, ...(got.managerIds ? { managerIds: got.managerIds } : {}), ...(got.calleePages ? { calleePages: got.calleePages } : {}), ...(got.incentiveIds ? { incentiveIds: got.incentiveIds } : {}), ...(got.incentivePages ? { incentivePages: got.incentivePages } : {}) };
+    } else if (got.error === 'manager') delete next.memo;
+    if (JSON.stringify(next) !== JSON.stringify(now)) writeJson(settingsFile, next);
+  }
   if (got.error === 'login') fail(LOGIN);
   if (got.error === 'manager') fail(manager ? `아테나 담당자 목록에 "${manager}"이(가) 없습니다${got.where ? `(${got.where})` : ''}. 현황판 화면에서 담당자 이름을 다시 골라 주세요.` : '담당자 이름이 정해지지 않았습니다. 현황판 화면(대시보드 → 현황판)에서 본인 이름을 고르거나 적은 뒤 다시 실행해 주세요.');
   if (got.error === 'columns') fail(`아테나 ${got.where} 화면에서 필요한 열을 찾지 못했습니다. 화면 구성이 바뀌었는지 확인해 주세요.`);
@@ -234,9 +387,17 @@ function main() {
     assign: (got.assign || []).map((c) => ({ key: c.key, name: who(c), sub: join(c.cat, c.stage, c.state), tags: [/\d/.test(c.fin) ? c.fin : '정산정보 미입력'], date: c.reg })),
     partner: (got.partner || []).map((c) => ({ key: c.key, name: who(c), sub: join(c.stage, c.cat), tags: ['검토중'], date: c.date })),
     posting: (got.posting || []).map((c) => ({ key: c.key, name: c.nick, sub: c.title, tags: ['대기'], date: c.date })),
+    mentor: (got.mentor || []).map((c) => ({ key: c.key, name: who(c), sub: '멘토 신청', tags: [c.state || '신청'], date: c.date })),
+    mentee: (got.mentee || []).map((c) => ({ key: c.key, name: who(c), sub: join(c.role, c.other), tags: ['신청'], date: c.date })),
+    qna: flagged(got.qna, '고객 문의', '상담사 답변'),
+    review: flagged(got.review, '후기', '상담사 댓글'),
     incentive: (got.incentive || []).map((c) => ({ key: c.key, name: c.who, sub: join(c.cat, c.recommender && c.recommender !== '-' ? `추천인 ${c.recommender}` : ''), tags: [...new Set([c.status, c.recStatus].filter((s) => /지급대기/.test(s)))], date: c.reg })),
   };
+  const span = windowStart === windowEnd ? windowEnd : windowStart + ' ~ ' + windowEnd;
   const notes = {
+    mentor: '', mentee: '',
+    qna: got.qna ? span + ' 내 담당 ' + got.qna.length + '건 점검(전체 ' + got.qnaAll + '건 중)' : '',
+    review: got.review ? span + ' 내 담당 ' + got.review.length + '건 점검(전체 ' + got.reviewAll + '건 중)' : '',
     assign: `내 담당 ${got.mine}명 중`,
     partner: '',
     posting: got.postingAll !== undefined ? `전체 대기 ${got.postingAll}건 중` : '',
@@ -254,6 +415,11 @@ function main() {
     const seen = new Map((before.items || []).map((i) => [i.key, i]));
     const first = !before.checkedAt;
     const list = items[def.id].map((i) => ({ ...i, firstSeen: seen.get(i.key)?.firstSeen || at, isNew: !first && !seen.has(i.key) }));
+    // 규정 점검은 하루씩 넘어가므로, 이번에 읽은 기간보다 앞에 걸렸던 글은 keepDays 동안 남겨 둔다(확인함으로 접을 수 있다)
+    if (def.group === 'daily') {
+      const have = new Set(list.map((i) => i.key)), cutoff = kstDay(rules.keepDays);
+      for (const old of before.items || []) if (!have.has(old.key) && old.date && old.date < windowStart && old.date >= cutoff) list.push({ ...old, isNew: false });
+    }
     counts[def.id] = list.length; fresh[def.id] = list.filter((i) => i.isNew).length;
     return { id: def.id, title: def.title, hint: def.hint, when: def.when, link, checkedAt: at, note: [notes[def.id], ...(got.notes || [])].filter(Boolean).join(' · '), items: list };
   });

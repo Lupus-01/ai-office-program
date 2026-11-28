@@ -12,16 +12,16 @@
 </head>
 <body class="board-body">
   <header class="bd-top">
-    <a class="btn btn-sm btn-ghost" href="./">‹ 대화로</a>
+    <a class="btn btn-sm btn-ghost bd-back" href="./" aria-label="대화 화면으로 돌아가기">‹ 대화</a>
     <h1>현황판</h1>
-    <p class="bd-sub" id="bdSub">지금 챙길 것을 한 화면에 모았습니다.</p>
+    <p class="bd-sub" id="bdSub">지금 챙길 것만 모아 보여 줍니다. 챙긴 건은 "확인함"으로 접어 두세요.</p>
     <form class="bd-manager" id="bdManagerForm" autocomplete="off">
       <label for="bdManager">담당자</label>
       <input id="bdManager" list="bdManagers" maxlength="40" placeholder="본인 이름" required>
       <datalist id="bdManagers"></datalist>
-      <button type="submit" class="btn btn-sm">저장</button>
+      <button type="submit" class="btn btn-sm" id="bdManagerSave">저장</button>
     </form>
-    <button type="button" class="btn btn-sm" id="bdRun">지금 확인</button>
+    <button type="button" class="btn btn-sm bd-run" id="bdRun">지금 확인</button>
   </header>
   <p class="bd-notice" id="bdNotice" role="status" hidden></p>
   <main id="bdMain" class="bd-main" aria-live="polite"></main>

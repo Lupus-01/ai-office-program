@@ -1,46 +1,91 @@
 /* 현황판(board.html). 색은 styles.css의 테마 토큰만 쓴다. */
 .board-body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font: 15px/1.5 var(--font); }
-.bd-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 14px 20px; background: var(--panel); border-bottom: var(--border); position: sticky; top: 0; z-index: 2; }
+.bd-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 12px 24px; background: var(--panel); border-bottom: var(--border); position: sticky; top: 0; z-index: 2; }
 .bd-top h1 { margin: 0; font-size: 20px; }
+.bd-back { text-decoration: none; }
 .bd-sub { margin: 0; color: var(--muted); font-size: 13px; flex: 1 1 200px; }
 .bd-manager { display: flex; align-items: center; gap: 6px; margin: 0; }
 .bd-manager label { font-size: 13px; color: var(--muted); }
-.bd-manager input { width: 9em; min-height: 32px; padding: 4px 8px; border: var(--border); border-radius: var(--radius-sm); background: var(--panel-2); color: var(--text); font: inherit; }
-.bd-notice { margin: 12px 20px 0; padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 12%, var(--panel)); }
+.bd-manager input { width: 9em; min-height: 34px; padding: 4px 10px; border: var(--border); border-radius: var(--radius-sm); background: var(--panel-2); color: var(--text); font: inherit; }
+.bd-manager input:focus-visible { outline: none; box-shadow: var(--focus); }
+.bd-run { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.bd-run:disabled { opacity: .7; }
+.bd-notice { margin: 14px 24px 0; padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 12%, var(--panel)); white-space: pre-line; }
 .bd-notice.is-error { border-color: color-mix(in srgb, var(--danger) 50%, transparent); background: color-mix(in srgb, var(--danger) 10%, var(--panel)); }
-.bd-main { padding: 16px 20px 40px; max-width: 1500px; margin: 0 auto; }
-.bd-panel + .bd-panel { margin-top: 28px; }
-.bd-panel-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin-bottom: 10px; }
-.bd-panel-head h2 { margin: 0; font-size: 17px; }
-.bd-panel-head span { color: var(--muted); font-size: 13px; }
-.bd-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
-.bd-tile { display: block; padding: 12px 14px; border: var(--border); border-radius: var(--radius); background: var(--panel); color: inherit; text-decoration: none; }
+.bd-main { padding: 18px 24px 48px; max-width: 1400px; margin: 0 auto; }
+.bd-panel + .bd-panel { margin-top: 36px; }
+.bd-panel-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 12px; }
+.bd-panel-head h2 { margin: 0; font-size: 19px; }
+.bd-panel-sub { color: var(--muted); font-size: 13px; margin-left: auto; }
+.bd-total, .bd-group-count { padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; background: var(--panel-3); color: var(--muted); }
+.bd-total.is-open { background: var(--danger); color: #fff; }
+.bd-group-count.is-open { background: color-mix(in srgb, var(--danger) 14%, var(--panel)); color: var(--danger); }
+
+/* 요약 타일: 누르면 그 카드로 간다 */
+.bd-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.bd-tile { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px; border: var(--border); border-radius: var(--radius); background: var(--panel); color: inherit; text-decoration: none; }
 .bd-tile:hover { border-color: var(--line-strong); }
-.bd-tile strong { display: block; font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.bd-tile.is-zero strong { color: var(--faint); }
+.bd-tile:focus-visible { outline: none; box-shadow: var(--focus); }
+.bd-tile strong { font-size: 22px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.bd-tile.is-zero { background: transparent; }
+.bd-tile.is-zero strong, .bd-tile.is-zero span { color: var(--faint); }
 .bd-tile.is-open strong { color: var(--danger); }
-.bd-tile span { font-size: 13px; color: var(--muted); }
-.bd-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; align-items: start; }
-.bd-card { border: var(--border); border-radius: var(--radius); background: var(--panel); overflow: hidden; scroll-margin-top: 80px; }
-.bd-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 12px 14px; border-bottom: var(--border); background: var(--panel-2); }
-.bd-card-head h3 { margin: 0; font-size: 15px; flex: 1 1 auto; }
-.bd-count { min-width: 1.8em; padding: 1px 8px; border-radius: 999px; text-align: center; font-weight: 700; font-size: 13px; background: var(--panel-3); }
-.bd-count.is-open { background: var(--danger); color: #fff; }
-.bd-card-meta { margin: 0; padding: 8px 14px 0; font-size: 12.5px; color: var(--muted); }
-.bd-list { list-style: none; margin: 0; padding: 6px 8px 8px; }
-.bd-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 6px; border-radius: var(--radius-sm); }
+.bd-tile span { font-size: 13px; color: var(--muted); line-height: 1.3; }
+
+/* 확인 주기별 묶음 */
+.bd-group { margin-top: 26px; }
+.bd-group-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: var(--border); }
+.bd-group-head h3 { margin: 0; font-size: 15px; }
+.bd-group-time { margin-left: auto; font-size: 12.5px; color: var(--muted); }
+/* 카드 높이가 달라도 빈칸이 생기지 않게 단으로 흘린다 */
+.bd-cards { columns: 2 420px; column-gap: 14px; }
+.bd-card { break-inside: avoid; margin: 0 0 14px; border: var(--border); border-radius: var(--radius); background: var(--panel); overflow: hidden; scroll-margin-top: 84px; }
+.bd-card:target { box-shadow: var(--focus); }
+.bd-card-head { display: flex; align-items: center; gap: 8px; padding: 11px 14px; }
+.bd-card:not(.is-clear) .bd-card-head { border-bottom: var(--border); background: var(--panel-2); }
+.bd-card-head h3 { margin: 0; font-size: 15px; }
+.bd-count { min-width: 1.5em; padding: 1px 8px; border-radius: 999px; text-align: center; font-weight: 700; font-size: 13px; background: var(--danger); color: #fff; }
+.bd-link { margin-left: auto; font-size: 13px; color: var(--accent); text-decoration: none; white-space: nowrap; }
+.bd-link:hover { text-decoration: underline; }
+.bd-card-meta { margin: 0; padding: 8px 14px 2px; font-size: 12.5px; color: var(--muted); }
+.bd-list { list-style: none; margin: 0; padding: 4px 8px 6px; }
+.bd-item { display: flex; align-items: flex-start; gap: 10px; padding: 9px 6px; }
 .bd-item + .bd-item { border-top: 1px solid var(--line); }
 .bd-item-main { flex: 1 1 auto; min-width: 0; }
+.bd-item-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .bd-item-name { font-weight: 600; overflow-wrap: anywhere; }
-.bd-item-sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
-.bd-tag { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--panel-3); color: var(--muted); vertical-align: 1px; }
+.bd-item-date { margin-left: auto; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.bd-item-sub { margin-top: 2px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.bd-item-sub mark { padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--warn) 28%, var(--panel)); color: var(--text); font-weight: 600; }
+.bd-tag { padding: 0 7px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--panel-3); color: var(--muted); white-space: nowrap; }
 .bd-tag.is-new { background: var(--accent); color: var(--accent-ink); }
-.bd-item .btn { flex: 0 0 auto; }
-.bd-empty { margin: 0; padding: 18px 14px; color: var(--faint); text-align: center; }
+.bd-item .btn { flex: 0 0 auto; min-height: 32px; }
+.bd-card-foot { display: flex; justify-content: space-between; gap: 8px; padding: 0 10px 8px; }
+.bd-card-foot:empty { display: none; }
+.bd-card-foot .btn:only-child { margin-left: auto; }
 .bd-done { margin: 0 8px 8px; }
-.bd-done summary { padding: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.bd-done summary { padding: 6px; font-size: 13px; color: var(--muted); cursor: pointer; border-radius: var(--radius-sm); }
 .bd-done .bd-item-name { font-weight: 400; color: var(--muted); }
-.bd-blank { padding: 40px 20px; text-align: center; color: var(--muted); border: 1px dashed var(--line-strong); border-radius: var(--radius); background: var(--panel); }
-@media (max-width: 640px) { .bd-top { padding: 12px 16px; } .bd-main { padding: 12px 16px 32px; } .bd-cards { grid-template-columns: 1fr; } }
-
-.bd-notice { white-space: pre-line; }
+/* 챙길 것이 없는 카드: 한 줄 */
+.bd-clears { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 8px; }
+.bd-card.is-clear { margin: 0; background: transparent; }
+.bd-card.is-clear h3 { font-size: 14px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.bd-clear { font-size: 12.5px; color: var(--faint); white-space: nowrap; }
+.bd-cards + .bd-clears { margin-top: 0; }
+.bd-blank { padding: 48px 20px; text-align: center; color: var(--muted); border: 1px dashed var(--line-strong); border-radius: var(--radius); background: var(--panel); }
+.bd-blank strong { color: var(--text); font-size: 16px; }
+@media (max-width: 640px) {
+  .bd-top { padding: 10px 16px; gap: 8px 10px; }
+  .bd-sub { display: none; }
+  .bd-top h1 { flex: 1 1 auto; }
+  .bd-manager { order: 3; flex: 1 1 100%; }
+  .bd-manager input { flex: 1 1 auto; width: auto; }
+  .bd-notice { margin: 12px 16px 0; }
+  .bd-main { padding: 14px 16px 36px; }
+  .bd-panel-sub, .bd-group-time { margin-left: 0; flex: 1 1 100%; }
+  .bd-tiles { grid-template-columns: repeat(2, 1fr); }
+  .bd-cards { columns: 1; }
+  .bd-clears { grid-template-columns: 1fr; }
+  .bd-item .btn { min-height: 40px; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
